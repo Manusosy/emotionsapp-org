@@ -6,6 +6,9 @@ import path from 'path';
 export default defineConfig(({ mode }) => {
   const isProduction = mode === 'production';
   
+  // Detect if we're in a Vercel environment
+  const isVercel = process.env.VERCEL === '1';
+  
   return {
     plugins: [react()],
     resolve: {
@@ -28,8 +31,10 @@ export default defineConfig(({ mode }) => {
     },
     build: {
       sourcemap: !isProduction,
-      minify: isProduction,
+      // Use esbuild for minification instead of terser to avoid rollup native dependencies
+      minify: isProduction ? 'esbuild' : false,
       cssMinify: isProduction,
+      // Disable rollup native optimizations which require platform-specific dependencies
       rollupOptions: {
         output: {
           manualChunks: {
