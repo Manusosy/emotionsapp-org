@@ -12,8 +12,17 @@ import fs from 'fs';
 const currentPlatform = platform();
 const currentArch = arch();
 
-console.log(`Environment: Local development`);
+// Check if we're running in a Vercel environment
+const isVercel = process.env.VERCEL === '1';
+
+console.log(`Environment: ${isVercel ? 'Vercel' : 'Local development'}`);
 console.log(`Platform: ${currentPlatform}-${currentArch}`);
+
+// For Vercel deployments, skip platform-specific dependencies
+if (isVercel) {
+  console.log('Running in Vercel environment, skipping platform-specific dependencies');
+  process.exit(0);
+}
 
 // For local development, use the platform-specific package
 console.log(`Installing platform-specific dependencies for ${currentPlatform}-${currentArch}`);

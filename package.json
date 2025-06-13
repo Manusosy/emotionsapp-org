@@ -12,8 +12,7 @@
     "type-check": "tsc --noEmit",
     "lint": "eslint src --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "preview": "node ./scripts/setup-env.js && vite preview",
-    "setup-env": "node ./scripts/setup-env.js",
-    "postinstall": "node ./scripts/install-platform-deps.js"
+    "setup-env": "node ./scripts/setup-env.js"
   },
   "dependencies": {
     "@babel/plugin-transform-react-jsx": "7.23.4",
@@ -88,7 +87,6 @@
     "zod": "3.22.4"
   },
   "devDependencies": {
-    "@rollup/rollup-win32-x64-msvc": "4.42.0",
     "@types/node": "^20.10.6",
     "@types/react": "^18.2.46",
     "@types/react-dom": "^18.2.18",
