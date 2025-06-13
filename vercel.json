@@ -1,5 +1,6 @@
 {
   "version": 2,
+  "installCommand": "npm install --no-optional --ignore-scripts --platform=linux --no-shrinkwrap",
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
   "framework": "vite",
