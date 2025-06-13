@@ -1,29 +1,21 @@
 {
   "version": 2,
-  "framework": "vite",
   "buildCommand": "npm run build",
+  "installCommand": "npm install --no-optional",
+  "framework": null,
   "outputDirectory": "dist",
-  "installCommand": "npm install --no-optional --ignore-platform",
-  "env": {
-    "ROLLUP_SKIP_NODEJS_NATIVE_MODULES": "true",
-    "ROLLUP_NATIVE_MODULES": "never",
-    "ROLLUP_PURE_JS": "true",
-    "VITE_DISABLE_NATIVE": "true"
-  },
+  "cleanUrls": true,
   "routes": [
-    {
-      "src": "/assets/(.*)",
-      "headers": { "cache-control": "public, max-age=31536000, immutable" },
-      "dest": "/assets/$1"
-    },
-    {
-      "src": "/(.*\\.(js|css|ico|png|jpg|jpeg|svg|webp|gif|woff|woff2|ttf|eot)$)",
-      "headers": { "cache-control": "public, max-age=31536000, immutable" },
-      "dest": "/$1"
-    },
-    {
-      "src": "/(.*)",
-      "dest": "/index.html"
+    { "handle": "filesystem" },
+    { "src": "/(.*)", "dest": "/index.html" }
+  ],
+  "github": {
+    "enabled": true,
+    "silent": false
+  },
+  "git": {
+    "deploymentEnabled": {
+      "main": true
     }
-  ]
+  }
 } 
