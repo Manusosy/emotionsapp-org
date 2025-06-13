@@ -62,7 +62,7 @@
     "clsx": "^2.1.0",
     "cmdk": "1.1.1",
     "date-fns": "2.30.0",
-    "dompurify": "3.2.5",
+    "dompurify": "3.2.6",
     "embla-carousel-react": "^8.0.0-rc18",
     "framer-motion": "10.18.0",
     "html2canvas": "1.4.1",
