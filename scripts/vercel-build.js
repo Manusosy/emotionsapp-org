@@ -2,6 +2,7 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { execSync } from 'child_process';
 
 // Get the directory name using ESM standard
 const __filename = fileURLToPath(import.meta.url);
