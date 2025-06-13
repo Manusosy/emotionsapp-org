@@ -6,9 +6,6 @@ import path from 'path';
 export default defineConfig(({ mode }) => {
   const isProduction = mode === 'production';
   
-  // Detect if we're in a Vercel environment
-  const isVercel = process.env.VERCEL === '1';
-  
   return {
     plugins: [react()],
     resolve: {
@@ -65,7 +62,7 @@ export default defineConfig(({ mode }) => {
       'import.meta.env.VITE_SUPABASE_ANON_KEY': JSON.stringify(process.env.VITE_SUPABASE_ANON_KEY),
       'import.meta.env.VITE_DAILY_API_KEY': JSON.stringify(process.env.VITE_DAILY_API_KEY || '87f0c35f773411583c35bf5c5d79488504f3d872542fdf8cc8a5f9e1e1f60ef8'),
       'import.meta.env.VITE_DAILY_DOMAIN': JSON.stringify(process.env.VITE_DAILY_DOMAIN || 'emotionsapp.daily.co'),
-      'import.meta.env.VITE_APP_URL': JSON.stringify(process.env.VITE_APP_URL || 'https://emotionsapp.vercel.app'),
+      'import.meta.env.VITE_APP_URL': JSON.stringify(process.env.VITE_APP_URL || 'https://emotions-app.com'),
     }
   };
 });
