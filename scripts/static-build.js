@@ -1,11 +1,12 @@
 /**
- * Static build script for Vercel deployment
- * This script creates a simple static build without using Rollup
+ * Enhanced static build script for Vercel deployment
+ * This script creates a more comprehensive build without relying on native modules
  */
 
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { execSync } from 'child_process';
 
 // Get the directory name using ESM standard
 const __filename = fileURLToPath(import.meta.url);
@@ -15,13 +16,89 @@ const rootDir = path.join(__dirname, '..');
 // Check if we're running in a Vercel environment
 const isVercel = process.env.VERCEL === '1';
 
-console.log(`Running static build script in ${isVercel ? 'Vercel' : 'local'} environment`);
+console.log(`Running enhanced build script in ${isVercel ? 'Vercel' : 'local'} environment`);
 
 // Create dist directory if it doesn't exist
 const distDir = path.join(rootDir, 'dist');
 if (!fs.existsSync(distDir)) {
   fs.mkdirSync(distDir, { recursive: true });
 }
+
+// Try to run a modified Vite build that avoids native dependencies
+try {
+  console.log('Attempting to run Vite build with esbuild minifier...');
+  
+  // Create a temporary vite.config.js that uses esbuild and avoids native dependencies
+  const tempConfigPath = path.join(rootDir, 'vite.temp.js');
+  const configContent = `
+import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react';
+import path from 'path';
+
+// https://vitejs.dev/config/
+export default defineConfig({
+  plugins: [react()],
+  resolve: {
+    alias: {
+      '@': path.resolve(__dirname, './src')
+    }
+  },
+  build: {
+    sourcemap: false,
+    minify: 'esbuild',
+    cssMinify: true,
+    rollupOptions: {
+      external: [/@rollup\\/rollup-.*/],
+      output: {
+        manualChunks: {
+          react: ['react', 'react-dom'],
+          router: ['react-router-dom']
+        }
+      }
+    }
+  },
+  define: {
+    'import.meta.env.VITE_SUPABASE_URL': JSON.stringify(process.env.VITE_SUPABASE_URL),
+    'import.meta.env.VITE_SUPABASE_ANON_KEY': JSON.stringify(process.env.VITE_SUPABASE_ANON_KEY),
+    'import.meta.env.VITE_DAILY_API_KEY': JSON.stringify(process.env.VITE_DAILY_API_KEY || '87f0c35f773411583c35bf5c5d79488504f3d872542fdf8cc8a5f9e1e1f60ef8'),
+    'import.meta.env.VITE_DAILY_DOMAIN': JSON.stringify(process.env.VITE_DAILY_DOMAIN || 'emotionsapp.daily.co'),
+    'import.meta.env.VITE_APP_URL': JSON.stringify(process.env.VITE_APP_URL || 'https://emotionsapp.vercel.app'),
+  }
+});
+`;
+
+  fs.writeFileSync(tempConfigPath, configContent);
+  
+  // Try to run Vite build with the temporary config
+  try {
+    execSync(`npx vite build --config ${tempConfigPath}`, {
+      stdio: 'inherit',
+      env: {
+        ...process.env,
+        ROLLUP_SKIP_NODEJS_NATIVE_MODULES: 'true',
+        ROLLUP_NATIVE_MODULES: 'never',
+        ROLLUP_PURE_JS: 'true'
+      }
+    });
+    console.log('Vite build completed successfully!');
+    // If we get here, the build was successful, so we can exit
+    process.exit(0);
+  } catch (error) {
+    console.error('Vite build failed, falling back to static build:', error.message);
+    // Continue with the static build
+  } finally {
+    // Clean up the temporary config file
+    if (fs.existsSync(tempConfigPath)) {
+      fs.unlinkSync(tempConfigPath);
+    }
+  }
+  
+} catch (error) {
+  console.error('Error setting up Vite build:', error);
+  console.log('Falling back to static build...');
+}
+
+// If we get here, the Vite build failed, so we'll create a static build
 
 // Copy the public directory to dist
 const publicDir = path.join(rootDir, 'public');
@@ -108,6 +185,14 @@ const indexHtml = `<!DOCTYPE html>
       // Simple script to check if environment variables are loaded
       document.addEventListener('DOMContentLoaded', function() {
         console.log('Environment variables loaded:', !!window.ENV_CONFIG);
+        
+        // Display environment variables status
+        if (window.ENV_CONFIG) {
+          const envStatus = document.createElement('div');
+          envStatus.className = 'card';
+          envStatus.innerHTML = '<p>Environment variables are properly loaded.</p>';
+          document.querySelector('.container').appendChild(envStatus);
+        }
       });
     </script>
   </body>
