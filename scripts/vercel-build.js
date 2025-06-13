@@ -1,128 +1,39 @@
-/**
- * Custom build script for Vercel deployment
- * This script bypasses the Rollup native module issue by using environment variables
- */
-
-import { spawn } from 'child_process';
+// This script ensures environment variables are properly loaded during Vercel build
+import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import fs from 'fs';
 
 // Get the directory name using ESM standard
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const rootDir = path.join(__dirname, '..');
 
-// Check if we're running in a Vercel environment
-const isVercel = process.env.VERCEL === '1';
+// Path to the env-config.js file in the public directory
+const envConfigPath = path.join(__dirname, '../public/env-config.js');
 
-console.log(`Running custom build script in ${isVercel ? 'Vercel' : 'local'} environment`);
-
-// Set environment variables to disable native modules in Rollup
-process.env.ROLLUP_SKIP_NODEJS_NATIVE_MODULES = 'true';
-process.env.ROLLUP_NATIVE_MODULES = 'never';
-process.env.ROLLUP_PURE_JS = 'true';
-
-// Function to run the build command
-async function runBuild() {
-  return new Promise((resolve, reject) => {
-    console.log('Starting Vite build with native modules disabled...');
-    
-    // Create the Vite build process
-    const buildProcess = spawn('npx', ['vite', 'build'], {
-      cwd: rootDir,
-      stdio: 'inherit',
-      env: {
-        ...process.env,
-        ROLLUP_SKIP_NODEJS_NATIVE_MODULES: 'true',
-        ROLLUP_NATIVE_MODULES: 'never',
-        ROLLUP_PURE_JS: 'true',
-        VITE_DISABLE_NATIVE: 'true'
-      }
-    });
-    
-    buildProcess.on('close', (code) => {
-      if (code === 0) {
-        console.log('Build completed successfully!');
-        resolve();
-      } else {
-        console.error(`Build failed with code ${code}`);
-        reject(new Error(`Build process exited with code ${code}`));
-      }
-    });
-    
-    buildProcess.on('error', (err) => {
-      console.error('Failed to start build process:', err);
-      reject(err);
-    });
-  });
-}
-
-// Create a simple vite.pure.js config that doesn't use native modules
-function createPureViteConfig() {
-  const configContent = `
-// Pure JS Vite config without native dependencies
-import { defineConfig } from 'vite';
-import react from '@vitejs/plugin-react';
-import path from 'path';
-
-// https://vitejs.dev/config/
-export default defineConfig({
-  plugins: [react()],
-  resolve: {
-    alias: {
-      '@': path.resolve(__dirname, './src')
-    }
-  },
-  build: {
-    sourcemap: false,
-    minify: 'esbuild',
-    cssMinify: true,
-    rollupOptions: {
-      external: [/@rollup\\/rollup-.*/],
-      output: {
-        manualChunks: {
-          react: ['react', 'react-dom'],
-          router: ['react-router-dom']
-        }
-      }
-    }
-  },
-  define: {
-    'import.meta.env.VITE_SUPABASE_URL': JSON.stringify(process.env.VITE_SUPABASE_URL),
-    'import.meta.env.VITE_SUPABASE_ANON_KEY': JSON.stringify(process.env.VITE_SUPABASE_ANON_KEY),
-    'import.meta.env.VITE_DAILY_API_KEY': JSON.stringify(process.env.VITE_DAILY_API_KEY || '87f0c35f773411583c35bf5c5d79488504f3d872542fdf8cc8a5f9e1e1f60ef8'),
-    'import.meta.env.VITE_DAILY_DOMAIN': JSON.stringify(process.env.VITE_DAILY_DOMAIN || 'emotionsapp.daily.co'),
-    'import.meta.env.VITE_APP_URL': JSON.stringify(process.env.VITE_APP_URL || 'https://emotionsapp.vercel.app'),
-  }
-});
+// Create the env-config.js file with environment variables from Vercel
+function createEnvConfig() {
+  const envConfig = `
+// This file is auto-generated during the build process
+window.ENV_CONFIG = {
+  VITE_SUPABASE_URL: "${process.env.VITE_SUPABASE_URL || 'https://hibeorkevqignkinaafy.supabase.co'}",
+  VITE_SUPABASE_ANON_KEY: "${process.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhpYmVvcmtldnFpZ25raW5hYWZ5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDc4MTMwNjgsImV4cCI6MjA2MzM4OTA2OH0.T-Dda-Rox11B6YFgrOt2PpK_vzhNB7GRuf5RxnYhNOE'}",
+  VITE_DAILY_DOMAIN: "${process.env.VITE_DAILY_DOMAIN || 'emotionsapp.daily.co'}",
+  VITE_DAILY_API_KEY: "${process.env.VITE_DAILY_API_KEY || '87f0c35f773411583c35bf5c5d79488504f3d872542fdf8cc8a5f9e1e1f60ef8'}",
+  VITE_APP_URL: "${process.env.VITE_APP_URL || 'https://emotions-app.com'}"
+};
 `;
 
-  const configPath = path.join(rootDir, 'vite.pure.js');
-  fs.writeFileSync(configPath, configContent, 'utf8');
-  console.log('Created pure JS Vite config at', configPath);
-  return configPath;
+  // Write the env-config.js file
+  fs.writeFileSync(envConfigPath, envConfig, 'utf8');
+  console.log('Created env-config.js with environment variables');
 }
 
-// Main function
-async function main() {
-  try {
-    if (isVercel) {
-      console.log('Running in Vercel environment, creating pure JS config...');
-      const pureConfigPath = createPureViteConfig();
-      
-      // Override the VITE_CONFIG_PATH environment variable
-      process.env.VITE_CONFIG_PATH = pureConfigPath;
-      process.env.VITE_FORCE_PURE_JS = 'true';
-    }
-    
-    await runBuild();
-    process.exit(0);
-  } catch (error) {
-    console.error('Build failed:', error);
-    process.exit(1);
-  }
-}
-
-// Run the main function
-main(); 
+// Execute the function with error handling
+try {
+  createEnvConfig();
+  console.log('Successfully created env-config.js');
+} catch (error) {
+  console.error('Error creating env-config.js:', error);
+  // Don't fail the build, but log the error
+  console.log('Continuing build process despite error...');
+} 
