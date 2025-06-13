@@ -1,6 +1,10 @@
-// Using CommonJS for compatibility
-const fs = require('fs');
-const path = require('path');
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+// Get the directory name using ESM standard
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // Path to the temp-env.txt file
 const tempEnvPath = path.join(__dirname, '../temp-env.txt');
@@ -41,11 +45,11 @@ function parseEnvFile() {
 }
 
 // If this script is run directly, execute the parseEnvFile function
-if (require.main === module) {
+if (import.meta.url === `file://${process.argv[1]}`) {
   console.log('Setting up environment variables from temp-env.txt...');
   const envVars = parseEnvFile();
   console.log(`Set ${Object.keys(envVars).length} environment variables`);
 }
 
 // Export the function for use in other modules
-module.exports = { parseEnvFile }; 
+export { parseEnvFile }; 

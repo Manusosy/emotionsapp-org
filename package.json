@@ -2,13 +2,13 @@
   "name": "emotions-app",
   "private": true,
   "version": "0.1.0",
-  "type": "commonjs",
+  "type": "module",
   "engines": {
     "node": ">=18.0.0"
   },
   "scripts": {
     "dev": "node ./scripts/setup-env.js && vite --host --port 5173 --force",
-    "build": "node ./scripts/esbuild.js",
+    "build": "node ./scripts/setup-env.js && tsc && vite build",
     "type-check": "tsc --noEmit",
     "lint": "eslint src --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "preview": "node ./scripts/setup-env.js && vite preview",
@@ -56,15 +56,12 @@
     "@tiptap/starter-kit": "^2.2.1",
     "@types/react-router-dom": "5.3.3",
     "@types/uuid": "10.0.0",
-    "autoprefixer": "^10.4.16",
     "canvg": "4.0.3",
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.0",
     "cmdk": "1.1.1",
     "date-fns": "2.30.0",
     "dompurify": "3.2.5",
-    "esbuild": "^0.20.2",
-    "esbuild-plugin-postcss2": "^0.1.2",
     "embla-carousel-react": "^8.0.0-rc18",
     "framer-motion": "10.18.0",
     "html2canvas": "1.4.1",
@@ -73,7 +70,6 @@
     "jspdf-autotable": "5.0.2",
     "lucide-react": "^0.303.0",
     "moment": "^2.30.1",
-    "postcss": "^8.4.32",
     "react": "^18.2.0",
     "react-day-picker": "^8.10.0",
     "react-dom": "^18.2.0",
@@ -82,12 +78,10 @@
     "react-router-dom": "^6.21.1",
     "recharts": "2.15.2",
     "sonner": "1.7.4",
-    "tailwindcss": "^3.4.0",
     "tailwind-merge": "^2.2.0",
     "tailwindcss-animate": "^1.0.7",
     "tinymce": "7.9.0",
     "typewriter-effect": "^2.21.0",
-    "typescript": "^5.3.3",
     "uuid": "11.1.0",
     "vaul": "^0.8.0",
     "zod": "3.22.4"
@@ -99,8 +93,13 @@
     "@typescript-eslint/eslint-plugin": "^6.16.0",
     "@typescript-eslint/parser": "^6.16.0",
     "@vitejs/plugin-react": "^4.2.1",
+    "autoprefixer": "^10.4.16",
     "eslint": "^8.56.0",
     "eslint-plugin-react-hooks": "^4.6.0",
-    "eslint-plugin-react-refresh": "^0.4.5"
+    "eslint-plugin-react-refresh": "^0.4.5",
+    "postcss": "^8.4.32",
+    "tailwindcss": "^3.4.0",
+    "typescript": "^5.3.3",
+    "vite": "^5.0.10"
   }
 }
