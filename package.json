@@ -12,7 +12,8 @@
     "type-check": "tsc --noEmit",
     "lint": "eslint src --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "preview": "node ./scripts/setup-env.js && vite preview",
-    "setup-env": "node ./scripts/setup-env.js"
+    "setup-env": "node ./scripts/setup-env.js",
+    "vercel-install": "npm install --omit=dev --no-optional --ignore-scripts --platform=linux"
   },
   "dependencies": {
     "@babel/plugin-transform-react-jsx": "7.23.4",
