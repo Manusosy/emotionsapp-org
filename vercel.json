@@ -1,21 +1,9 @@
 {
   "version": 2,
   "buildCommand": "npm run build",
-  "installCommand": "npm install --no-optional",
-  "framework": null,
   "outputDirectory": "dist",
-  "cleanUrls": true,
   "routes": [
     { "handle": "filesystem" },
     { "src": "/(.*)", "dest": "/index.html" }
-  ],
-  "github": {
-    "enabled": true,
-    "silent": false
-  },
-  "git": {
-    "deploymentEnabled": {
-      "main": true
-    }
-  }
+  ]
 } 
