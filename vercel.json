@@ -4,6 +4,12 @@
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
   "installCommand": "npm install --no-optional --ignore-platform",
+  "env": {
+    "ROLLUP_SKIP_NODEJS_NATIVE_MODULES": "true",
+    "ROLLUP_NATIVE_MODULES": "never",
+    "ROLLUP_PURE_JS": "true",
+    "VITE_DISABLE_NATIVE": "true"
+  },
   "routes": [
     {
       "src": "/assets/(.*)",
