@@ -1,0 +1,228 @@
+/* Mood Mentors Page Styles */
+
+/* Hero Section Gradient Animation */
+.mood-mentors-hero {
+  background: linear-gradient(-45deg, #0069FF, #00C2FF, #0091FF, #00AEFF);
+  background-size: 400% 400%;
+  animation: gradient 15s ease infinite;
+}
+
+@keyframes gradient {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+/* Card Hover Effects */
+.mentor-card {
+  transition: all 0.3s ease;
+  border: 1px solid rgba(0,0,0,0.05);
+}
+
+.mentor-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 10px 20px rgba(0, 105, 255, 0.1);
+  border-color: rgba(0, 105, 255, 0.2);
+}
+
+/* Star rating styles */
+.star-rating {
+  display: inline-flex;
+  color: #FFB800;
+}
+
+.star-rating .star {
+  width: 16px;
+  height: 16px;
+}
+
+/* Satisfaction percentage indicator */
+.satisfaction-indicator {
+  height: 6px;
+  background: #E9ECEF;
+  border-radius: 3px;
+  overflow: hidden;
+  margin: 8px 0;
+}
+
+.satisfaction-bar {
+  height: 100%;
+  background: linear-gradient(90deg, #00C2FF 0%, #0069FF 100%);
+  border-radius: 3px;
+}
+
+/* Badges */
+.specialty-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  background-color: rgba(0, 105, 255, 0.1);
+  color: #0069FF;
+  margin-right: 4px;
+  margin-bottom: 4px;
+}
+
+/* Free badge */
+.free-badge {
+  background-color: rgba(16, 185, 129, 0.1);
+  color: #10B981;
+}
+
+/* Profile image hover effect */
+.mentor-image {
+  transition: all 0.3s ease;
+  border: 2px solid transparent;
+}
+
+.mentor-card:hover .mentor-image {
+  border-color: #0069FF;
+}
+
+/* Action buttons */
+.action-button {
+  transition: all 0.2s ease;
+}
+
+.action-button:hover {
+  transform: translateY(-2px);
+}
+
+.book-button {
+  background: linear-gradient(90deg, #0069FF 0%, #00AEFF 100%);
+  color: white;
+  border: none;
+}
+
+.book-button:hover {
+  background: linear-gradient(90deg, #005CE0 0%, #0091D6 100%);
+}
+
+/* Feedback count badge */
+.feedback-count {
+  display: inline-flex;
+  align-items: center;
+  color: #64748B;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+/* Location badge */
+.location-badge {
+  display: inline-flex;
+  align-items: center;
+  color: #64748B;
+  font-size: 12px;
+}
+
+/* Availability indicator */
+.available-indicator {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: #10B981;
+  margin-right: 6px;
+}
+
+.unavailable-indicator {
+  background-color: #EF4444;
+}
+
+/* Filter section */
+.filter-section {
+  background-color: white;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  padding: 16px;
+  margin-bottom: 16px;
+}
+
+.filter-title {
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 12px;
+  color: #334155;
+}
+
+.filter-options {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* Custom checkboxes */
+.custom-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.custom-checkbox input {
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border: 1px solid #CBD5E1;
+  border-radius: 4px;
+  position: relative;
+}
+
+.custom-checkbox input:checked {
+  background-color: #0069FF;
+  border-color: #0069FF;
+}
+
+.custom-checkbox input:checked::after {
+  content: '';
+  position: absolute;
+  left: 5px;
+  top: 2px;
+  width: 5px;
+  height: 10px;
+  border: solid white;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+/* Search input */
+.search-input {
+  position: relative;
+}
+
+.search-input input {
+  padding-left: 36px;
+}
+
+.search-icon {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #94A3B8;
+}
+
+/* Wave separator */
+.wave-separator {
+  width: 100%;
+  overflow: hidden;
+  line-height: 0;
+}
+
+.wave-separator svg {
+  display: block;
+  width: calc(100% + 1.3px);
+  height: 46px;
+}
+
+.wave-separator .shape-fill {
+  fill: #FFFFFF;
+} 

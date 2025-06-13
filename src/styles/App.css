@@ -1,0 +1,284 @@
+#root {
+  max-width: 100%;
+  margin: 0 auto;
+  padding: 0;
+}
+
+.logo {
+  height: 6em;
+  padding: 1.5em;
+  will-change: filter;
+  transition: filter 300ms;
+}
+.logo:hover {
+  filter: drop-shadow(0 0 2em #646cffaa);
+}
+.logo.react:hover {
+  filter: drop-shadow(0 0 2em #61dafbaa);
+}
+
+@keyframes logo-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes marquee {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
+.animate-marquee {
+  animation: marquee 30s linear infinite;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  a:nth-of-type(2) .logo {
+    animation: logo-spin infinite 20s linear;
+  }
+}
+
+.card {
+  padding: 2em;
+}
+
+.read-the-docs {
+  color: #888;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .card {
+    padding: 1.5em;
+  }
+  
+  h1, h2, h3 {
+    word-wrap: break-word;
+    hyphens: auto;
+  }
+}
+
+@media (max-width: 640px) {
+  .card {
+    padding: 1em;
+  }
+  
+  /* Better text sizing for small screens */
+  h1, .h1 {
+    font-size: 2rem;
+  }
+  
+  h2, .h2 {
+    font-size: 1.75rem;
+  }
+}
+
+/* Global font styles */
+body, p, h1, h2, h3, h4, h5, h6, button, input, select, textarea {
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-weight: 400;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-weight: 500;
+}
+
+/* Enhance font display */
+.text-gradient-blue {
+  background: linear-gradient(90deg, #0078FF 0%, #00C6FF 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Button and interactive elements */
+button, .button, .btn {
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-weight: 500;
+  transition: all 0.3s ease;
+}
+
+/* Form elements */
+input, select, textarea {
+  font-family: 'Plus Jakarta Sans', sans-serif;
+}
+
+/* WhyBookUs specific styles - Updated to match the image exactly */
+.why-book-title {
+  font-size: 2.5rem;
+  font-weight: 700;
+  line-height: 1.2;
+  color: #001233;
+  font-family: 'Plus Jakarta Sans', sans-serif;
+}
+
+.why-book-badge {
+  background-color: #007BFF;
+  color: white;
+  padding: 0.5rem 1.5rem;
+  border-radius: 9999px;
+  font-weight: 700;
+  font-size: 0.875rem;
+  display: inline-flex;
+  align-items: center;
+  font-family: 'Plus Jakarta Sans', sans-serif;
+}
+
+/* Mission Vision section styling - updated to match the image exactly */
+.mission-vision-section {
+  background-color: #001A41;
+  padding: 4rem 0;
+}
+
+.mission-vision-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 1.5rem;
+}
+
+.mission-vision-item {
+  background-color: #001F54;
+  border: 1px solid rgba(0, 123, 255, 0.2);
+  border-radius: 1rem;
+  margin-bottom: 1rem;
+  overflow: hidden;
+  transition: all 0.3s ease;
+}
+
+.mission-vision-item.active {
+  border-color: rgba(0, 123, 255, 0.4);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+}
+
+.mission-vision-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1.25rem 1.5rem;
+  cursor: pointer;
+  width: 100%;
+  font-family: 'Plus Jakarta Sans', sans-serif;
+}
+
+.mission-vision-title-container {
+  display: flex;
+  align-items: center;
+}
+
+.mission-vision-number {
+  color: #007BFF;
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin-right: 0.75rem;
+  font-family: 'Plus Jakarta Sans', sans-serif;
+}
+
+.mission-vision-title {
+  color: white;
+  font-size: 1.25rem;
+  font-weight: 600;
+  font-family: 'Plus Jakarta Sans', sans-serif;
+}
+
+.mission-vision-content {
+  padding: 1rem 1.5rem 1.5rem;
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 1rem;
+  line-height: 1.6;
+  border-top: 1px solid rgba(0, 123, 255, 0.2);
+  margin-top: 0;
+  font-family: 'Plus Jakarta Sans', sans-serif;
+}
+
+.mission-vision-icon {
+  width: 2rem;
+  height: 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: #007BFF;
+  border-radius: 0.5rem;
+}
+
+/* FAQ styling */
+.faq-item {
+  border: 1px solid rgba(0, 123, 255, 0.2);
+  border-radius: 1rem;
+  margin-bottom: 1rem;
+  overflow: hidden;
+  transition: all 0.3s ease;
+  background-color: white;
+}
+
+.faq-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1.25rem 1.5rem;
+  cursor: pointer;
+  width: 100%;
+  font-family: 'Plus Jakarta Sans', sans-serif;
+}
+
+.faq-title {
+  color: #001A41;
+  font-size: 1.125rem;
+  font-weight: 600;
+  font-family: 'Plus Jakarta Sans', sans-serif;
+}
+
+.faq-content {
+  padding: 0 1.5rem 1.5rem;
+  color: #475467;
+  font-size: 1rem;
+  line-height: 1.6;
+  font-family: 'Plus Jakarta Sans', sans-serif;
+}
+
+.faq-icon-container {
+  width: 2rem;
+  height: 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: #007BFF;
+  border-radius: 0.5rem;
+}
+
+@media (max-width: 768px) {
+  .why-book-title {
+    font-size: 2rem;
+  }
+  
+  .mission-vision-header {
+    padding: 1.5rem;
+  }
+  
+  .mission-vision-number {
+    font-size: 1.5rem;
+  }
+  
+  .mission-vision-title {
+    font-size: 1.5rem;
+  }
+  
+  .mission-vision-content {
+    font-size: 1.125rem;
+    padding: 0 1.5rem 1.5rem 1.5rem;
+  }
+  
+  .faq-title {
+    font-size: 1rem;
+  }
+  
+  .faq-content {
+    font-size: 0.875rem;
+  }
+}

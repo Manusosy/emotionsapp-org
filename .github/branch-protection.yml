@@ -1,0 +1,26 @@
+name: Branch Protection
+
+on:
+  # Run on repository creation and manual triggers
+  create:
+  workflow_dispatch:
+
+jobs:
+  setup-branch-protection:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up branch protection
+        uses: softprops/ghaction-branch-protection@v1
+        with:
+          branches: 'main'
+          strict: false
+          enforce_admins: false
+          required_approving_review_count: 0
+          dismiss_stale_reviews: false
+          require_code_owner_reviews: false
+          require_status_checks: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} 

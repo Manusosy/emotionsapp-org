@@ -1,0 +1,21 @@
+/* Custom styles for the stress assessment slider */
+
+/* Ensure the cursor stays as a grabbing hand when dragging */
+.cursor-grab:active {
+  cursor: grabbing;
+}
+
+/* Make the background track a lighter shade */
+.bg-amber-400 {
+  background-color: #FFC107;
+}
+
+/* Make the border a slightly darker shade for contrast */
+.border-amber-500 {
+  border-color: #FF9800;
+}
+
+/* Add smooth transitions to slider elements */
+.transform {
+  transition: transform 0.1s ease-out, left 0.1s ease-out;
+} 

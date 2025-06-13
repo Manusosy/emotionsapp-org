@@ -1,0 +1,44 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Global styles */
+:root {
+  --brand-primary: #0078FF;
+  --brand-secondary: #FDA802;
+}
+
+body {
+  font-weight: 400;
+}
+
+/* Adjust font weights globally */
+@layer base {
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-medium;
+  }
+  
+  p, span, div, a {
+    @apply font-normal;
+  }
+  
+  .font-bold {
+    font-weight: 500 !important;
+  }
+  
+  .font-semibold {
+    font-weight: 500 !important;
+  }
+  
+  .font-medium {
+    font-weight: 400 !important;
+  }
+}
+
+body.signing-out {
+  cursor: wait;
+  opacity: 0.7;
+  pointer-events: none;
+}
+
+/* ... existing code ... */ 

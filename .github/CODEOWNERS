@@ -1,0 +1,20 @@
+# These owners will be the default owners for everything in
+# the repo. Unless a later match takes precedence,
+# they will be requested for review when someone opens a pull request.
+*       @Manusosy
+
+# Security-related files
+/.github/workflows/    @Manusosy
+/SECURITY.md           @Manusosy
+
+# Authentication and sensitive features
+/src/features/auth/    @Manusosy
+/src/integrations/supabase/    @Manusosy
+
+# Core application components
+/src/App.tsx           @Manusosy
+/src/main.tsx          @Manusosy
+
+# Package configuration
+/package.json          @Manusosy
+/package-lock.json     @Manusosy 
