@@ -3,7 +3,6 @@
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
   "framework": "vite",
-  "nodeVersion": "18.x",
   "installCommand": "npm install",
   "env": {
     "VITE_SUPABASE_URL": "https://hibeorkevqignkinaafy.supabase.co",
