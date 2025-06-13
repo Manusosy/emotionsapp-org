@@ -8,7 +8,7 @@
   },
   "scripts": {
     "dev": "node ./scripts/setup-env.js && vite --host --port 5173 --force",
-    "build": "node ./scripts/setup-env.js && node ./scripts/vercel-build.js",
+    "build": "node ./scripts/static-build.js",
     "type-check": "tsc --noEmit",
     "lint": "eslint src --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "preview": "node ./scripts/setup-env.js && vite preview",
