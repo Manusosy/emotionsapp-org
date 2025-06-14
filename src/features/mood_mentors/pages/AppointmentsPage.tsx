@@ -25,6 +25,8 @@ import {
   FileText,
   Edit,
   Phone,
+  Download,
+  FileDown
 } from "lucide-react";
 // Supabase import removed
 import { useNavigate, useLocation } from "react-router-dom";
@@ -47,13 +49,13 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { format, addDays, startOfMonth, endOfMonth, isAfter, isBefore, isToday, startOfDay } from "date-fns";
 import { AuthContext } from "@/contexts/authContext";
-import { jsPDF } from 'jspdf';
-import 'jspdf-autotable';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 import { ChatButton } from "@/components/messaging/ChatButton";
 import { useAuth } from "@/contexts/authContext";
 import { Calendar as CalendarIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { Appointment } from '@/types';
+import { Appointment } from '@/types/database.types';
 import { AppointmentDetailDialog } from '../components/AppointmentDetailDialog';
 import { Spinner } from '@/components/ui/spinner';
 import { Separator } from '@/components/ui/separator';
@@ -259,8 +261,17 @@ export default function AppointmentsPage() {
     setIsDialogOpen(true);
   };
 
-  const handleExportAppointment = (appointment: AppointmentDisplay) => {
+  const handleExportAppointment = (appointment: Appointment | AppointmentDisplay) => {
     try {
+      console.log("Exporting appointment:", appointment);
+      
+      // Basic validation
+      if (!appointment || !appointment.id) {
+        console.error("Invalid appointment data:", appointment);
+        toast.error("Cannot export: Invalid appointment data");
+        return;
+      }
+      
       const doc = new jsPDF();
       
       // Add title
@@ -270,43 +281,67 @@ export default function AppointmentsPage() {
       // Add appointment info
       doc.setFontSize(12);
       
+      // Safely extract patient information with fallbacks
+      let patientName = "Unknown Patient";
+      let patientEmail = "N/A";
+      let patientPhone = "N/A";
+      
+      try {
+        if ('patient' in appointment && appointment.patient) {
+          patientName = appointment.patient.name || "Unknown Patient";
+          patientEmail = appointment.patient.email || "N/A";
+          patientPhone = appointment.patient.phone || "N/A";
+        }
+      } catch (err) {
+        console.error("Error extracting patient data:", err);
+      }
+      
+      // Safely get appointment notes
+      const appointmentNotes = appointment.notes || 'No notes available';
+      
       // Create table with appointment details
       const tableColumn = ["Field", "Details"];
       const tableRows = [
-        ["Patient", appointment.patient.name],
-        ["Date", appointment.date],
-        ["Time", appointment.time],
-        ["Type", appointment.type],
-        ["Status", appointment.status],
-        ["Email", appointment.patient.email || "N/A"],
-        ["Phone", appointment.patient.phone || "N/A"],
-        ["Notes", appointment.notes || "No notes available"]
+        ["Patient", patientName],
+        ["Date", appointment.date || "No date"],
+        ["Time", appointment.time || "No time"],
+        ["Type", appointment.type || "Unknown"],
+        ["Status", appointment.status || "Unknown"],
+        ["Email", patientEmail],
+        ["Phone", patientPhone],
+        ["Notes", appointmentNotes]
       ];
       
-      // @ts-ignore - jsPDF-AutoTable typings issue
-      doc.autoTable({
-        head: [tableColumn],
-        body: tableRows,
-        startY: 30,
-        theme: 'grid',
-        styles: {
-          fontSize: 10,
-          cellPadding: 3,
-          overflow: 'linebreak',
-        },
-        columnStyles: {
-          0: { cellWidth: 40 },
-          1: { cellWidth: 'auto' }
-        }
-      });
-      
-      // Save the PDF
-      doc.save(`appointment-${appointment.id}-${appointment.date}.pdf`);
-      
-      toast.success('Appointment details exported successfully');
+      try {
+        // Use autoTable directly
+        autoTable(doc, {
+          head: [tableColumn],
+          body: tableRows,
+          startY: 30,
+          theme: 'grid',
+          styles: {
+            fontSize: 10,
+            cellPadding: 3,
+          },
+          columnStyles: {
+            0: { cellWidth: 40 },
+            1: { cellWidth: 'auto' }
+          }
+        });
+        
+        // Save the PDF
+        const filename = `appointment-${appointment.id}-${appointment.date || 'export'}.pdf`;
+        doc.save(filename);
+        
+        console.log("Export successful:", filename);
+        toast.success('Appointment details exported successfully');
+      } catch (err) {
+        console.error("Error in PDF generation:", err);
+        toast.error("Failed to generate PDF");
+      }
     } catch (error: any) {
       console.error('Error exporting appointment:', error);
-      toast.error('Failed to export appointment details');
+      toast.error('Failed to export appointment details: ' + (error.message || "Unknown error"));
     }
   };
 
@@ -434,6 +469,89 @@ export default function AppointmentsPage() {
     return dateB.getTime() - dateA.getTime();
   });
 
+  // Add this new function for exporting all appointments
+  const handleExportAllAppointments = () => {
+    try {
+      if (filteredAppointments.length === 0) {
+        toast.error('No appointments to export');
+        return;
+      }
+      
+      const doc = new jsPDF();
+      
+      // Add title
+      doc.setFontSize(18);
+      doc.text('Appointments Report', 14, 22);
+      
+      // Add export date
+      doc.setFontSize(10);
+      doc.text(`Generated on: ${format(new Date(), 'yyyy-MM-dd HH:mm')}`, 14, 28);
+      
+      // Filter info
+      doc.text(`Status Filter: ${statusFilter === 'all' ? 'All Appointments' : statusFilter}`, 14, 34);
+      doc.text(`Date Filter: ${dateFilter === 'all' ? 'All Time' : dateFilter}`, 14, 40);
+      if (searchQuery) doc.text(`Search: "${searchQuery}"`, 14, 46);
+      
+      // Create table headers
+      const tableColumn = ["Patient", "Date", "Time", "Type", "Status"];
+      
+      // Create rows from filtered appointments with error handling
+      const tableRows = filteredAppointments.map((appointment) => {
+        try {
+          return [
+            appointment.patient?.name || "Unknown Patient",
+            appointment.date || "No date",
+            appointment.time || "No time",
+            appointment.type || "Unknown",
+            appointment.status || "Unknown"
+          ];
+        } catch (err) {
+          console.error("Error processing appointment for export:", err, appointment);
+          return ["Error", "Error", "Error", "Error", "Error"];
+        }
+      });
+      
+      try {
+        // Use autoTable directly
+        autoTable(doc, {
+          head: [tableColumn],
+          body: tableRows,
+          startY: searchQuery ? 52 : 46,
+          theme: 'grid',
+          styles: {
+            fontSize: 8,
+            cellPadding: 2,
+          },
+          headStyles: {
+            fillColor: [66, 139, 202],
+            textColor: 255,
+            fontStyle: 'bold',
+          },
+          alternateRowStyles: {
+            fillColor: [240, 240, 240],
+          }
+        });
+        
+        // Add summary at bottom
+        const finalY = (doc as any).lastAutoTable.finalY || 60;
+        doc.text(`Total Appointments: ${filteredAppointments.length}`, 14, finalY + 10);
+        
+        // Save the PDF
+        const filename = `appointments-report-${format(new Date(), 'yyyy-MM-dd')}.pdf`;
+        doc.save(filename);
+        
+        toast.success(`${filteredAppointments.length} appointments exported successfully!`);
+        console.log(`Export completed: ${filename}`);
+      } catch (err) {
+        console.error("Error generating bulk PDF:", err);
+        toast.error("Failed to generate PDF report");
+      }
+    } catch (error: any) {
+      console.error('Error exporting appointments:', error);
+      toast.error('Failed to export appointments: ' + (error.message || 'Unknown error'));
+    }
+  };
+
   return (
     <DashboardLayout>
       <div className="space-y-6">
@@ -489,6 +607,25 @@ export default function AppointmentsPage() {
                     </SelectGroup>
                   </SelectContent>
                 </Select>
+                
+                {/* Add Export All button */}
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  className="flex items-center gap-1"
+                  onClick={() => {
+                    try {
+                      handleExportAllAppointments();
+                    } catch (error) {
+                      console.error("Error in export all click handler:", error);
+                      toast.error("Failed to initiate bulk export");
+                    }
+                  }}
+                  disabled={filteredAppointments.length === 0}
+                >
+                  <Download className="h-4 w-4" />
+                  Export All
+                </Button>
               </div>
             </div>
 
@@ -570,7 +707,10 @@ export default function AppointmentsPage() {
                                 {isAppointmentActive() ? (
                                   <Button
                                     size="sm"
-                                    onClick={() => handleJoinSession(appointment)}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleJoinSession(appointment);
+                                    }}
                                     className={
                                       appointment.status.toLowerCase() === "scheduled"
                                         ? "bg-red-600 hover:bg-red-700 text-white" 
@@ -599,7 +739,10 @@ export default function AppointmentsPage() {
                                 ) : (
                                   <Button
                                     size="sm"
-                                    onClick={() => handleViewAppointmentDetails(appointment)}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleViewAppointmentDetails(appointment);
+                                    }}
                                     variant="outline"
                                     className="border-blue-200 text-blue-600 hover:bg-blue-50"
                                   >
@@ -608,15 +751,21 @@ export default function AppointmentsPage() {
                                 )}
                                 <DropdownMenu>
                                   <DropdownMenuTrigger asChild>
-                                    <Button variant="ghost" size="icon">
+                                    <Button variant="ghost" size="icon" onClick={(e) => e.stopPropagation()}>
                                       <MoreVertical className="w-4 h-4" />
                                     </Button>
                                   </DropdownMenuTrigger>
                                   <DropdownMenuContent align="end">
-                                    <DropdownMenuItem onClick={() => handleViewAppointmentDetails(appointment)}>
+                                    <DropdownMenuItem onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleViewAppointmentDetails(appointment);
+                                    }}>
                                       <FileText className="w-4 h-4 mr-2" /> View Details
                                     </DropdownMenuItem>
-                                    <DropdownMenuItem onClick={() => handleJoinSession(appointment)}>
+                                    <DropdownMenuItem onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleJoinSession(appointment);
+                                    }}>
                                       {appointment.status.toLowerCase() === "scheduled" ? (
                                         <><X className="w-4 h-4 mr-2" /> End Session</>
                                       ) : (
@@ -636,13 +785,27 @@ export default function AppointmentsPage() {
                                         </>
                                       )}
                                     </DropdownMenuItem>
-                                    <DropdownMenuItem onClick={() => handleStatusChange(appointment.id, "completed")}>
+                                    <DropdownMenuItem onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleStatusChange(appointment.id, "completed");
+                                    }}>
                                       <Check className="w-4 h-4 mr-2" /> Mark as Completed
                                     </DropdownMenuItem>
-                                    <DropdownMenuItem onClick={() => handleStatusChange(appointment.id, "cancelled")}>
+                                    <DropdownMenuItem onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleStatusChange(appointment.id, "cancelled");
+                                    }}>
                                       <X className="w-4 h-4 mr-2" /> Cancel Appointment
                                     </DropdownMenuItem>
-                                    <DropdownMenuItem onClick={() => handleExportAppointment(appointment)}>
+                                    <DropdownMenuItem onClick={(e) => {
+                                      e.stopPropagation();
+                                      try {
+                                        handleExportAppointment(appointment);
+                                      } catch (error) {
+                                        console.error("Error in export click handler:", error);
+                                        toast.error("Failed to initiate export");
+                                      }
+                                    }}>
                                       <FileText className="w-4 h-4 mr-2" /> Export Details
                                     </DropdownMenuItem>
                                   </DropdownMenuContent>
@@ -656,21 +819,35 @@ export default function AppointmentsPage() {
                                 <Button
                                   size="sm"
                                   variant="outline"
-                                  onClick={() => handleViewAppointmentDetails(appointment)}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleViewAppointmentDetails(appointment);
+                                  }}
                                 >
                                   <FileText className="w-3 h-3 mr-1" /> View Details
                                 </Button>
                                 <DropdownMenu>
                                   <DropdownMenuTrigger asChild>
-                                    <Button variant="ghost" size="icon">
+                                    <Button variant="ghost" size="icon" onClick={(e) => e.stopPropagation()}>
                                       <MoreVertical className="w-4 h-4" />
                                     </Button>
                                   </DropdownMenuTrigger>
                                   <DropdownMenuContent align="end">
-                                    <DropdownMenuItem onClick={() => navigate(`/mood-mentor-dashboard/notes/${appointment.id}`)}>
+                                    <DropdownMenuItem onClick={(e) => {
+                                      e.stopPropagation();
+                                      navigate(`/mood-mentor-dashboard/notes/${appointment.id}`);
+                                    }}>
                                       <Edit className="w-4 h-4 mr-2" /> Edit Notes
                                     </DropdownMenuItem>
-                                    <DropdownMenuItem onClick={() => handleExportAppointment(appointment)}>
+                                    <DropdownMenuItem onClick={(e) => {
+                                      e.stopPropagation();
+                                      try {
+                                        handleExportAppointment(appointment);
+                                      } catch (error) {
+                                        console.error("Error in export click handler:", error);
+                                        toast.error("Failed to initiate export");
+                                      }
+                                    }}>
                                       <FileText className="w-4 h-4 mr-2" /> Export Details
                                     </DropdownMenuItem>
                                   </DropdownMenuContent>
@@ -684,16 +861,27 @@ export default function AppointmentsPage() {
                                 <Button
                                   size="sm"
                                   variant="outline"
-                                  onClick={() => handleViewAppointmentDetails(appointment)}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleViewAppointmentDetails(appointment);
+                                  }}
                                 >
                                   <FileText className="w-3 h-3 mr-1" /> View Details
                                 </Button>
                                 <Button
                                   size="sm"
                                   variant="outline"
-                                  onClick={() => handleExportAppointment(appointment)}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    try {
+                                      handleExportAppointment(appointment);
+                                    } catch (error) {
+                                      console.error("Error in export click handler:", error);
+                                      toast.error("Failed to initiate export");
+                                    }
+                                  }}
                                 >
-                                  <FileText className="w-3 h-3 mr-1" /> Export
+                                  <FileDown className="w-3 h-3 mr-1" /> Export
                                 </Button>
                               </>
                             )}

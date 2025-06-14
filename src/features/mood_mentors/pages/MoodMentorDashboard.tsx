@@ -1049,16 +1049,8 @@ export default function MoodMentorDashboard() {
                     <Calendar className="mx-auto h-10 w-10 text-gray-400 mb-2" />
                     <h3 className="text-sm font-medium text-gray-900">No upcoming appointments</h3>
                     <p className="text-sm text-gray-500 mt-1">
-                      Your schedule is clear for now
+                      No appointments for now
                     </p>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="mt-4"
-                      onClick={() => navigate('/mood-mentor-dashboard/availability')}
-                    >
-                      Manage Availability
-                    </Button>
                   </div>
                 )}
               </CardContent>
