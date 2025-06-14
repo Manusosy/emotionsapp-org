@@ -102,15 +102,60 @@ export function AppointmentDetailDialog({
   };
   
   const handleStartSession = async () => {
-    // Close the dialog first to avoid showing it again after navigation
-    onOpenChange(false);
-    
-    if (onJoinSession) {
-      // Use the provided callback if available
-      onJoinSession();
-    } else {
-      // Otherwise navigate directly
-      navigate(`/mood-mentor-dashboard/appointment/${appointment.id}/call`);
+    try {
+      // Show loading toast
+      toast.loading('Preparing video call room...');
+      
+      // First, ensure a room is created for this appointment
+      const { data: sessionData, error: sessionError } = await appointmentService.startAppointmentSession(appointment.id);
+      
+      // Dismiss loading toast
+      toast.dismiss();
+      
+      if (sessionError) {
+        console.error('Error starting appointment session:', sessionError);
+        toast.error('Failed to start call', {
+          description: sessionError
+        });
+        return;
+      }
+      
+      if (!sessionData || !sessionData.roomUrl) {
+        toast.error('Failed to create video call room');
+        return;
+      }
+      
+      console.log('Room created successfully:', sessionData.roomUrl);
+      
+      // Update the appointment status to "scheduled" if it's not already
+      if (appointment.status.toLowerCase() !== 'scheduled') {
+        await supabase
+          .from('appointments')
+          .update({ 
+            status: 'scheduled',
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', appointment.id);
+      }
+      
+      // Close the dialog first to avoid showing it again after navigation
+      onOpenChange(false);
+      
+      // Now that we have confirmed the room is created, navigate to the call page
+      toast.success('Video call room ready, joining session...');
+      
+      if (onJoinSession) {
+        // Use the provided callback if available
+        onJoinSession();
+      } else {
+        // Otherwise navigate directly
+        navigate(`/mood-mentor-dashboard/appointment/${appointment.id}/call`);
+      }
+    } catch (error: any) {
+      console.error('Error starting session:', error);
+      toast.error('Failed to start session', {
+        description: error.message || 'An unexpected error occurred'
+      });
     }
   };
   
@@ -224,8 +269,8 @@ export function AppointmentDetailDialog({
   }
   
   const isPast = new Date(appointment.date) < new Date();
-  const isActive = appointment.status === 'upcoming' || appointment.status === 'scheduled';
-  const canJoin = isActive && (isStartingSoon() || isMentor);
+  const isActive = appointment.status === 'upcoming' || appointment.status === 'scheduled' || appointment.status === 'in progress';
+  const canJoin = isActive && (isStartingSoon() || isMentor || appointment.status === 'in progress');
   
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

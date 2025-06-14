@@ -450,7 +450,9 @@ export default function AppointmentsPage() {
   // Function to check if a patient can join a session
   const canJoinSession = (appointment: any) => {
     // Patient can join if the appointment is scheduled (mentor has started it)
-    return appointment.status.toLowerCase() === 'scheduled';
+    // or if it is in progress
+    return appointment.status.toLowerCase() === 'scheduled' || 
+           appointment.status.toLowerCase() === 'in progress';
   };
 
   // Function to handle joining a video session
@@ -685,6 +687,24 @@ export default function AppointmentsPage() {
                                   disabled={!canJoinSession(appointment)}
                                 >
                                   <Video className="h-3.5 w-3.5 mr-1.5" />
+                                  {canJoinSession(appointment) ? "Join Call" : "Waiting..."}
+                                </Button>
+                              )}
+                              
+                              {/* Add support for audio appointments */}
+                              {appointment.type.toLowerCase() === 'audio' && (
+                                <Button
+                                  variant={canJoinSession(appointment) ? "default" : "outline"}
+                                  size="sm"
+                                  className={`h-8 px-3 rounded-full ${
+                                    canJoinSession(appointment)
+                                      ? "bg-green-600 hover:bg-green-700 text-white"
+                                      : "text-gray-500"
+                                  }`}
+                                  onClick={() => handleJoinSession(appointment)}
+                                  disabled={!canJoinSession(appointment)}
+                                >
+                                  <Phone className="h-3.5 w-3.5 mr-1.5" />
                                   {canJoinSession(appointment) ? "Join Call" : "Waiting..."}
                                 </Button>
                               )}

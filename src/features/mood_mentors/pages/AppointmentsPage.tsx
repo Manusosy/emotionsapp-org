@@ -205,7 +205,43 @@ export default function AppointmentsPage() {
         return;
       }
 
-      // Navigate directly to the call page
+      // Show loading toast
+      toast.loading('Preparing video call room...');
+
+      // First, ensure a room is created for this appointment
+      const { data: sessionData, error: sessionError } = await appointmentService.startAppointmentSession(appointment.id);
+      
+      // Dismiss loading toast
+      toast.dismiss();
+      
+      if (sessionError) {
+        console.error('Error starting appointment session:', sessionError);
+        toast.error('Failed to start call', {
+          description: sessionError
+        });
+        return;
+      }
+      
+      if (!sessionData || !sessionData.roomUrl) {
+        toast.error('Failed to create video call room');
+        return;
+      }
+      
+      console.log('Room created successfully:', sessionData.roomUrl);
+      
+      // Update the appointment status to "scheduled" if it's not already
+      if (appointment.status.toLowerCase() !== 'scheduled') {
+        await supabase
+          .from('appointments')
+          .update({ 
+            status: 'scheduled',
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', appointment.id);
+      }
+      
+      // Now that we have confirmed the room is created, navigate to the call page
+      toast.success('Video call room ready, joining session...');
       navigate(`/mood-mentor-dashboard/appointment/${appointment.id}/call`);
       
     } catch (error: any) {

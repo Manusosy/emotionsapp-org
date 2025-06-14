@@ -6,8 +6,10 @@ import { Video, Phone, X, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 import DailyIframe from '@daily-co/daily-js';
 import { appointmentService } from '@/services/appointments/appointment.service';
+import { dailyService } from '@/services/daily/daily.service';
 import { getEnvVar } from '@/lib/utils';
 import { EventBus } from '@/App';
+import { supabase } from '@/lib/supabase';
 
 // Function to aggressively clean up any existing Daily.co iframes
 const destroyAllDailyIframes = () => {
@@ -33,8 +35,30 @@ const destroyAllDailyIframes = () => {
   }
 };
 
-// Standard fallback values - should match those in daily.service.ts
-const FALLBACK_DOMAIN = 'emotionsapp.daily.co';
+// Standard fallback values - get from environment
+const FALLBACK_DOMAIN = getEnvVar('VITE_DAILY_DOMAIN', 'emotionsapp.daily.co');
+
+// Add this function at the top level, outside of any component
+const getApiKeyErrorMessage = (error: string | null): string | null => {
+  if (!error) return null;
+  
+  // Check for specific API key related errors
+  if (error.includes('authentication-error') || 
+      error.includes('API error (401)') || 
+      error.includes('API error (403)')) {
+    return 'The Daily.co API key appears to be invalid or expired. Please check your environment variables and ensure you have a valid API key.';
+  }
+  
+  if (error.includes('API error (400)')) {
+    return 'There was an error creating the video call room. This might be due to an invalid room configuration or API key issues.';
+  }
+  
+  if (error.includes('Network error')) {
+    return 'Could not connect to the Daily.co API. Please check your internet connection and try again.';
+  }
+  
+  return error;
+};
 
 // Base Call Page Component
 const DirectCallPage = ({ isMentor, redirectPath }: { isMentor: boolean, redirectPath: string }) => {
@@ -52,6 +76,7 @@ const DirectCallPage = ({ isMentor, redirectPath }: { isMentor: boolean, redirec
   const callFrameRef = useRef<ReturnType<typeof DailyIframe.createFrame> | null>(null);
   const mountedRef = useRef(true);
   const retryTimeoutRef = useRef<number | null>(null);
+  const [isRoomReady, setIsRoomReady] = useState(false);
   
   // Daily.co configuration - use only domain as we don't need API key in frontend component
   const dailyDomain = getEnvVar('VITE_DAILY_DOMAIN', FALLBACK_DOMAIN);
@@ -126,134 +151,121 @@ const DirectCallPage = ({ isMentor, redirectPath }: { isMentor: boolean, redirec
       setError(null);
       
       try {
+        console.log('Fetching appointment data and preparing room...');
+        
         if (!id) {
-          setError('Missing appointment ID');
-          setIsLoading(false);
-          return;
+          throw new Error('Appointment ID is missing');
         }
         
         // First, fetch the appointment details
-        const { data: appointmentData, error: appointmentError } = await appointmentService.getAppointmentById(id || '');
+        const { data: appointmentData, error: appointmentError } = await appointmentService.getAppointmentById(id);
         
-        if (appointmentError) {
-          console.error('Error fetching appointment:', appointmentError);
-          setError(`Failed to load appointment details: ${appointmentError}`);
-          setIsLoading(false);
-          return;
+        if (appointmentError || !appointmentData) {
+          throw new Error(appointmentError || 'Failed to fetch appointment details');
         }
         
-        if (!appointmentData) {
-          setError('Appointment not found');
-          setIsLoading(false);
-          return;
-        }
-        
+        // Store appointment details
         setAppointmentDetails(appointmentData);
         
-        // Check if patient and mentor data need to be swapped
-        if (appointmentData.patient && appointmentData.mentor) {
-          // If the patient data has "Mentor" in the name and mentor data doesn't, swap them
-          if (
-            (appointmentData.patient.full_name && appointmentData.patient.full_name.includes('Mentor')) ||
-            (appointmentData.patient.name && appointmentData.patient.name.includes('Mentor'))
-          ) {
-            console.log('Swapping patient and mentor data');
-            const temp = appointmentData.patient;
-            appointmentData.patient = appointmentData.mentor;
-            appointmentData.mentor = temp;
-          }
+        // Set audio-only mode based on appointment type
+        if (appointmentData.meeting_type && appointmentData.meeting_type.toLowerCase() === 'audio') {
+          console.log('Setting audio-only mode for this call');
+          setIsAudioOnly(true);
+        } else {
+          setIsAudioOnly(false);
         }
         
-        // Check if this is an audio-only call
-        const callType = appointmentData.meeting_type?.toLowerCase() || 'video';
-        setIsAudioOnly(callType === 'audio');
+        console.log('Appointment details loaded:', JSON.stringify(appointmentData, null, 2));
         
-        // Then, start the appointment session to get/create a room
+        // Check if we already have a meeting link
+        if (appointmentData.meeting_link) {
+          console.log('Using existing meeting link:', appointmentData.meeting_link);
+          setRoomUrl(appointmentData.meeting_link);
+          setIsRoomReady(true);
+          setIsLoading(false);
+          return;
+        }
+        
+        // No meeting link found, create a new room
+        console.log('No meeting link found, creating a new room...');
+        toast.info('Creating video call room...');
+        
+        // Explicitly create a room for this appointment
         const { data: sessionData, error: sessionError } = await appointmentService.startAppointmentSession(id);
         
-        if (sessionError) {
-          console.error('Error starting appointment session:', sessionError);
-          setError(`Failed to start call: ${sessionError}`);
-          setIsLoading(false);
-          return;
+        if (sessionError || !sessionData || !sessionData.roomUrl) {
+          console.error('Failed to create room:', sessionError);
+          throw new Error(sessionError || 'Failed to create video call room');
         }
         
-        if (!sessionData || !sessionData.roomUrl) {
-          setError('Failed to create video call room');
-          setIsLoading(false);
-          return;
-        }
+        console.log('Room created successfully:', sessionData.roomUrl);
+        toast.success('Video call room ready');
         
-        console.log('Room URL:', sessionData.roomUrl);
+        // Set the room URL
         setRoomUrl(sessionData.roomUrl);
+        setIsRoomReady(true);
         setIsLoading(false);
-        
-        // Notify that appointment session was started successfully
-        EventBus.emit('appointment-session-started', { 
-          appointmentId: id,
-          roomUrl: sessionData.roomUrl
+      } catch (error: any) {
+        console.error('Error in fetchAppointmentAndPrepareRoom:', error);
+        setError(error.message || 'Failed to prepare video call');
+        toast.error('Failed to prepare video call', { 
+          description: error.message || 'Please try again later'
         });
-      } catch (error) {
-        console.error('Unexpected error in fetchAppointmentAndPrepareRoom:', error);
-        setError(`Unexpected error: ${error instanceof Error ? error.message : String(error)}`);
         setIsLoading(false);
-      }
+      } 
     };
     
     fetchAppointmentAndPrepareRoom();
   }, [id, refreshKey]);
   
   const startCall = () => {
-    if (!roomUrl) {
-      setError('Cannot start call: Room not ready yet.');
-      return;
-    }
-    
-    if (isInitializing) {
-      console.log('Call initialization already in progress, ignoring duplicate request');
-      return;
-    }
-    
-    // Reset any previous error state
-    setError(null);
-    
-    // Clean up any existing call frames to prevent stale state
-    if (callFrameRef.current) {
-      try {
-        callFrameRef.current.destroy();
-        callFrameRef.current = null;
-      } catch (e) {
-        console.error('Error cleaning up existing call frame:', e);
+    try {
+      console.log('Starting call...');
+      setIsInitializing(true);
+      setError(null); // Clear any previous errors
+      toast.loading('Initializing video call...');
+
+      if (!roomUrl) {
+        throw new Error('Room URL is missing. Cannot start call.');
       }
+      
+      // Log the room URL being used
+      console.log('Initializing call with room URL:', roomUrl);
+      setIsCallStarted(true);
+      
+      // Add a small delay before initializing the call frame
+      const timeoutId = window.setTimeout(() => {
+        if (!mountedRef.current) return;
+        
+        // Initialize the call and handle potential errors
+        initializeCall().catch(err => {
+          console.error('Error during call initialization:', err);
+          setError(`Failed to initialize call: ${err instanceof Error ? err.message : 'Unknown error'}`);
+          setIsInitializing(false);
+          setIsCallStarted(false);
+          toast.dismiss();
+          toast.error('Failed to initialize call');
+        });
+      }, 1000);
+    } catch (error: any) {
+      console.error('Error starting call:', error);
+      setError(`Failed to start call: ${error.message || 'Unknown error'}`);
+      setIsInitializing(false);
+      setIsCallStarted(false);
+      toast.dismiss();
+      toast.error('Failed to start video call');
     }
-    
-    // Clean up any Daily iframes that might be lingering
-    destroyAllDailyIframes();
-    
-    setIsInitializing(true);
-    setIsCallStarted(true);
-    
-    console.log('Starting call initialization with delay...');
-    toast.info('Preparing video call, please wait...');
-    
-    // Use a longer timeout to ensure the DOM is ready
-    const timeoutId = window.setTimeout(() => {
-      if (mountedRef.current) {
-        console.log('Initializing call after delay');
-        initializeCall();
-      } else {
-        console.log('Component unmounted during initialization delay, aborting');
-      }
-    }, 2000); // Increased to 2 seconds for better stability
   };
   
-  const initializeCall = () => {
+  const initializeCall = async () => {
     // Check if room URL is available
     if (!roomUrl) {
       setError('Cannot initialize call: Room URL is not available.');
       setIsInitializing(false);
       return;
     }
+    
+    console.log('Using room URL:', roomUrl);
     
     // Check if the wrapper element is available
     if (!wrapperRef.current) {
@@ -268,8 +280,9 @@ const DirectCallPage = ({ isMentor, redirectPath }: { isMentor: boolean, redirec
         return;
       }
       
-      // Check for camera and mic permissions
-      navigator.mediaDevices.getUserMedia({ video: !isAudioOnly, audio: true })
+      // Check for camera and mic permissions based on call type
+      console.log(`Requesting permissions for ${isAudioOnly ? 'audio-only' : 'video'} call`);
+      navigator.mediaDevices.getUserMedia({ video: isAudioOnly ? false : true, audio: true })
         .then(() => {
           try {
             // Destroy any existing call frame
@@ -281,6 +294,9 @@ const DirectCallPage = ({ isMentor, redirectPath }: { isMentor: boolean, redirec
               }
               callFrameRef.current = null;
             }
+            
+            // Clean up any Daily iframes that might be lingering one more time
+            destroyAllDailyIframes();
             
             // Create Daily.co call frame with proper configuration
             // Make sure wrapper element exists before creating frame
@@ -294,58 +310,59 @@ const DirectCallPage = ({ isMentor, redirectPath }: { isMentor: boolean, redirec
               : (appointmentDetails?.patient?.full_name || 'Patient');
             
             console.log('Setting user name for call:', userName);
+            console.log('Creating Daily.co frame with URL:', roomUrl);
             
-            // Set up a MutationObserver to detect when the Daily.co name input appears
-            const observer = new MutationObserver((mutations) => {
-              // Look for the Daily.co name input field
-              const nameInput = document.querySelector('input[placeholder="Enter your name"]');
-              if (nameInput) {
-                console.log('Daily.co name input detected, hiding loading overlay');
-                setIsInitializing(false);
-                observer.disconnect();
-              }
-            });
+            // Create the call frame with the room URL
+            if (isAudioOnly) {
+              console.log('Creating audio-only call frame');
+              callFrameRef.current = DailyIframe.createFrame(wrapperRef.current, {
+                url: roomUrl,
+                showLeaveButton: true,
+                iframeStyle: {
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  width: '100%',
+                  height: '100%',
+                  border: 'none',
+                  borderRadius: '8px'
+                },
+                showFullscreenButton: true,
+                videoSource: false,
+                audioSource: true
+              });
+            } else {
+              console.log('Creating video call frame');
+              callFrameRef.current = DailyIframe.createFrame(wrapperRef.current, {
+                url: roomUrl,
+                showLeaveButton: true,
+                iframeStyle: {
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  width: '100%',
+                  height: '100%',
+                  border: 'none',
+                  borderRadius: '8px'
+                },
+                showFullscreenButton: true,
+                videoSource: true,
+                audioSource: true
+              });
+            }
             
-            // Start observing the document with the configured parameters
-            observer.observe(document.body, { 
-              childList: true, 
-              subtree: true 
-            });
-            
-            // Clean up observer on component unmount
-            const currentObserver = observer;
-            const observerTimeoutId = window.setTimeout(() => {
-              if (mountedRef.current) {
-                currentObserver.disconnect();
-              }
-            }, 10000); // Disconnect after 10 seconds to avoid memory leaks
-            
-            callFrameRef.current = DailyIframe.createFrame(wrapperRef.current, {
-              url: roomUrl,
-              showLeaveButton: true,
-              iframeStyle: {
-                position: 'absolute',
-                top: 0,
-                left: 0,
-                width: '100%',
-                height: '100%',
-                border: 'none',
-                borderRadius: '8px'
-              },
-              // Simplified dailyConfig to avoid TypeScript errors
-              dailyConfig: {
-                // Using a simpler configuration
-              },
-              showFullscreenButton: true,
-              videoSource: !isAudioOnly,
-              audioSource: true
-            });
+            // Add debugging info
+            console.log('Call frame created, adding event listeners...');
             
             // Listen for Daily.co events
             callFrameRef.current
+              .on('loading', () => {
+                console.log('Daily.co iframe loading');
+              })
               .on('loaded', () => {
                 console.log('Daily.co iframe loaded');
                 // Hide our loading overlay after a short delay to allow the Daily.co UI to appear
+                toast.dismiss(); // Dismiss the loading toast
                 const uiTimeoutId = window.setTimeout(() => {
                   setIsInitializing(false);
                 }, 1000);
@@ -360,15 +377,20 @@ const DirectCallPage = ({ isMentor, redirectPath }: { isMentor: boolean, redirec
                 });
               })
               .on('joining-meeting', () => {
+                console.log('Joining meeting...');
                 toast.info('Joining video call...');
               })
               .on('joined-meeting', () => {
+                console.log('Joined meeting successfully');
+                toast.dismiss(); // Dismiss any loading toasts
                 toast.success('You have joined the call');
               })
               .on('left-meeting', () => {
+                console.log('Left meeting');
                   endCall();
               })
               .on('participant-joined', (event) => {
+                console.log('Participant joined:', event);
                 const displayName = event.participant.user_name || 'Someone';
                 toast.info(`${displayName} joined the call`);
               })
@@ -379,8 +401,13 @@ const DirectCallPage = ({ isMentor, redirectPath }: { isMentor: boolean, redirec
                 });
               });
             
+            // Log right before joining
+            console.log('About to join meeting with call frame:', callFrameRef.current);
+            
             // Join the meeting
             callFrameRef.current.join();
+            console.log('Join method called');
+            
           } catch (err) {
             console.error('Error initializing call:', err);
             setError(`Failed to initialize call: ${err instanceof Error ? err.message : 'Unknown error'}`);
@@ -492,6 +519,16 @@ const DirectCallPage = ({ isMentor, redirectPath }: { isMentor: boolean, redirec
                 <p className="text-lg">We encountered an error</p>
                 <p className="text-destructive">{error}</p>
                 
+                {getApiKeyErrorMessage(error) && (
+                  <div className="mt-2 p-3 bg-amber-50 border border-amber-200 rounded-md">
+                    <p className="text-amber-800 font-medium">API Key Issue Detected</p>
+                    <p className="text-amber-700 mt-1">{getApiKeyErrorMessage(error)}</p>
+                    <p className="text-amber-700 mt-2 text-sm">
+                      Visit the <a href="https://dashboard.daily.co/developers" target="_blank" rel="noopener noreferrer" className="underline">Daily.co Developer Dashboard</a> to generate a new API key.
+                    </p>
+                  </div>
+                )}
+                
                 <div className="mt-6">
                   <h4 className="font-medium mb-2">Possible solutions:</h4>
                   <ul className="list-disc list-inside text-left space-y-2">
@@ -499,6 +536,9 @@ const DirectCallPage = ({ isMentor, redirectPath }: { isMentor: boolean, redirec
               <li>Allow browser permissions for camera and microphone when prompted</li>
               <li>Try using a different browser</li>
               <li>Restart your computer if the issue persists</li>
+                    {error.includes('API') && (
+                      <li className="text-amber-700">Contact your administrator to verify the Daily.co API configuration</li>
+                    )}
             </ul>
           </div>
           
@@ -553,7 +593,7 @@ const DirectCallPage = ({ isMentor, redirectPath }: { isMentor: boolean, redirec
                 <div>
                   <h3 className="text-xl font-semibold mb-2">
                     {isMentor 
-                      ? `Start Session with James Madd`
+                      ? `Start Session with ${appointmentDetails?.patient?.full_name || 'Patient'}`
                       : `Join Session with ${appointmentDetails?.mentor?.full_name || appointmentDetails?.mentor?.name || 'Mentor'}`
                     }
                   </h3>
@@ -572,7 +612,10 @@ const DirectCallPage = ({ isMentor, redirectPath }: { isMentor: boolean, redirec
                           {isMentor ? 'Patient' : 'Mentor'}:
                         </span>{' '}
                         {isMentor 
-                          ? 'James Madd'
+                          ? (appointmentDetails.patient?.full_name || 
+                             appointmentDetails.patient?.name ||
+                             appointmentDetails.patient?.email || 
+                             'Patient')
                           : (appointmentDetails.mentor?.full_name || 
                              appointmentDetails.mentor?.name ||
                              appointmentDetails.mentor?.email || 
@@ -589,8 +632,6 @@ const DirectCallPage = ({ isMentor, redirectPath }: { isMentor: boolean, redirec
                         <span className="font-medium">Time:</span>{' '}
                         {appointmentDetails.start_time} - {appointmentDetails.end_time}
                       </p>
-                      
-
                     </div>
                   )}
             

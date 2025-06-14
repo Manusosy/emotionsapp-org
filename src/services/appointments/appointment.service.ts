@@ -37,6 +37,26 @@ class SupabaseAppointmentService implements AppointmentService {
         return { error: 'Mentor profile not found. The user may not be registered as a mood mentor.' };
       }
       
+      // First create a meeting room with Daily.co
+      const roomName = `appointment-${data.patient_id.substring(0, 8)}-${data.mentor_id.substring(0, 8)}-${Date.now()}`;
+      const { data: roomData, error: roomError } = await dailyService.createRoom({
+        name: roomName,
+        privacy: 'public',
+        properties: {
+          enable_chat: true,
+          enable_screenshare: true
+        }
+      });
+
+      if (roomError) {
+        console.error('Error creating room:', roomError);
+        return { error: 'Failed to create meeting room: ' + roomError };
+      }
+
+      // Use the meeting link from the room data or a fallback
+      const meetingLink = roomData?.url || `https://emotionsapp.daily.co/${roomName}`;
+      console.log('Created room with URL:', meetingLink);
+      
       // Use the correct field names that match the database schema
       const appointmentData = {
         patient_id: data.patient_id,
@@ -46,7 +66,7 @@ class SupabaseAppointmentService implements AppointmentService {
         date: data.date, // Use date as in the schema
         start_time: data.start_time, // Use start_time as in the schema
         end_time: data.end_time,
-        meeting_link: data.meeting_link || `https://emotionsapp.org/meet/${data.patient_id}/${data.mentor_id}`,
+        meeting_link: meetingLink,
         meeting_type: data.meeting_type, // Use meeting_type as in the schema
         notes: data.notes || null,
         status: 'pending',
@@ -522,7 +542,7 @@ class SupabaseAppointmentService implements AppointmentService {
       // Fetch the basic appointment data
       const { data: appointment, error: fetchError } = await supabase
         .from(tables.appointments)
-        .select('id, status, meeting_link, meeting_type')
+        .select('id, status, patient_id, mentor_id, meeting_type')
         .eq('id', appointmentId)
         .single();
       
@@ -535,42 +555,49 @@ class SupabaseAppointmentService implements AppointmentService {
         return { error: 'Appointment not found' };
       }
       
-      // If the appointment already has a meeting link, return it
-      if (appointment.meeting_link) {
-        console.log('Appointment already has meeting link:', appointment.meeting_link);
-        return { 
-          data: { 
-            roomUrl: appointment.meeting_link,
-            isExisting: true
-          } 
-        };
-      }
-      
-      // Otherwise, create a new room with Daily.co
       console.log('Creating new room for appointment:', appointmentId);
+      
+      // Generate a unique room name based on appointment ID and timestamp
+      // This ensures a new room is created for each session
+      const timestamp = Date.now();
+      const roomName = `appointment-${appointmentId.replace(/[^a-zA-Z0-9]/g, '')}-${timestamp}`;
+      
+      console.log('Generated unique room name:', roomName);
+      
+      // Create a new room with Daily.co
+      const isAudioOnly = appointment.meeting_type && appointment.meeting_type.toLowerCase() === 'audio';
+      console.log(`Creating ${isAudioOnly ? 'audio-only' : 'video'} call room for appointment type: ${appointment.meeting_type}`);
+      
       const { data: roomData, error: roomError } = await dailyService.createRoom({
-        name: `appointment-${appointmentId}`,
+        name: roomName,
         privacy: 'public',
         expiry: 24 * 60 * 60, // 24 hours
-        enable_chat: true,
-        enable_screenshare: true
+        properties: {
+          enable_chat: true,
+          enable_screenshare: true,
+          start_video_off: isAudioOnly,
+          start_audio_off: false
+        }
       });
         
       if (roomError) {
         console.error('Error creating room:', roomError);
-        return { error: `Failed to create room: ${roomError}` };
+        return { error: roomError };
       }
         
       if (!roomData || !roomData.url) {
         console.error('No room URL returned from Daily.co');
         return { error: 'Failed to create room: No URL returned' };
       }
+      
+      const roomUrl = roomData.url;
+      console.log('Room created successfully with URL:', roomUrl);
         
       // Update the appointment with the meeting link
       const { error: updateError } = await supabase
         .from(tables.appointments)
         .update({ 
-          meeting_link: roomData.url,
+          meeting_link: roomUrl,
           updated_at: new Date().toISOString()
         })
         .eq('id', appointmentId);
@@ -578,10 +605,9 @@ class SupabaseAppointmentService implements AppointmentService {
       if (updateError) {
         console.error('Error updating appointment with meeting link:', updateError);
         // Still return the room URL even if we couldn't update the DB
-        // This ensures the call can proceed
         return { 
           data: { 
-            roomUrl: roomData.url,
+            roomUrl: roomUrl,
             isNew: true,
             warning: 'Room created but appointment not updated in database'
           },
@@ -592,12 +618,12 @@ class SupabaseAppointmentService implements AppointmentService {
       // Emit event to notify that a session was started
       EventBus.emit('appointment-session-created', { 
         appointmentId, 
-        roomUrl: roomData.url 
+        roomUrl: roomUrl 
       });
         
       return { 
         data: { 
-          roomUrl: roomData.url,
+          roomUrl: roomUrl,
           isNew: true
         } 
       };

@@ -1,374 +1,270 @@
 import { ServiceResponse } from '../index';
 import { getEnvVar } from '@/lib/utils';
 
-/**
- * Room configuration options for Daily.co
- */
+// Daily.co room configuration interface
 export interface DailyRoomConfig {
-  /** Name of the room */
   name?: string;
-  /** Whether the room is private (requires token to join) */
   privacy?: 'public' | 'private';
-  /** Duration in seconds until the room expires */
   expiry?: number;
-  /** Maximum number of participants allowed */
-  max_participants?: number;
-  /** Whether to enable or disable camera at start */
-  enable_camera?: boolean;
-  /** Whether to enable or disable microphone at start */
-  enable_mic?: boolean;
-  /** Whether to enable screen sharing */
+  properties?: {
+    start_audio_off?: boolean;
+    start_video_off?: boolean;
+    enable_chat?: boolean;
   enable_screenshare?: boolean;
-  /** Whether to enable chat */
-  enable_chat?: boolean;
-  /** Whether to enable emoji reactions */
-  enable_emoji_reactions?: boolean;
-  /** Whether to enable hand raising */
-  enable_hand_raising?: boolean;
-  /** Whether to enable background blur */
-  enable_background_blur?: boolean;
-  /** Whether to enable recording */
-  enable_recording?: boolean;
+    [key: string]: any;
+  };
 }
 
-/**
- * Response from creating a Daily.co room
- */
-interface DailyRoomResponse {
+// Daily.co room response interface
+export interface DailyRoomResponse {
   id: string;
   name: string;
   api_created: boolean;
   privacy: 'public' | 'private';
   url: string;
   created_at: string;
-  config: {
-    enable_chat: boolean;
-    enable_screenshare: boolean;
-    enable_emoji_reactions: boolean;
-    enable_hand_raising: boolean;
-    enable_recording: boolean;
-    [key: string]: any;
-  };
 }
 
-// Standard fallback API key - should match the one in vite.config.ts and env-config.js
-const FALLBACK_API_KEY = '87f0c35f773411583c35bf5c5d79488504f3d872542fdf8cc8a5f9e1e1f60ef8';
-const FALLBACK_DOMAIN = 'emotionsapp.daily.co';
+// Get Daily.co API configuration from environment variables
+const API_KEY = getEnvVar('VITE_DAILY_API_KEY', '');
+const DOMAIN = getEnvVar('VITE_DAILY_DOMAIN', 'emotionsapp.daily.co');
+const API_BASE_URL = 'https://api.daily.co/v1';
+
+// Validate API key is available
+if (!API_KEY) {
+  console.error('Warning: Daily.co API key is missing. Video calls will not work correctly.');
+}
 
 /**
- * Service for interacting with the Daily.co API
+ * Simple service for interacting with the Daily.co API
  */
 class DailyService {
-  private apiKey: string = '';
-  private dailyDomain: string = '';
-  private baseUrl: string = 'https://api.daily.co/v1';
-  private isInitialized: boolean = false;
-
-  constructor() {
-    this.initializeService();
-  }
-  
-  /**
-   * Initialize the service with environment variables or fallbacks
-   */
-  private initializeService() {
-    try {
-      // Get API key with consistent fallback pattern
-      this.apiKey = getEnvVar('VITE_DAILY_API_KEY', FALLBACK_API_KEY);
-      this.dailyDomain = getEnvVar('VITE_DAILY_DOMAIN', FALLBACK_DOMAIN);
-      
-      // Trim values to remove any whitespace
-      this.apiKey = this.apiKey.trim();
-      this.dailyDomain = this.dailyDomain.trim();
-      
-      // Validate API key format
-      if (!this.apiKey || this.apiKey.length < 40) {
-        console.error('Daily.co API key is invalid or too short. Video calls will not work.');
-      } else {
-        this.isInitialized = true;
-      }
-      
-      console.log('Daily.co service initialized:');
-      console.log('- API Key (masked):', this.apiKey ? `${this.apiKey.substring(0, 5)}...${this.apiKey.substring(this.apiKey.length - 5)}` : 'undefined');
-      console.log('- API Key length:', this.apiKey ? this.apiKey.length : 0);
-      console.log('- Domain:', this.dailyDomain);
-      console.log('- Initialization status:', this.isInitialized ? 'SUCCESS' : 'FAILED');
-    } catch (error) {
-      console.error('Error initializing Daily service:', error);
-      this.apiKey = FALLBACK_API_KEY;
-      this.dailyDomain = FALLBACK_DOMAIN;
-    }
-  }
-
   /**
    * Create a new Daily.co room
-   * @param config Room configuration options
-   * @returns ServiceResponse with room data or error
    */
   async createRoom(config: DailyRoomConfig = {}): Promise<ServiceResponse<DailyRoomResponse>> {
     try {
-      // Check if service is initialized
-      if (!this.isInitialized) {
-        console.error('Daily.co service not properly initialized');
-        return { error: 'Video call service not properly initialized' };
+      console.log('Creating Daily.co room with config:', JSON.stringify(config));
+      
+      // Check if API key is available
+      if (!API_KEY) {
+        return { error: 'Daily.co API key is not configured. Please check your environment variables.' };
       }
       
-      // Set default expiry to 24 hours if not specified
-      const expiry = config.expiry || 24 * 60 * 60; // 24 hours in seconds
+      // Set default room name if not provided
+      const roomName = config.name || `room-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
       
-      // Generate a unique name if not provided
-      const name = config.name || `room-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
-      
-      // Default configuration
-      const defaultConfig: DailyRoomConfig = {
-        privacy: 'public',
-        max_participants: 10,
-        enable_camera: true,
-        enable_mic: true,
+      // Set default configuration
+      const roomConfig = {
+        name: roomName,
+        privacy: config.privacy || 'public',
+        properties: {
+          exp: Math.floor(Date.now() / 1000) + (config.expiry || 24 * 60 * 60), // Default 24 hours
+          enable_chat: true,
         enable_screenshare: true,
-        enable_chat: true,
-        enable_emoji_reactions: true,
-        enable_hand_raising: true,
-        enable_background_blur: false,
-        enable_recording: false,
+          ...(config.properties || {})
+        }
       };
-
-      // Merge default config with provided config
-      const roomConfig = { ...defaultConfig, ...config, name, expiry };
-
-      console.log(`Creating Daily.co room: ${name}`);
       
-      try {
-        const response = await fetch(`${this.baseUrl}/rooms`, {
+      // Make API request to create room
+      const response = await fetch(`${API_BASE_URL}/rooms`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${this.apiKey}`
+            'Authorization': `Bearer ${API_KEY}`
           },
           body: JSON.stringify(roomConfig)
         });
 
+      // Log response status for debugging
+      console.log(`Daily.co create room response status: ${response.status}`);
+      
+      // Handle non-OK response
         if (!response.ok) {
           const errorText = await response.text();
-          let errorData;
-          try {
-            errorData = JSON.parse(errorText);
-          } catch (e) {
-            errorData = { error: errorText };
-          }
-          
-          console.error('Error creating Daily.co room:', {
-            status: response.status,
-            statusText: response.statusText,
-            errorData
-          });
-          
-          // Special handling for authentication errors
+        console.error('Daily.co API error:', errorText);
+        
+        // Return appropriate error message
           if (response.status === 401 || response.status === 403) {
             return { error: 'authentication-error' };
           }
           
-          return { 
-            error: `Failed to create room: ${errorData.error || response.statusText || 'API Error'}` 
-          };
-        }
-
-        const data: DailyRoomResponse = await response.json();
-        console.log('Daily.co room created successfully:', data.name);
-        return { data };
-      } catch (fetchError: any) {
-        console.error('Fetch error when calling Daily.co API:', fetchError);
-        return { error: `Network error: ${fetchError.message}` };
+        return { error: `API error (${response.status}): ${errorText}` };
       }
+      
+      // Parse successful response
+      const roomData = await response.json();
+      console.log('Room created successfully:', roomData.url);
+      
+      return { data: roomData };
     } catch (error: any) {
-      console.error('Error in createRoom:', error);
-      return { error: error.message || 'Unknown error creating Daily.co room' };
+      console.error('Error creating Daily.co room:', error);
+      return { error: error.message || 'Unknown error creating room' };
     }
   }
 
   /**
-   * Create a room specifically for an appointment
-   * @param appointmentId ID of the appointment
-   * @param isAudioOnly Whether this is an audio-only call
-   * @returns ServiceResponse with room URL or error
-   */
-  async createAppointmentRoom(appointmentId: string, isAudioOnly: boolean = false): Promise<ServiceResponse<string>> {
-    try {
-      // Check if service is initialized
-      if (!this.isInitialized) {
-        console.error('Daily.co service not properly initialized');
-        return { error: 'Video call service not properly initialized' };
-      }
-      
-      // Validate parameters
-      if (!appointmentId) {
-        console.error('Missing appointment ID for Daily.co room creation');
-        return { error: 'Missing appointment ID' };
-      }
-      
-      // Create a simplified room name without any special characters
-      const roomName = `appointment${appointmentId.replace(/[^a-zA-Z0-9]/g, '')}`;
-      
-      console.log(`Creating appointment room: ${roomName}`);
-      
-      // First, check if the room already exists
-      try {
-        const checkResponse = await fetch(`${this.baseUrl}/rooms/${roomName}`, {
-          method: 'GET',
-          headers: {
-            'Authorization': `Bearer ${this.apiKey}`
-          }
-        });
-        
-        // If room exists, return its URL
-        if (checkResponse.ok) {
-          const roomData = await checkResponse.json();
-          console.log('Room already exists:', roomData.name);
-          return { data: roomData.url };
-        }
-        
-        // If we get an authentication error, report it clearly
-        if (checkResponse.status === 401 || checkResponse.status === 403) {
-          console.error('Daily.co API authentication error. Check API key validity.');
-          return { error: 'authentication-error' };
-        }
-        
-        // If 404, room doesn't exist, continue to create it
-      } catch (checkError) {
-        console.warn('Error checking if room exists:', checkError);
-        // Continue to create room
-      }
-      
-      // Create a simple room with minimal configuration
-      try {
-        const roomConfig = {
-          name: roomName,
-          privacy: 'public',
-          properties: {
-            start_audio_off: isAudioOnly,
-            start_video_off: isAudioOnly,
-            enable_chat: true,
-            enable_screenshare: true
-          }
-        };
-        
-        const response = await fetch(`${this.baseUrl}/rooms`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${this.apiKey}`
-          },
-          body: JSON.stringify(roomConfig)
-        });
-        
-        if (!response.ok) {
-          const errorText = await response.text();
-          console.error('Error response from Daily.co API:', errorText);
-          
-          if (response.status === 401 || response.status === 403) {
-            return { error: 'authentication-error' };
-          }
-          
-          return { error: `Failed to create room: API error (${response.status})` };
-        }
-        
-        const data = await response.json();
-        console.log('Room created successfully:', data.name);
-        
-        if (!data.url) {
-          return { error: 'No room URL returned from API' };
-        }
-        
-        return { data: data.url };
-      } catch (createError: any) {
-        console.error('Error creating room:', createError);
-        return { error: `Failed to create room: ${createError.message}` };
-      }
-    } catch (error: any) {
-      console.error('Error in createAppointmentRoom:', error);
-      return { error: error.message || 'Unknown error creating appointment room' };
-    }
-  }
-
-  /**
-   * Delete a Daily.co room
-   * @param roomName Name of the room to delete
-   * @returns ServiceResponse with success or error
-   */
-  async deleteRoom(roomName: string): Promise<ServiceResponse<boolean>> {
-    try {
-      if (!this.isInitialized || !this.apiKey) {
-        return { error: 'Daily.co API key is not configured' };
-      }
-
-      const response = await fetch(`${this.baseUrl}/rooms/${roomName}`, {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${this.apiKey}`
-        }
-      });
-
-      if (!response.ok) {
-        // 404 is acceptable - room might already be deleted or expired
-        if (response.status === 404) {
-          return { data: true };
-        }
-        
-        const errorData = await response.json();
-        console.error('Error deleting Daily.co room:', errorData);
-        return { 
-          error: `Failed to delete room: ${errorData.error || response.statusText}` 
-        };
-      }
-
-      return { data: true };
-    } catch (error: any) {
-      console.error('Error in deleteRoom:', error);
-      return { error: error.message || 'Unknown error deleting Daily.co room' };
-    }
-  }
-
-  /**
-   * Get information about a Daily.co room
-   * @param roomName Name of the room
-   * @returns ServiceResponse with room data or error
+   * Get details about an existing room
    */
   async getRoomDetails(roomName: string): Promise<ServiceResponse<DailyRoomResponse>> {
     try {
-      if (!this.isInitialized || !this.apiKey) {
-        return { error: 'Daily.co API key is not configured' };
-      }
-
-      const response = await fetch(`${this.baseUrl}/rooms/${roomName}`, {
+      console.log(`Getting details for room: ${roomName}`);
+      
+      const response = await fetch(`${API_BASE_URL}/rooms/${roomName}`, {
         method: 'GET',
         headers: {
-          'Authorization': `Bearer ${this.apiKey}`
+          'Authorization': `Bearer ${API_KEY}`
         }
       });
-
+      
+      console.log(`Daily.co get room details response status: ${response.status}`);
+      
       if (!response.ok) {
-        const errorData = await response.json();
-        console.error('Error getting Daily.co room details:', errorData);
-        return { 
-          error: `Failed to get room details: ${errorData.error || response.statusText}` 
-        };
+        const errorText = await response.text();
+        console.error('Daily.co API error:', errorText);
+        
+        if (response.status === 404) {
+          return { error: 'room-not-found' };
+        }
+        
+        if (response.status === 401 || response.status === 403) {
+          return { error: 'authentication-error' };
+        }
+        
+        return { error: `API error (${response.status}): ${errorText}` };
       }
-
-      const data: DailyRoomResponse = await response.json();
-      return { data };
+      
+      const roomData = await response.json();
+      return { data: roomData };
     } catch (error: any) {
-      console.error('Error in getRoomDetails:', error);
+      console.error('Error getting Daily.co room details:', error);
       return { error: error.message || 'Unknown error getting room details' };
     }
   }
 
   /**
+   * Delete a room
+   */
+  async deleteRoom(roomName: string): Promise<ServiceResponse<boolean>> {
+    try {
+      console.log(`Deleting room: ${roomName}`);
+
+      const response = await fetch(`${API_BASE_URL}/rooms/${roomName}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${API_KEY}`
+        }
+      });
+      
+      console.log(`Daily.co delete room response status: ${response.status}`);
+      
+      // 404 is acceptable - room might not exist
+      if (response.status === 404) {
+        return { data: true };
+      }
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Daily.co API error:', errorText);
+        
+        if (response.status === 401 || response.status === 403) {
+          return { error: 'authentication-error' };
+        }
+        
+        return { error: `API error (${response.status}): ${errorText}` };
+      }
+
+      return { data: true };
+    } catch (error: any) {
+      console.error('Error deleting Daily.co room:', error);
+      return { error: error.message || 'Unknown error deleting room' };
+    }
+  }
+
+  /**
+   * Test connection to Daily.co API
+   */
+  async testConnection(): Promise<ServiceResponse<boolean>> {
+    try {
+      console.log('Testing Daily.co API connection...');
+
+      const response = await fetch(`${API_BASE_URL}/rooms`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${API_KEY}`
+        }
+      });
+      
+      console.log(`Daily.co API test response status: ${response.status}`);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Daily.co API test failed:', errorText);
+        return { error: `API connection failed (${response.status}): ${errorText}` };
+      }
+      
+      const data = await response.json();
+      console.log('Daily.co API connection successful. Found', data.totalCount, 'rooms');
+      return { data: true };
+    } catch (error: any) {
+      console.error('Error testing Daily.co API connection:', error);
+      return { error: error.message || 'Network error' };
+    }
+  }
+  
+  /**
+   * Create a room specifically for an appointment
+   */
+  async createAppointmentRoom(appointmentId: string, isAudioOnly: boolean = false): Promise<ServiceResponse<string>> {
+    try {
+      console.log(`Creating appointment room for appointment: ${appointmentId}`);
+      
+      if (!appointmentId) {
+        return { error: 'Missing appointment ID' };
+      }
+      
+      // Create a simplified room name
+      const roomName = `appointment-${appointmentId.replace(/[^a-zA-Z0-9]/g, '')}`;
+      
+      // First check if room already exists
+      const { data: existingRoom, error: checkError } = await this.getRoomDetails(roomName);
+      
+      if (existingRoom) {
+        console.log('Room already exists:', existingRoom.url);
+        return { data: existingRoom.url };
+      }
+      
+      // Create a new room
+      const { data: roomData, error: createError } = await this.createRoom({
+        name: roomName,
+        properties: {
+          start_audio_off: isAudioOnly,
+          start_video_off: isAudioOnly,
+          enable_chat: true,
+          enable_screenshare: true
+        }
+      });
+      
+      if (createError) {
+        return { error: createError };
+      }
+      
+      if (!roomData || !roomData.url) {
+        return { error: 'No room URL returned from API' };
+      }
+      
+      return { data: roomData.url };
+    } catch (error: any) {
+      console.error('Error creating appointment room:', error);
+      return { error: error.message || 'Unknown error creating appointment room' };
+    }
+  }
+
+  /**
    * Get the full URL for a Daily.co room
-   * @param roomName Name of the room
-   * @returns Full URL to the room
    */
   getRoomUrl(roomName: string): string {
-    return `https://${this.dailyDomain}/${roomName}`;
+    return `https://${DOMAIN}/${roomName}`;
   }
 }
 
