@@ -1,8 +1,8 @@
-import { authService, userService, dataService, apiService, messageService, patientService, moodMentorService, appointmentService } from '../../../services'
 import { useEffect, useState } from 'react';
 import { Star } from 'lucide-react';
 import { format } from 'date-fns';
-// Supabase import removed
+import { MoodMentorService } from '@/services/mood-mentor/mood-mentor.service';
+import { MoodMentorReview } from '@/services/mood-mentor/mood-mentor.interface';
 
 import {
   Card,
@@ -30,6 +30,7 @@ interface ReviewListProps {
 export function ReviewList({ moodMentorId }: ReviewListProps) {
   const [reviews, setReviews] = useState<Review[]>([]);
   const [loading, setLoading] = useState(true);
+  const mentorService = new MoodMentorService();
 
   useEffect(() => {
     loadReviews();
@@ -37,42 +38,29 @@ export function ReviewList({ moodMentorId }: ReviewListProps) {
 
   const loadReviews = async () => {
     try {
-      const { data, error } = await supabase
-        .from('mood_mentor_reviews')
-        .select(`
-          id,
-          rating,
-          comment,
-          created_at,
-          users:user_id (
-            full_name,
-            avatar_url
-          )
-        `)
-        .eq('mood_mentor_id', moodMentorId)
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-
-      // Use type assertion to safely set the reviews
-      if (data) {
-        // Handle potential errors in the nested query by providing default values
-        const safeReviews = data.map(review => ({
-          id: review.id,
-          rating: review.rating,
-          comment: review.comment,
-          created_at: review.created_at,
-          users: review.users && typeof review.users === 'object' ? 
-            {
-              full_name: (review.users as any)?.full_name || 'Anonymous User',
-              avatar_url: (review.users as any)?.avatar_url || '/default-avatar.png'
-            } : null
-        })) as Review[];
-        
-        setReviews(safeReviews);
-      } else {
+      setLoading(true);
+      
+      // Use the service to get reviews with patient data in one call
+      const serviceReviews = await mentorService.getMoodMentorReviews(moodMentorId);
+      
+      if (serviceReviews.length === 0) {
         setReviews([]);
+        return;
       }
+      
+      // Convert service reviews to component format
+      const formattedReviews = serviceReviews.map((review: MoodMentorReview) => ({
+        id: review.id,
+        rating: review.rating,
+        comment: review.reviewText,
+        created_at: review.createdAt,
+        users: {
+          full_name: review.patientName || 'Anonymous User',
+          avatar_url: review.patientAvatar || '/default-avatar.png'
+        }
+      })) as Review[];
+      
+      setReviews(formattedReviews);
     } catch (error) {
       console.error('Error loading reviews:', error);
     } finally {

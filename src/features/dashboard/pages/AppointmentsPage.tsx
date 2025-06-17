@@ -70,6 +70,7 @@ import { appointmentService } from "@/services";
 import { ChatButton } from "@/components/messaging/ChatButton";
 import { useAuth } from "@/contexts/authContext";
 import BookingButton from "@/features/booking/components/BookingButton";
+import { ReviewModal } from "@/features/mood_mentors/components/ReviewModal";
 
 // Define the Appointment type
 interface Appointment {
@@ -81,6 +82,7 @@ interface Appointment {
   concerns?: string;
   notes?: string;
   duration?: string;
+  isReviewed?: boolean;
 }
 
 // Define the MoodMentorProfile type
@@ -196,6 +198,13 @@ export default function AppointmentsPage() {
 
   const [loadingMoodMentors, setLoadingMoodMentors] = useState(false);
 
+  const [isReviewModalOpen, setIsReviewModalOpen] = useState(false);
+  const [selectedAppointmentForReview, setSelectedAppointmentForReview] = useState<{
+    id: string;
+    mentorId: string;
+    mentorName: string;
+  } | null>(null);
+
   useEffect(() => {
     fetchAppointments();
     fetchMoodMentors();
@@ -259,6 +268,21 @@ export default function AppointmentsPage() {
       
       console.log("Appointments data:", appointmentsData);
       
+      // Get appointments that have been reviewed
+      const { data: reviewedAppointments, error: reviewError } = await supabase
+        .from('mentor_reviews')
+        .select('appointment_id')
+        .eq('patient_id', currentUser.id);
+        
+      if (reviewError) {
+        console.error("Error fetching reviewed appointments:", reviewError);
+      }
+      
+      // Create a Set of reviewed appointment IDs for fast lookup
+      const reviewedAppointmentIds = new Set(
+        (reviewedAppointments || []).map((review: any) => review.appointment_id)
+      );
+      
       // Map the appointments to the expected format
       const formattedAppointments = appointmentsData.map(appt => ({
         id: appt.id,
@@ -269,6 +293,7 @@ export default function AppointmentsPage() {
         concerns: appt.description,
         notes: appt.notes,
         duration: '1 hour',
+        isReviewed: reviewedAppointmentIds.has(appt.id),
         mentor: {
           id: appt.mentor_id, // This is the auth.users ID
           name: appt.mentor_name || 'Unknown Mentor',
@@ -474,6 +499,42 @@ export default function AppointmentsPage() {
     } catch (error) {
       console.error("Error joining session:", error);
       toast.error("Failed to join session. Please try again.");
+    }
+  };
+
+  const openReviewModal = async (appointment: AppointmentWithMentor) => {
+    if (!appointment.mentor) {
+      toast.error('Mentor information is missing');
+      return;
+    }
+
+    try {
+      // Check if the patient can review this appointment
+      const { data: canReview, error: checkError } = await supabase
+        .rpc('can_patient_review_appointment', { 
+          appointment_id: appointment.id,
+          patient_uuid: user?.id
+        });
+      
+      if (checkError) {
+        console.error("Error checking if can review:", checkError);
+        throw new Error("Couldn't verify if you can review this appointment");
+      }
+      
+      if (!canReview) {
+        toast.error('You cannot review this appointment. It may already be reviewed or not completed.');
+        return;
+      }
+      
+      setSelectedAppointmentForReview({
+        id: appointment.id,
+        mentorId: appointment.mentor.id,
+        mentorName: appointment.mentor.name,
+      });
+      setIsReviewModalOpen(true);
+    } catch (error: any) {
+      console.error("Error in openReviewModal:", error);
+      toast.error(error.message || "Failed to open review form");
     }
   };
 
@@ -730,6 +791,16 @@ export default function AppointmentsPage() {
                               >
                                 <MessageSquare className="h-3.5 w-3.5 mr-1.5" />
                                 Feedback
+                              </Button>
+                              <Button 
+                                variant="outline"
+                                size="sm"
+                                className={`h-8 px-3 rounded-full ${appointment.isReviewed ? 'bg-green-50 text-green-600 border-green-200' : ''}`}
+                                onClick={() => openReviewModal(appointment)}
+                                disabled={appointment.isReviewed}
+                              >
+                                <Star className="h-3.5 w-3.5 mr-1.5" />
+                                {appointment.isReviewed ? 'Already Reviewed' : 'Leave Review'}
                               </Button>
                               <Button 
                                 size="sm"
@@ -1037,6 +1108,21 @@ export default function AppointmentsPage() {
           </div>
         </div>
       </div>
+
+      {selectedAppointmentForReview && (
+        <ReviewModal
+          isOpen={isReviewModalOpen}
+          onClose={() => {
+            setIsReviewModalOpen(false);
+            setSelectedAppointmentForReview(null);
+            // Refresh appointments after review submission
+            fetchAppointments();
+          }}
+          appointmentId={selectedAppointmentForReview.id}
+          mentorId={selectedAppointmentForReview.mentorId}
+          mentorName={selectedAppointmentForReview.mentorName}
+        />
+      )}
     </DashboardLayout>
   );
 }

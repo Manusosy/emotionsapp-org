@@ -428,55 +428,56 @@ export class MoodMentorService implements IMoodMentorService {
   async getMoodMentorReviews(mentorId: string, options?: {
     limit?: number;
     offset?: number;
+    includeAll?: boolean; // Flag to include all reviews regardless of status
   }): Promise<MoodMentorReview[]> {
     try {
-      let query = supabase
-        .from('reviews')
-        .select(`
-          id,
-          patient_id,
-          mentor_id,
-          rating,
-          review_text,
-          created_at,
-          patient_profiles:patient_id (
-            full_name,
-            avatar_url
-          )
-        `)
+      // Use the new view to get reviews with patient data in one query
+      let reviewQuery = supabase
+        .from('mentor_reviews_with_patients')
+        .select('*')
         .eq('mentor_id', mentorId)
         .order('created_at', { ascending: false });
-        
+      
+      // Filter by status unless includeAll is true
+      if (!options?.includeAll) {
+        reviewQuery = reviewQuery.eq('status', 'published');
+      }
+      
       if (options?.limit) {
-        query = query.limit(options.limit);
+        reviewQuery = reviewQuery.limit(options.limit);
       }
       
       if (options?.offset) {
-        query = query.range(
+        reviewQuery = reviewQuery.range(
           options.offset, 
           options.offset + (options.limit || 10) - 1
         );
       }
-        
-      const { data, error } = await query;
       
-      if (error) throw error;
+      const { data: reviewsData, error: reviewsError } = await reviewQuery;
       
-      return (data || []).map(review => {
-        // Safely access the nested patient_profiles data
-        const patientProfile = review.patient_profiles as any;
-        
-        return {
+      if (reviewsError) {
+        console.error('Error fetching reviews:', reviewsError);
+        return [];
+      }
+      
+      if (!reviewsData || reviewsData.length === 0) {
+        return [];
+      }
+      
+      // Map the reviews to the expected format - we now have patient data from the view
+      return reviewsData.map(review => ({
         id: review.id,
         patientId: review.patient_id,
-        mentorId: review.mentor_id,
+        mentorId,
         rating: review.rating,
         reviewText: review.review_text,
         createdAt: review.created_at,
-          patientName: patientProfile ? patientProfile.full_name || 'Anonymous' : 'Anonymous',
-          patientAvatar: patientProfile ? patientProfile.avatar_url || null : null
-        };
-      });
+        patientName: review.patient_name || 'Anonymous',
+        patientAvatar: review.patient_avatar || null,
+        appointmentId: review.appointment_id,
+        status: review.status
+      }));
     } catch (error) {
       console.error('Error in getMoodMentorReviews:', error);
       return [];
@@ -485,18 +486,35 @@ export class MoodMentorService implements IMoodMentorService {
 
   async addMoodMentorReview(review: Omit<MoodMentorReview, 'id' | 'createdAt'>): Promise<MoodMentorReview> {
     try {
+      // First check if the patient can review this mentor
+      const { data: canReview, error: checkError } = await supabase
+        .rpc('can_patient_review_appointment', { 
+          appointment_id: review.appointmentId,
+          patient_uuid: review.patientId
+        });
+      
+      if (checkError) {
+        throw new Error(`Error checking review eligibility: ${checkError.message}`);
+      }
+      
+      if (!canReview) {
+        throw new Error('You cannot review this appointment. It may already be reviewed or not completed.');
+      }
+      
       const { data, error } = await supabase
-        .from('reviews')
+        .from('mentor_reviews')
         .insert({
+          appointment_id: review.appointmentId,
           mentor_id: review.mentorId,
           patient_id: review.patientId,
           rating: review.rating,
-          review_text: review.reviewText
+          review_text: review.reviewText,
+          status: 'pending'
         })
         .select()
         .single();
         
-      if (error) throw error;
+      if (error) throw new Error(`Error adding review: ${error.message}`);
       
       return {
         id: data.id,
@@ -506,11 +524,37 @@ export class MoodMentorService implements IMoodMentorService {
         reviewText: data.review_text,
         createdAt: data.created_at,
         patientName: review.patientName || 'Anonymous',
-        patientAvatar: review.patientAvatar || null
+        patientAvatar: review.patientAvatar || null,
+        appointmentId: data.appointment_id,
+        status: data.status
       };
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error in addMoodMentorReview:', error);
       throw error;
+    }
+  }
+  
+  /**
+   * Update a review's status (for approving or rejecting reviews)
+   */
+  async updateReviewStatus(reviewId: string, mentorId: string, status: 'pending' | 'published' | 'rejected'): Promise<boolean> {
+    try {
+      // Make sure only the mentor associated with the review can update its status
+      const { error } = await supabase
+        .from('mentor_reviews')
+        .update({ 
+          status, 
+          updated_at: new Date().toISOString() 
+        })
+        .eq('id', reviewId)
+        .eq('mentor_id', mentorId);
+
+      if (error) throw new Error(`Error updating review status: ${error.message}`);
+      
+      return true;
+    } catch (error: any) {
+      console.error('Error in updateReviewStatus:', error);
+      return false;
     }
   }
 

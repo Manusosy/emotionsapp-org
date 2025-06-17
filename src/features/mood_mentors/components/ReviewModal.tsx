@@ -27,30 +27,29 @@ import {
 import { Textarea } from '@/components/ui/textarea';
 
 const formSchema = z.object({
-  rating: z.number().min(1).max(5),
+  rating: z.number().min(1, 'Please select a rating').max(5),
   comment: z.string().min(10, 'Please provide at least 10 characters').max(500),
 });
 
 interface ReviewModalProps {
   isOpen: boolean;
   onClose: () => void;
-  bookingId: string;
-  moodMentorId: string;
-  moodMentorName: string;
+  appointmentId?: string;
+  mentorId?: string;
+  mentorName?: string;
 }
 
 export function ReviewModal({
   isOpen,
   onClose,
-  bookingId,
-  moodMentorId,
-  moodMentorName,
+  appointmentId,
+  mentorId,
+  mentorName,
 }: ReviewModalProps) {
   const [rating, setRating] = useState(0);
   const [hoveredRating, setHoveredRating] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  // Mock services are used instead of Supabase
-
+  
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
@@ -70,25 +69,47 @@ export function ReviewModal({
         return;
       }
 
-      // Add review directly using Supabase
+      if (!appointmentId || !mentorId) {
+        toast.error('Missing appointment or mentor information');
+        return;
+      }
+
+      // Check if the patient can review this appointment
+      const { data: canReview, error: checkError } = await supabase
+        .rpc('can_patient_review_appointment', { 
+          appointment_id: appointmentId,
+          patient_uuid: user.id
+        });
+      
+      if (checkError) {
+        console.error("Error checking if can review:", checkError);
+        throw new Error("Couldn't verify if you can review this appointment");
+      }
+      
+      if (!canReview) {
+        toast.error('You cannot review this appointment. It may already be reviewed or not completed.');
+        return;
+      }
+
+      // Add review using the standardized table
       const { error } = await supabase
         .from('mentor_reviews')
         .insert({
-          mentor_id: moodMentorId,
-          user_id: user.id,
-          user_name: user.user_metadata?.name || user.email,
+          appointment_id: appointmentId,
+          mentor_id: mentorId,
+          patient_id: user.id,
           rating: values.rating,
-          comment: values.comment,
-          booking_id: bookingId
+          review_text: values.comment,
+          status: 'pending' // Reviews are pending until approved by the mentor
         });
 
       if (error) throw error;
 
-      toast.success('Review submitted successfully');
+      toast.success('Review submitted successfully! It will be visible after approval.');
       onClose();
       form.reset();
-    } catch (error) {
-      toast.error('Failed to submit review');
+    } catch (error: any) {
+      toast.error('Failed to submit review: ' + error.message);
       console.error('Error submitting review:', error);
     } finally {
       setIsSubmitting(false);
@@ -106,7 +127,7 @@ export function ReviewModal({
         <DialogHeader>
           <DialogTitle>Rate Your Session</DialogTitle>
           <DialogDescription>
-            Share your experience with {moodMentorName}
+            Share your experience with {mentorName}
           </DialogDescription>
         </DialogHeader>
 

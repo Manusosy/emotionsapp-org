@@ -77,6 +77,8 @@ export interface MoodMentorReview {
   rating: number;
   reviewText: string;
   createdAt: string;
+  appointmentId: string;
+  status: 'pending' | 'published' | 'rejected';
 }
 
 export interface SupportGroup {
