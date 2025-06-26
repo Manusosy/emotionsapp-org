@@ -13,6 +13,9 @@ import type { IPatientService } from './patient/patient.interface';
 // import { MessagingService } from './messaging/messaging.interface'; // Removed
 // import SupabaseMessagingService from './messaging/messaging.service'; // Removed
 
+// Import the reviews service
+import { reviewsService } from './reviews/reviews.service';
+
 // Export implemented services
 export { authService } from './auth/auth.service';
 export { appointmentService } from './appointments/appointment.service';
@@ -86,8 +89,11 @@ interface DataService {
   deleteJournalEntry: (entryId: string) => Promise<ServiceResponse<void>>;
   getResources: () => Promise<ServiceResponse<any[]>>;
   getResourcesByMentor: (mentorId: string) => Promise<ServiceResponse<any[]>>;
+  getResourcesWithFavorites: (userId: string) => Promise<ServiceResponse<any[]>>;
   saveResource: (resource: any) => Promise<ServiceResponse<void>>;
   deleteResource: (resourceId: string) => Promise<ServiceResponse<void>>;
+  addFavoriteResource: (userId: string, resourceId: string) => Promise<ServiceResponse<void>>;
+  removeFavoriteResource: (userId: string, resourceId: string) => Promise<ServiceResponse<void>>;
   addMoodEntry: (moodEntry: MoodEntryData) => Promise<ServiceResponse<string>>;
   getMoodEntries: (userId: string, options?: { limit?: number; from?: Date; to?: Date }) => Promise<ServiceResponse<any[]>>;
   getMoodStreak: (userId: string) => Promise<ServiceResponse<number>>;
@@ -298,6 +304,19 @@ export const dataService: DataService = {
     }
   },
 
+  async getResourcesWithFavorites(userId: string) {
+    try {
+      const { data, error } = await supabase.rpc('get_resources_with_favorite_status', {
+        p_user_id: userId
+      });
+      
+      if (error) throw error;
+      return { data };
+    } catch (error) {
+      return { error: 'Failed to fetch resources with favorites' };
+    }
+  },
+
   async getResourcesByMentor(mentorId: string) {
     try {
       const { data, error } = await supabase
@@ -338,7 +357,43 @@ export const dataService: DataService = {
     } catch (error) {
       return { error: 'Failed to delete resource' };
     }
+  },
+
+  async addFavoriteResource(userId: string, resourceId: string) {
+    try {
+      const { error } = await supabase
+        .from('resource_favorites')
+        .insert({
+          user_id: userId,
+          resource_id: resourceId
+        });
+      
+      if (error) throw error;
+      return { data: undefined };
+    } catch (error) {
+      return { error: 'Failed to add resource to favorites' };
+    }
+  },
+
+  async removeFavoriteResource(userId: string, resourceId: string) {
+    try {
+      const { error } = await supabase
+        .from('resource_favorites')
+        .delete()
+        .match({
+          user_id: userId,
+          resource_id: resourceId
+        });
+      
+      if (error) throw error;
+      return { data: undefined };
+    } catch (error) {
+      return { error: 'Failed to remove resource from favorites' };
+    }
   }
 };
 
-export const apiService: ApiService = {}; 
+export const apiService: ApiService = {};
+
+// Export the reviews service
+export { reviewsService }; 

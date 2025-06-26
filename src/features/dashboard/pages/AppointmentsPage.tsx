@@ -32,7 +32,12 @@ import {
   CalendarRange,
   ChevronDown,
   FileText,
-  Download
+  Download,
+  FileOutput,
+  Printer,
+  FileDown,
+  FileText as FilePdf,
+  CheckCircle
 } from "lucide-react";
 import { AuthContext } from "@/contexts/authContext";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -70,7 +75,28 @@ import { appointmentService } from "@/services";
 import { ChatButton } from "@/components/messaging/ChatButton";
 import { useAuth } from "@/contexts/authContext";
 import BookingButton from "@/features/booking/components/BookingButton";
-import { ReviewModal } from "@/features/mood_mentors/components/ReviewModal";
+import { ReviewModal } from "@/features/reviews/components/ReviewModal";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Search,
+} from "lucide-react";
+import jsPDF from "jspdf";
+import 'jspdf-autotable';
+import { autoTable } from 'jspdf-autotable';
 
 // Define the Appointment type
 interface Appointment {
@@ -102,15 +128,29 @@ interface MoodMentorProfile {
 }
 
 // Define the AppointmentWithMentor type
-interface AppointmentWithMentor extends Appointment {
+interface AppointmentWithMentor {
+  id: string;
+  patient_id: string;
+  mentor_id: string;
+  title: string;
+  date: string;
+  time: string;
+  type: string;
+  status: string;
+  notes?: string;
+  meeting_link?: string;
+  meeting_type: 'video' | 'audio' | 'chat';
   mentor?: {
     id: string;
     name: string;
     specialty: string;
-    avatar: string;
-    email: string;
-    phone: string;
-  }
+    avatar?: string;
+    email?: string;
+    phone?: string;
+  };
+  created_at: string;
+  updated_at: string;
+  isReviewed?: boolean;
 }
 
 // Define the DateFilter type
@@ -158,7 +198,7 @@ export default function AppointmentsPage() {
     cancelled: 0,
     completed: 0
   });
-
+  
   // Date filter options
   const dateFilters: DateFilter[] = [
     {
@@ -195,6 +235,7 @@ export default function AppointmentsPage() {
 
   const [cancelAppointmentId, setCancelAppointmentId] = useState<string | null>(null);
   const [cancellationReason, setCancellationReason] = useState<string>('');
+  const [cancelingAppointment, setCancelingAppointment] = useState<boolean>(false);
 
   const [loadingMoodMentors, setLoadingMoodMentors] = useState(false);
 
@@ -205,132 +246,100 @@ export default function AppointmentsPage() {
     mentorName: string;
   } | null>(null);
 
+  const [searchTerm, setSearchTerm] = useState('');
+
   useEffect(() => {
     fetchAppointments();
     fetchMoodMentors();
-  }, [user?.id, activeTab, startDate, endDate]);
+
+    // Subscribe to appointment changes
+    const appointmentSubscription = supabase
+      .channel('appointment_changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'appointments'
+        },
+        (payload) => {
+          console.log('Appointment change received:', payload);
+          // Refresh appointments when there's a change
+          fetchAppointments();
+        }
+      )
+      .subscribe();
+
+    // Cleanup subscription
+    return () => {
+      appointmentSubscription.unsubscribe();
+    };
+  }, [user]);
+
+  // Add subscription for real-time updates
+  useEffect(() => {
+    if (!user) return;
+
+    const appointmentSubscription = supabase
+      .channel('appointment_updates')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'appointments',
+          filter: `patient_id=eq.${user.id}`
+        },
+        (payload) => {
+          console.log('Appointment update received:', payload);
+          // Refresh appointments when there's a change
+          fetchAppointments();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      appointmentSubscription.unsubscribe();
+    };
+  }, [user]);
 
   const fetchAppointments = async () => {
     try {
-      // Get the current user from auth context
+      setLoading(true);
       const { data: { user: currentUser } } = await supabase.auth.getUser();
       
       if (!currentUser || !currentUser.id) {
-        console.log("No authenticated user found");
-        toast.error("User authentication required");
-        setLoading(false);
+        toast.error("User authentication required", {
+          dismissible: true
+        });
         return;
-      }
-      
-      setLoading(true);
-      console.log(`Fetching appointments for user ${currentUser.id}, tab: ${activeTab}`);
-      
-      // Get current date in YYYY-MM-DD format
-      const today = new Date();
-      const todayFormatted = format(today, 'yyyy-MM-dd');
-      
-      // Determine status filter based on active tab
-      let statusFilter: string | undefined;
-      if (activeTab === 'upcoming') {
-        statusFilter = 'pending,scheduled';
-      } else if (activeTab === 'cancelled') {
-        statusFilter = 'cancelled';
-      } else if (activeTab === 'completed') {
-        statusFilter = 'completed';
       }
       
       // Fetch appointments from the database
-      const { data: appointmentsData, error } = await supabase
+      const { data, error } = await supabase
         .from('patient_appointments_view')
         .select('*')
         .eq('patient_id', currentUser.id)
-        .in('status', statusFilter ? statusFilter.split(',') : []);
+        .order('date', { ascending: false });
       
       if (error) {
-        console.error("Error fetching appointments:", error);
-        toast.error("Failed to load appointments: " + error.message);
-        setLoading(false);
-        return;
-      }
-      
-      // If no data but no error, it means there are no appointments yet
-      if (!appointmentsData || appointmentsData.length === 0) {
-        console.log("No appointments found for this patient");
-        setAppointments([]);
-        setCounts({
-          upcoming: 0,
-          cancelled: 0,
-          completed: 0
+        console.error('Error fetching appointments:', error);
+        toast.error("Failed to fetch appointments: " + error.message, {
+          dismissible: true
         });
-        setLoading(false);
         return;
       }
       
-      console.log("Appointments data:", appointmentsData);
+      // Transform and set the appointments data
+      const transformedData = transformAppointments(data);
       
-      // Get appointments that have been reviewed
-      const { data: reviewedAppointments, error: reviewError } = await supabase
-        .from('mentor_reviews')
-        .select('appointment_id')
-        .eq('patient_id', currentUser.id);
-        
-      if (reviewError) {
-        console.error("Error fetching reviewed appointments:", reviewError);
-      }
-      
-      // Create a Set of reviewed appointment IDs for fast lookup
-      const reviewedAppointmentIds = new Set(
-        (reviewedAppointments || []).map((review: any) => review.appointment_id)
-      );
-      
-      // Map the appointments to the expected format
-      const formattedAppointments = appointmentsData.map(appt => ({
-        id: appt.id,
-        date: appt.date,
-        time: appt.start_time,
-        type: appt.meeting_type as 'video' | 'audio' | 'chat',
-        status: appt.status as 'pending' | 'confirmed' | 'cancelled' | 'completed',
-        concerns: appt.description,
-        notes: appt.notes,
-        duration: '1 hour',
-        isReviewed: reviewedAppointmentIds.has(appt.id),
-        mentor: {
-          id: appt.mentor_id, // This is the auth.users ID
-          name: appt.mentor_name || 'Unknown Mentor',
-          specialty: appt.mentor_specialty || 'Specialist',
-          avatar: appt.mentor_avatar_url || '',
-          email: '',
-          phone: ''
-        }
-      }));
-      
-      // Sort appointments by date and time
-      formattedAppointments.sort((a, b) => {
-        const dateA = new Date(`${a.date}T${a.time}`);
-        const dateB = new Date(`${b.date}T${b.time}`);
-        return dateB.getTime() - dateA.getTime();
-      });
-      
-      console.log("Formatted appointments:", formattedAppointments);
-      
-      // Update appointments state
-      setAppointments(formattedAppointments);
-      
-      // Update counts
-      const upcomingCount = appointmentsData.filter(a => a.status === 'pending' || a.status === 'scheduled').length;
-      const cancelledCount = appointmentsData.filter(a => a.status === 'cancelled').length;
-      const completedCount = appointmentsData.filter(a => a.status === 'completed').length;
-      
-      setCounts({
-        upcoming: upcomingCount,
-        cancelled: cancelledCount,
-        completed: completedCount
-      });
-      
-      setLoading(false);
+      setAppointments(transformedData);
     } catch (error: any) {
-      console.error("Error in fetchAppointments:", error);
-      toast.error("An error occurred while loading appointments: " + (error.message || "Unknown error"));
+      console.error('Error in fetchAppointments:', error);
+      toast.error("Failed to fetch appointments: " + (error.message || "Unknown error"), {
+        dismissible: true
+      });
+    } finally {
       setLoading(false);
     }
   };
@@ -354,7 +363,7 @@ export default function AppointmentsPage() {
       
       if (mentorsData && mentorsData.length > 0) {
         const mappedMentors: MoodMentorProfile[] = mentorsData.map(mentor => ({
-          id: mentor.id,
+          id: mentor.user_id,
           name: mentor.full_name || 'Mood Mentor',
           specialty: mentor.specialty || 'Mental Health Support',
           avatar: mentor.avatar_url || '/default-avatar.png',
@@ -372,9 +381,45 @@ export default function AppointmentsPage() {
         
         setMoodMentors(mappedMentors);
       } else {
-        // No mock data fallback - just set empty array
-        console.log("No mood mentors found");
-        setMoodMentors([]);
+        // If no data from database, use mock data for development
+        const mockMentors: MoodMentorProfile[] = [
+          {
+            id: 'mock-1',
+            name: 'Dr. Sarah Johnson',
+            specialty: 'Anxiety & Depression',
+            avatar: 'https://randomuser.me/api/portraits/women/32.jpg',
+            rating: 4.9,
+            reviews: 124,
+            available: true,
+            nextAvailable: 'Today',
+            bio: 'Specialized in cognitive behavioral therapy with 10+ years of experience helping patients overcome anxiety and depression.'
+          },
+          {
+            id: 'mock-2',
+            name: 'Dr. Michael Chen',
+            specialty: 'Stress Management',
+            avatar: 'https://randomuser.me/api/portraits/men/45.jpg',
+            rating: 4.7,
+            reviews: 98,
+            available: true,
+            nextAvailable: 'Tomorrow',
+            bio: 'Expert in mindfulness techniques and stress reduction strategies for professionals and students.'
+          },
+          {
+            id: 'mock-3',
+            name: 'Emma Rodriguez',
+            specialty: 'Trauma Recovery',
+            avatar: 'https://randomuser.me/api/portraits/women/65.jpg',
+            rating: 4.8,
+            reviews: 87,
+            available: true,
+            nextAvailable: 'Thursday',
+            bio: 'Specialized in trauma-informed care and EMDR therapy to help patients process difficult experiences.'
+          }
+        ];
+        
+        console.log("Using mock mood mentors data");
+        setMoodMentors(mockMentors);
       }
     } catch (error) {
       console.error("Error fetching mood mentors:", error);
@@ -402,7 +447,13 @@ export default function AppointmentsPage() {
   };
 
   const handleBookWithMentor = (mentorId: string) => {
-    navigate(`/booking?mentor=${mentorId}`);
+    // Navigate to booking page with the mentor ID in location state
+    // This matches how the public mood mentors page handles booking
+    navigate('/booking', {
+      state: {
+        mentorId: mentorId
+      }
+    });
   };
 
   const handleViewMentorProfile = (mentorId: string) => {
@@ -416,89 +467,321 @@ export default function AppointmentsPage() {
   };
 
   const handleCancelAppointment = async (appointmentId: string) => {
+    const toastId = toast.loading("Cancelling appointment...", {
+      dismissible: true
+    });
+    
     try {
-      if (!user) {
-        toast.error("You must be logged in to cancel appointments");
-        return;
-      }
-      
-      toast.loading("Cancelling appointment...");
-      
-      // Use the appointment service to cancel the appointment
-      const result = await appointmentService.cancelAppointment(appointmentId, cancellationReason);
-      
-      if (result.error) {
-        console.error("Error cancelling appointment:", result.error);
-        toast.dismiss();
-        toast.error("Failed to cancel appointment: " + result.error);
-        return;
-      }
+      const { error } = await supabase
+        .from('appointments')
+        .update({ 
+          status: 'cancelled',
+          cancellation_reason: 'Cancelled by patient',
+          cancelled_by: 'patient'
+        })
+        .eq('id', appointmentId);
 
-      toast.dismiss();
-      toast.success("Appointment cancelled successfully");
-      fetchAppointments(); // Refresh appointments after cancellation
-    } catch (error) {
-      console.error("Error cancelling appointment:", error);
-      toast.dismiss();
-      toast.error("An error occurred while cancelling the appointment");
-    } finally {
-      setCancelAppointmentId(null);
-      setCancellationReason(''); // Reset the reason
+      if (error) throw error;
+      
+      toast.dismiss(toastId);
+      toast.success("Appointment cancelled successfully", {
+        dismissible: true
+      });
+      fetchAppointments();
+    } catch (error: any) {
+      console.error('Error cancelling appointment:', error);
+      toast.dismiss(toastId);
+      toast.error("Failed to cancel appointment: " + (error.message || "Unknown error"), {
+        dismissible: true
+      });
     }
   };
 
   const handleStartChat = async (appointmentId: string) => {
+    const toastId = toast.loading("Starting chat session...", {
+      dismissible: true
+    });
+    
     try {
-      const { data: conversationId, error } = await appointmentService.startAppointmentChat(appointmentId);
-      
-      if (error) {
-        // Special handling for database table not existing yet
-        if (error.includes('relation') && error.includes('does not exist')) {
-          toast.info('Chat system is being set up. Please try again in a moment.');
-        } else {
-          toast.error('Failed to start chat session: ' + error);
-        }
+      // Find the appointment
+      const appointment = appointments.find(a => a.id === appointmentId);
+      if (!appointment) {
+        toast.dismiss(toastId);
+        toast.error("Appointment not found", {
+          dismissible: true
+        });
         return;
       }
-      
-      if (conversationId) {
-        navigate(`/chat/${conversationId}`);
-      } else {
-        toast.error('Could not create a chat session');
+
+      // Create or get chat session
+      const { data: chatSession, error: chatError } = await supabase
+        .from('chat_sessions')
+        .select('*')
+        .eq('appointment_id', appointmentId)
+        .single();
+
+      if (chatError && chatError.code !== 'PGRST116') {
+        throw chatError;
       }
-    } catch (err) {
-      console.error('Error starting chat:', err);
-      toast.error('An error occurred while starting the chat');
+
+      let chatSessionId = chatSession?.id;
+
+      if (!chatSessionId) {
+        const { data: newSession, error: createError } = await supabase
+          .from('chat_sessions')
+          .insert([
+            {
+              appointment_id: appointmentId,
+              patient_id: appointment.patient_id,
+              mentor_id: appointment.mentor?.id
+            }
+          ])
+          .select()
+          .single();
+
+        if (createError) throw createError;
+        chatSessionId = newSession.id;
+      }
+
+      toast.dismiss(toastId);
+      toast.success("Chat session ready", {
+        dismissible: true
+      });
+      
+      // Navigate to chat
+      navigate(`/dashboard/chat/${chatSessionId}`);
+    } catch (error: any) {
+      console.error('Error starting chat:', error);
+      toast.dismiss(toastId);
+      toast.error("Failed to start chat: " + (error.message || "Unknown error"), {
+        dismissible: true
+      });
+    }
+  };
+
+  const getStatusBadge = (status: string) => {
+    switch (status.toLowerCase()) {
+      case 'pending':
+        return (
+          <Badge variant="outline" className="bg-yellow-50 text-yellow-700 border-yellow-200">
+            <Clock className="mr-1 h-3 w-3" /> Waiting
+          </Badge>
+        );
+      case 'scheduled':
+        return (
+          <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
+            <Video className="mr-1 h-3 w-3" /> Ready to Join
+          </Badge>
+        );
+      case 'completed':
+        return (
+          <Badge variant="outline" className="bg-purple-50 text-purple-700 border-purple-200">
+            <CheckCircle className="mr-1 h-3 w-3" /> Completed
+          </Badge>
+        );
+      case 'cancelled':
+        return (
+          <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200">
+            <X className="mr-1 h-3 w-3" /> Cancelled
+          </Badge>
+        );
+      default:
+        return (
+          <Badge variant="outline" className="bg-gray-50 text-gray-700 border-gray-200">
+            <Clock className="mr-1 h-3 w-3" /> {status}
+          </Badge>
+        );
     }
   };
 
   // Function to check if a patient can join a session
   const canJoinSession = (appointment: any) => {
-    // Patient can join if the appointment is scheduled (mentor has started it)
-    // or if it is in progress
-    return appointment.status.toLowerCase() === 'scheduled' || 
-           appointment.status.toLowerCase() === 'in progress';
+    // Patient can join only if the appointment is scheduled (mentor has started it)
+    return appointment.status.toLowerCase() === 'scheduled';
   };
 
   // Function to handle joining a video session
-  const handleJoinSession = async (appointment: any) => {
-    if (!user) {
-      toast.error("You must be logged in to join sessions");
-      return;
-    }
-
-    if (!canJoinSession(appointment)) {
-      toast.info("Please wait for your mentor to start the session.");
-      return;
-    }
-
+  const handleJoinSession = async (appointment: AppointmentWithMentor) => {
+    const toastId = toast.loading("Joining session...", {
+      dismissible: true
+    });
+    
     try {
-      // Navigate to the dedicated call page
-      navigate(`/patient-dashboard/appointment/${appointment.id}/call`);
-      toast.success("Joining video call...");
+      if (!appointment.meeting_link) {
+        toast.dismiss(toastId);
+        toast.error("Waiting for mentor to start the session", {
+          dismissible: true
+        });
+      return;
+    }
+
+      // Navigate to the call page
+      navigate(`/patient-dashboard/appointments/${appointment.id}/call`);
+      
+      toast.dismiss(toastId);
+    } catch (error: any) {
+      console.error('Error joining session:', error);
+      toast.dismiss(toastId);
+      toast.error("Failed to join session: " + (error.message || "Unknown error"), {
+        dismissible: true
+      });
+    }
+  };
+  
+  // Update the exportAppointmentsToPDF function
+  const exportAppointmentsToPDF = async () => {
+    const toastId = toast.loading("Generating PDF report...", {
+      dismissible: true
+    });
+    
+    try {
+      // Filter appointments based on the active tab
+      const filteredAppointments = appointments.filter(appointment => {
+        if (activeTab === "upcoming") {
+          return appointment.status === "pending" || appointment.status === "scheduled" || appointment.status === "confirmed";
+        } else if (activeTab === "completed") {
+          return appointment.status === "completed";
+        } else if (activeTab === "cancelled") {
+          return appointment.status === "cancelled";
+        }
+        return true;
+      });
+      
+      if (filteredAppointments.length === 0) {
+        toast.dismiss(toastId);
+        toast.error("No appointments to export", {
+          dismissible: true
+        });
+      return;
+    }
+      
+      // Create PDF document
+      const doc = new jsPDF();
+      
+      // Add title
+      doc.setFontSize(18);
+      doc.text('Appointments Report', 14, 22);
+      
+      // Add export date
+      doc.setFontSize(10);
+      doc.text(`Generated on: ${format(new Date(), 'yyyy-MM-dd HH:mm')}`, 14, 28);
+      doc.text(`Total Appointments: ${filteredAppointments.length}`, 14, 34);
+      
+      // Create table data
+      const tableColumn = ["Mentor", "Date", "Time", "Type", "Status"];
+      const tableRows = filteredAppointments.map(appointment => [
+        appointment.mentor?.name || "Unknown Mentor",
+        appointment.date || "",
+        appointment.time || "",
+        appointment.type || "",
+        appointment.status || ""
+      ]);
+      
+      // Generate table
+      autoTable(doc, {
+        head: [tableColumn],
+        body: tableRows,
+        startY: 40,
+        theme: 'grid',
+        styles: {
+          fontSize: 9,
+          cellPadding: 3,
+        },
+        headStyles: {
+          fillColor: [39, 99, 175],
+          textColor: 255,
+          fontStyle: 'bold',
+        },
+        alternateRowStyles: {
+          fillColor: [240, 247, 255],
+        }
+      });
+      
+      // Add summary at bottom
+      const pageHeight = doc.internal.pageSize.height;
+      doc.setFontSize(10);
+      doc.text("Emotions App - Patient Appointments Report", 14, pageHeight - 20);
+      
+      // Save the PDF
+      const filename = `appointments_${format(new Date(), 'yyyy-MM-dd')}.pdf`;
+      doc.save(filename);
+      
+      toast.dismiss(toastId);
+      toast.success("Appointments exported successfully as PDF!", {
+        dismissible: true
+      });
     } catch (error) {
-      console.error("Error joining session:", error);
-      toast.error("Failed to join session. Please try again.");
+      console.error("Error exporting appointments:", error);
+      toast.dismiss(toastId);
+      toast.error("Failed to export appointments. Please try again.", {
+        dismissible: true
+      });
+    }
+  };
+
+  // Update the exportAppointmentsToCSV function
+  const exportAppointmentsToCSV = async () => {
+    const toastId = toast.loading("Generating CSV export...", {
+      dismissible: true
+    });
+    
+    try {
+      // Filter appointments based on the active tab
+      const filteredAppointments = appointments.filter(appointment => {
+        if (activeTab === "upcoming") {
+          return appointment.status === "pending" || appointment.status === "scheduled" || appointment.status === "confirmed";
+        } else if (activeTab === "completed") {
+          return appointment.status === "completed";
+        } else if (activeTab === "cancelled") {
+          return appointment.status === "cancelled";
+        }
+        return true;
+      });
+
+      if (filteredAppointments.length === 0) {
+        toast.dismiss(toastId);
+        toast.error("No appointments to export", {
+          dismissible: true
+        });
+        return;
+      }
+
+      // Create CSV content
+      const headers = ["Mentor", "Date", "Time", "Type", "Status"];
+      const rows = filteredAppointments.map(appointment => [
+        appointment.mentor?.name || "Unknown Mentor",
+        appointment.date || "",
+        appointment.time || "",
+        appointment.type || "",
+        appointment.status || ""
+      ]);
+
+      // Convert to CSV string
+      const csvContent = [
+        headers.join(","),
+        ...rows.map(row => row.join(","))
+      ].join("\n");
+
+      // Create blob and download
+      const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+      const link = document.createElement("a");
+      const url = URL.createObjectURL(blob);
+      link.setAttribute("href", url);
+      link.setAttribute("download", `appointments_${format(new Date(), 'yyyy-MM-dd')}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      toast.dismiss(toastId);
+      toast.success("Appointments exported successfully as CSV!", {
+        dismissible: true
+      });
+    } catch (error) {
+      console.error("Error exporting appointments to CSV:", error);
+      toast.dismiss(toastId);
+      toast.error("Failed to export appointments to CSV. Please try again.", {
+        dismissible: true
+      });
     }
   };
 
@@ -538,34 +821,260 @@ export default function AppointmentsPage() {
     }
   };
 
-  // Replace the renderAppointmentList function with a more modern table design
-  const renderAppointmentList = () => {
-    if (loading) {
-      return (
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden mt-6 py-16">
-          <div className="flex flex-col items-center justify-center">
-            <Spinner size="lg" className="text-blue-600" />
-            <p className="text-gray-500 mt-4">Loading your appointments...</p>
-          </div>
-        </div>
-      );
+  // Update the exportSingleAppointmentToPDF function
+  const exportSingleAppointmentToPDF = (appointment: AppointmentWithMentor) => {
+    const toastId = toast.loading("Generating appointment summary...", {
+      dismissible: true
+    });
+    
+    try {
+      // Create new PDF document
+      const doc = new jsPDF();
+      
+      // Set title
+      doc.setFontSize(18);
+      doc.setTextColor(0, 0, 139); // Dark blue
+      doc.text('EMOTIONS APP - APPOINTMENT SUMMARY', 20, 20, { align: 'left' });
+      
+      // Add horizontal line
+      doc.setDrawColor(0, 0, 139);
+      doc.setLineWidth(0.5);
+      doc.line(20, 25, 190, 25);
+      
+      // Section header
+      doc.setFontSize(14);
+      doc.setTextColor(0, 0, 0);
+      doc.text('APPOINTMENT DETAILS', 20, 35);
+      
+      // Details content
+      doc.setFontSize(11);
+      
+      // Define the details with proper positioning
+      const startY = 45;
+      const lineHeight = 7;
+      
+      doc.setFont('helvetica', 'bold');
+      doc.text('Mentor:', 20, startY);
+      doc.setFont('helvetica', 'normal');
+      doc.text(appointment.mentor?.name || 'Mood Mentor', 70, startY);
+      
+      doc.setFont('helvetica', 'bold');
+      doc.text('Specialty:', 20, startY + lineHeight);
+      doc.setFont('helvetica', 'normal');
+      doc.text(appointment.mentor?.specialty || 'Mental Health Support', 70, startY + lineHeight);
+      
+      doc.setFont('helvetica', 'bold');
+      doc.text('Date:', 20, startY + lineHeight * 2);
+      doc.setFont('helvetica', 'normal');
+      doc.text(appointment.date || '', 70, startY + lineHeight * 2);
+      
+      doc.setFont('helvetica', 'bold');
+      doc.text('Time:', 20, startY + lineHeight * 3);
+      doc.setFont('helvetica', 'normal');
+      doc.text(appointment.time || '', 70, startY + lineHeight * 3);
+      
+      doc.setFont('helvetica', 'bold');
+      doc.text('Type:', 20, startY + lineHeight * 4);
+      doc.setFont('helvetica', 'normal');
+      doc.text(appointment.type || '', 70, startY + lineHeight * 4);
+      
+      doc.setFont('helvetica', 'bold');
+      doc.text('Status:', 20, startY + lineHeight * 5);
+      doc.setFont('helvetica', 'normal');
+      doc.text(appointment.status || '', 70, startY + lineHeight * 5);
+      
+      let currentY = startY + lineHeight * 6 + 10;
+      
+      // Add notes if available
+      if (appointment.notes) {
+        doc.setFont('helvetica', 'bold');
+        doc.text('SESSION NOTES', 20, currentY);
+        currentY += 5;
+        
+        // Add line under notes header
+        doc.setDrawColor(0, 0, 139);
+        doc.setLineWidth(0.3);
+        doc.line(20, currentY, 100, currentY);
+        currentY += 10;
+        
+        doc.setFont('helvetica', 'normal');
+        // Split text to ensure it fits on the page
+        const splitText = doc.splitTextToSize(appointment.notes, 170);
+        doc.text(splitText, 20, currentY);
+      }
+      
+      // Add footer
+      doc.setFontSize(9);
+      doc.setTextColor(100, 100, 100);
+      doc.text(`Exported on: ${new Date().toLocaleDateString()}`, 20, doc.internal.pageSize.height - 10);
+      
+      // Save the PDF
+      doc.save(`Appointment_Summary_${appointment.id}.pdf`);
+      
+      toast.dismiss(toastId);
+      toast.success("Appointment summary exported as PDF successfully!", {
+        dismissible: true
+      });
+    } catch (error) {
+      console.error("Failed to export appointment:", error);
+      toast.dismiss(toastId);
+      toast.error("Failed to export appointment summary", {
+        dismissible: true
+      });
     }
+  };
 
-    if (appointments.length === 0) {
+  const transformAppointments = (data: any[]): AppointmentWithMentor[] => {
+    return data.map(appointment => ({
+      id: appointment.id,
+      patient_id: appointment.patient_id,
+      mentor_id: appointment.mentor_id,
+      title: appointment.title || 'Appointment',
+      date: appointment.date,
+      time: `${appointment.start_time} - ${appointment.end_time}`,
+      type: appointment.meeting_type,
+      status: appointment.status,
+      notes: appointment.notes,
+      meeting_link: appointment.meeting_link,
+      meeting_type: appointment.meeting_type,
+      mentor: appointment.mentor ? {
+        id: appointment.mentor.id,
+        name: appointment.mentor.name,
+        specialty: appointment.mentor.specialty,
+        avatar: appointment.mentor.avatar,
+        email: appointment.mentor.email,
+        phone: appointment.mentor.phone
+      } : undefined,
+      created_at: appointment.created_at,
+      updated_at: appointment.updated_at,
+      isReviewed: appointment.rating !== null
+    }));
+  };
+
       return (
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden mt-6">
-          <div className="p-16 flex flex-col items-center justify-center text-center">
-            <div className="bg-blue-50 rounded-full p-5 mb-6">
-              <CalendarClock className="h-12 w-12 text-blue-500" />
+    <DashboardLayout>
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900">Appointments</h1>
+          <p className="text-gray-500 mt-1">Manage your appointments and sessions</p>
+          </div>
+        
+        <div className="bg-white rounded-lg border shadow-sm p-6">
+          {/* Search and filters */}
+          <div className="flex flex-col md:flex-row gap-4 mb-6">
+            <div className="relative flex-grow">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+              <Input 
+                placeholder="Search by mentor name, specialty..." 
+                className="pl-10"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
+        </div>
+            <div className="flex gap-4">
+              <Select 
+                value={activeTab} 
+                onValueChange={(value) => setActiveTab(value)}
+              >
+                <SelectTrigger className="w-[160px]">
+                  <SelectValue placeholder="All Status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="upcoming">Upcoming</SelectItem>
+                  <SelectItem value="completed">Completed</SelectItem>
+                  <SelectItem value="cancelled">Cancelled</SelectItem>
+                </SelectContent>
+              </Select>
+              
+              <Select>
+                <SelectTrigger className="w-[160px]">
+                  <SelectValue placeholder="All Time" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="this-week">This Week</SelectItem>
+                  <SelectItem value="this-month">This Month</SelectItem>
+                  <SelectItem value="this-year">This Year</SelectItem>
+                </SelectContent>
+              </Select>
+              
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button 
+                    variant="outline" 
+                    className="flex items-center gap-2 text-blue-600 border-blue-200 hover:bg-blue-50"
+                  >
+                    <Download className="h-4 w-4" />
+                    Export
+                    <ChevronDown className="h-4 w-4 ml-1" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={exportAppointmentsToCSV}>
+                    <FileDown className="h-4 w-4 mr-2" />
+                    Export CSV
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={exportAppointmentsToPDF}>
+                    <FileText className="h-4 w-4 mr-2" />
+                    Export PDF
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
-            <h3 className="text-xl font-medium mb-3">No {activeTab} appointments</h3>
-            <p className="text-gray-500 mb-8 max-w-md">
+          </div>
+          
+          {/* Table */}
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                <tr className="border-b">
+                  <th className="text-left py-3 px-4 font-medium text-gray-600">Mentor</th>
+                  <th className="text-left py-3 px-4 font-medium text-gray-600">Date & Time</th>
+                  <th className="text-left py-3 px-4 font-medium text-gray-600">Type</th>
+                  <th className="text-left py-3 px-4 font-medium text-gray-600">Status</th>
+                  <th className="text-right py-3 px-4 font-medium text-gray-600">Actions</th>
+                  </tr>
+                </thead>
+              <tbody>
+                {loading ? (
+                  <tr>
+                    <td colSpan={5} className="text-center py-12">
+                      <div className="flex justify-center items-center">
+                        <Spinner className="mr-2 text-blue-600" />
+                        <span>Loading appointments...</span>
+                      </div>
+                      </td>
+                  </tr>
+                ) : appointments.filter(appt => {
+                    // Filter by status tab
+                    const matchesTab = 
+                      activeTab === "upcoming" ? (appt.status === "pending" || appt.status === "scheduled" || appt.status === "confirmed") :
+                      activeTab === "completed" ? appt.status === "completed" :
+                      activeTab === "cancelled" ? appt.status === "cancelled" :
+                      true;
+                    
+                    // Filter by search term
+                    const matchesSearch = searchTerm === "" || 
+                      (appt.mentor?.name?.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                       appt.mentor?.specialty?.toLowerCase().includes(searchTerm.toLowerCase()));
+                    
+                    return matchesTab && matchesSearch;
+                  }).length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="text-center py-12">
+                      <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-blue-100 mb-4">
+                        {activeTab === "upcoming" && <Calendar className="h-6 w-6 text-blue-600" />}
+                        {activeTab === "completed" && <CheckCircle2 className="h-6 w-6 text-blue-600" />}
+                        {activeTab === "cancelled" && <X className="h-6 w-6 text-blue-600" />}
+                          </div>
+                      <h3 className="text-lg font-medium mb-2">No {activeTab} appointments</h3>
+                      <p className="text-gray-500 max-w-md mx-auto mb-6">
               {activeTab === "upcoming" 
-                ? "You don't have any upcoming appointments scheduled. Book an appointment with one of our mentors to get started with your mental health journey."
+                          ? "You don't have any upcoming appointments scheduled. Book an appointment with one of our mentors."
                 : activeTab === "cancelled" 
-                ? "You don't have any cancelled appointments. All your cancelled appointments will appear here for reference."
-                : "You don't have any completed appointments yet. After completing sessions, they will appear here for your records."}
+                          ? "You don't have any cancelled appointments."
+                          : "You don't have any completed appointments yet."}
             </p>
+                      {activeTab === "upcoming" && (
             <Button 
               onClick={() => {
                 // Scroll to the mood mentors section on the same page
@@ -574,558 +1083,325 @@ export default function AppointmentsPage() {
                   mentorsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
                 }
               }}
-              className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-2.5 rounded-full font-medium"
+                          className="bg-blue-600 hover:bg-blue-700 text-white"
             >
-              <CalendarPlus className="w-4 h-4 mr-2" />
+                          <CalendarPlus className="mr-2 h-4 w-4" />
               Book Appointment
             </Button>
-          </div>
-        </div>
-      );
-    }
-
-    // Format the appointment ID to be more user-friendly
-    const formatAppointmentId = (id: string) => {
-      return `#Apt${id.slice(-5)}`;
-    };
-
-    // Determine status badge styling
-    const getBadgeClasses = (status: string) => {
-      if (!status) return "bg-slate-100 text-slate-700 hover:bg-slate-200";
-      
-      switch(status.toLowerCase()) {
-        case 'pending':
-          return "bg-blue-100 text-blue-700 hover:bg-blue-200";
-        case 'scheduled':
-          return "bg-green-100 text-green-700 hover:bg-green-200";
-        case 'completed':
-          return "bg-purple-100 text-purple-700 hover:bg-purple-200";
-        case 'cancelled':
-          return "bg-red-100 text-red-700 hover:bg-red-200";
-        default:
-          return "bg-slate-100 text-slate-700 hover:bg-slate-200";
-      }
-    };
-
-    // Determine badge dot color
-    const getDotColor = (status: string) => {
-      if (!status) return "bg-slate-500";
-      
-      switch(status.toLowerCase()) {
-        case 'pending':
-          return "bg-blue-500";
-        case 'scheduled':
-          return "bg-green-500";
-        case 'completed':
-          return "bg-purple-500";
-        case 'cancelled':
-          return "bg-red-500";
-        default:
-          return "bg-slate-500";
-      }
-    };
-
-    // Format the status for display
-    const getDisplayStatus = (status: string) => {
-      if (!status) return "Unknown";
-      
-      switch (status.toLowerCase()) {
-        case 'pending':
-          return "Upcoming";
-        case 'scheduled':
-          return "In Progress";
-        case 'completed':
-          return "Completed";
-        case 'cancelled':
-          return "Cancelled";
-        default:
-          return status.charAt(0).toUpperCase() + status.slice(1).toLowerCase();
-      }
-    };
-
-    return (
-      <>
-        <Card className="shadow-sm overflow-hidden mt-6">
-          <CardContent className="p-0">
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr style={{ backgroundColor: '#1E88E5' }} className="rounded-t-lg">
-                    <th className="text-left text-sm font-semibold text-white p-4 first:rounded-tl-lg">ID</th>
-                    <th className="text-left text-sm font-semibold text-white p-4">Mood Mentor</th>
-                    <th className="text-left text-sm font-semibold text-white p-4">Date & Time</th>
-                    <th className="text-left text-sm font-semibold text-white p-4">Type</th>
-                    <th className="text-left text-sm font-semibold text-white p-4">Status</th>
-                    <th className="text-right text-sm font-semibold text-white p-4 last:rounded-tr-lg">Actions</th>
+                      )}
+                      </td>
                   </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-200">
-                  {appointments.map((appointment) => (
-                    <tr key={appointment.id} className="hover:bg-blue-50/30 transition-colors">
-                      <td className="p-4">
-                        <span className="text-blue-600 font-medium">{formatAppointmentId(appointment.id)}</span>
-                      </td>
-                      <td className="p-4">
-                        <div className="flex items-center gap-3">
-                          <FallbackAvatar
-                            src={appointment.mentor?.avatar}
-                            name={appointment.mentor?.name || "Mentor"}
-                            className="h-10 w-10"
-                          />
-                          <div>
-                            <div className="font-medium text-gray-800">{appointment.mentor?.name}</div>
-                            <div className="text-xs text-slate-500">{appointment.mentor?.specialty}</div>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="p-4">
-                        <div className="text-sm text-gray-700">
+                ) : (
+                  appointments
+                    .filter(appt => {
+                      // Filter by status tab
+                      const matchesTab = 
+                        activeTab === "upcoming" ? (appt.status === "pending" || appt.status === "scheduled" || appt.status === "confirmed") :
+                        activeTab === "completed" ? appt.status === "completed" :
+                        activeTab === "cancelled" ? appt.status === "cancelled" :
+                        true;
+                      
+                      // Filter by search term
+                      const matchesSearch = searchTerm === "" || 
+                        (appt.mentor?.name?.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                         appt.mentor?.specialty?.toLowerCase().includes(searchTerm.toLowerCase()));
+                      
+                      return matchesTab && matchesSearch;
+                    })
+                    .map((appointment) => (
+                      <tr key={appointment.id} className="border-b hover:bg-gray-50">
+                        <td className="py-4 px-4">
                           <div className="flex items-center">
-                            <CalendarIcon className="h-3.5 w-3.5 mr-1.5 text-blue-500" />
-                            {format(new Date(appointment.date), "dd MMM yyyy")}
-                          </div>
-                          <div className="flex items-center mt-1">
-                            <Clock className="h-3.5 w-3.5 mr-1.5 text-blue-500" />
-                            {appointment.time}
+                            <Avatar className="h-10 w-10 mr-3">
+                              <AvatarImage src={appointment.mentor?.avatar} alt={appointment.mentor?.name || "Mentor"} />
+                              <AvatarFallback className="bg-blue-100 text-blue-600">
+                                {appointment.mentor?.name?.charAt(0) || "M"}
+                              </AvatarFallback>
+                            </Avatar>
+                          <div>
+                              <div className="font-medium text-gray-900">{appointment.mentor?.name || "Mood Mentor"}</div>
+                              <div className="text-sm text-gray-500">{appointment.mentor?.specialty || "Mental Health Support"}</div>
                           </div>
                         </div>
                       </td>
-                      <td className="p-4">
-                        <span className="inline-flex items-center text-sm text-gray-700">
-                          {appointment.type === "video" && <Video className="h-3.5 w-3.5 mr-1.5 text-blue-500" />}
-                          {appointment.type === "audio" && <Phone className="h-3.5 w-3.5 mr-1.5 text-blue-500" />}
-                          {appointment.type === "chat" && <MessageSquare className="h-3.5 w-3.5 mr-1.5 text-blue-500" />}
-                          {appointment.type.charAt(0).toUpperCase() + appointment.type.slice(1)}
-                        </span>
+                        <td className="py-4 px-4">
+                          <div className="text-gray-900">{appointment.date}</div>
+                          <div className="text-sm text-gray-500">{appointment.time}</div>
                       </td>
-                      <td className="p-4">
-                        <Badge className={`${getBadgeClasses(appointment.status)} font-medium px-3 py-1 rounded-full`}>
-                          <span className="flex items-center">
-                            <span className={`h-1.5 w-1.5 rounded-full ${getDotColor(appointment.status)} mr-1.5`}></span>
-                            {getDisplayStatus(appointment.status)}
-                          </span>
-                        </Badge>
+                        <td className="py-4 px-4">
+                          <div className="flex items-center">
+                            {appointment.type === "video" && <Video className="mr-2 h-4 w-4 text-blue-600" />}
+                            {appointment.type === "audio" && <Phone className="mr-2 h-4 w-4 text-blue-600" />}
+                            {appointment.type === "chat" && <MessageSquare className="mr-2 h-4 w-4 text-blue-600" />}
+                            <span>{appointment.type.charAt(0).toUpperCase() + appointment.type.slice(1)}</span>
+                        </div>
                       </td>
-                      <td className="p-4 text-right">
-                        <div className="flex items-center justify-end gap-2">
-                          {activeTab === "upcoming" && (
-                            <>
-                              {/* Cancel button - always show for upcoming appointments */}
+                        <td className="py-4 px-4">
+                          {getStatusBadge(appointment.status)}
+                      </td>
+                        <td className="py-4 px-4 text-right">
+                          <div className="flex justify-end gap-2">
+                            {/* Actions based on appointment status */}
+                            {appointment.status === "completed" && !appointment.isReviewed && (
                               <Button 
                                 variant="outline"
                                 size="sm"
-                                className="h-8 px-3 rounded-full text-red-500 border-red-200 hover:bg-red-50"
-                                onClick={() => setCancelAppointmentId(appointment.id)}
+                                onClick={() => {
+                                  setSelectedAppointmentForReview({
+                                    id: appointment.id,
+                                    mentorId: appointment.mentor?.id || "",
+                                    mentorName: appointment.mentor?.name || "Mood Mentor"
+                                  });
+                                  setIsReviewModalOpen(true);
+                                }}
+                                className="text-blue-600 border-blue-200 hover:bg-blue-50"
                               >
-                                <X className="h-3.5 w-3.5 mr-1.5" />
-                                Cancel
+                                <Star className="mr-1.5 h-3.5 w-3.5" />
+                                Review
                               </Button>
+                            )}
                               
-                              {/* For chat appointments, only show Message button */}
-                              {appointment.type === 'chat' && (
+                            {appointment.status === "completed" && (
                                 <Button 
                                   variant="outline"
                                   size="sm"
-                                  className="h-8 px-3 rounded-full"
-                                  onClick={() => navigate(`/patient-dashboard/messages/${appointment.mentor?.id}`)}
+                                onClick={() => exportSingleAppointmentToPDF(appointment)}
+                                className="text-gray-600 border-gray-200 hover:bg-gray-50"
                                 >
-                                  <MessageSquare className="h-3.5 w-3.5 mr-1.5" />
-                                  Message
+                                                                  <FileDown className="mr-1.5 h-3.5 w-3.5" />
+                                  Export PDF
                                 </Button>
                               )}
                               
-                              {/* For video/audio appointments */}
-                              {appointment.type.toLowerCase() === 'video' && (
+                            {appointment.status === "completed" && (
                                 <Button
-                                  variant={canJoinSession(appointment) ? "default" : "outline"}
                                   size="sm"
-                                  className={`h-8 px-3 rounded-full ${
-                                    canJoinSession(appointment)
-                                      ? "bg-green-600 hover:bg-green-700 text-white"
-                                      : "text-gray-500"
-                                  }`}
-                                  onClick={() => handleJoinSession(appointment)}
-                                  disabled={!canJoinSession(appointment)}
-                                >
-                                  <Video className="h-3.5 w-3.5 mr-1.5" />
-                                  {canJoinSession(appointment) ? "Join Call" : "Waiting..."}
+                                onClick={() => navigate('/booking', {
+                                  state: {
+                                    mentorId: appointment.mentor_id,
+                                    mentorName: appointment.mentor?.name,
+                                    specialty: appointment.mentor?.specialty,
+                                    preselectedMentor: true
+                                  }
+                                })}
+                                className="bg-blue-600 hover:bg-blue-700 text-white"
+                              >
+                                <CalendarPlus className="mr-1.5 h-3.5 w-3.5" />
+                                Book Again
                                 </Button>
                               )}
                               
-                              {/* Add support for audio appointments */}
-                              {appointment.type.toLowerCase() === 'audio' && (
+                            {(appointment.status === "pending" || appointment.status === "scheduled") && (
+                              <>
                                 <Button
-                                  variant={canJoinSession(appointment) ? "default" : "outline"}
+                                  variant="outline" 
                                   size="sm"
-                                  className={`h-8 px-3 rounded-full ${
-                                    canJoinSession(appointment)
-                                      ? "bg-green-600 hover:bg-green-700 text-white"
-                                      : "text-gray-500"
-                                  }`}
-                                  onClick={() => handleJoinSession(appointment)}
-                                  disabled={!canJoinSession(appointment)}
+                                  onClick={() => setCancelAppointmentId(appointment.id)}
+                                  className="text-red-600 border-red-200 hover:bg-red-50"
                                 >
-                                  <Phone className="h-3.5 w-3.5 mr-1.5" />
-                                  {canJoinSession(appointment) ? "Join Call" : "Waiting..."}
+                                  <X className="mr-1.5 h-3.5 w-3.5" />
+                                  Cancel
                                 </Button>
-                              )}
-                            </>
-                          )}
-                          {activeTab === "cancelled" && (
+                                
+                                {canJoinSession(appointment) ? (
                             <Button 
                               size="sm"
-                              className="h-8 px-3 bg-blue-600 hover:bg-blue-700 rounded-full"
-                              onClick={() => navigate(`/booking?mentor=${appointment.mentor?.id}`)}
-                            >
-                              <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
-                              Reschedule
-                            </Button>
-                          )}
-                          {activeTab === "completed" && (
-                            <>
-                              <Button 
-                                variant="outline"
-                                size="sm"
-                                className="h-8 px-3 rounded-full"
-                                onClick={() => navigate(`/feedback/${appointment.id}`)}
+                                  onClick={() => handleJoinSession(appointment)}
+                                    className="bg-green-600 hover:bg-green-700 text-white"
+                                  >
+                                    {appointment.type === "video" && <Video className="mr-1.5 h-3.5 w-3.5" />}
+                                    {appointment.type === "audio" && <Phone className="mr-1.5 h-3.5 w-3.5" />}
+                                    {appointment.type === "chat" && <MessageSquare className="mr-1.5 h-3.5 w-3.5" />}
+                                    Join
+                                </Button>
+                                ) : (
+                            <Button 
+                              size="sm"
+                                    disabled
+                                    className="bg-gray-200 text-gray-600 cursor-not-allowed"
                               >
-                                <MessageSquare className="h-3.5 w-3.5 mr-1.5" />
-                                Feedback
+                                    <Clock className="mr-1.5 h-3.5 w-3.5" />
+                                    Waiting
                               </Button>
-                              <Button 
-                                variant="outline"
-                                size="sm"
-                                className={`h-8 px-3 rounded-full ${appointment.isReviewed ? 'bg-green-50 text-green-600 border-green-200' : ''}`}
-                                onClick={() => openReviewModal(appointment)}
-                                disabled={appointment.isReviewed}
-                              >
-                                <Star className="h-3.5 w-3.5 mr-1.5" />
-                                {appointment.isReviewed ? 'Already Reviewed' : 'Leave Review'}
-                              </Button>
-                              <Button 
-                                size="sm"
-                                className="h-8 px-3 bg-blue-600 hover:bg-blue-700 rounded-full"
-                                onClick={() => navigate(`/booking?mentor=${appointment.mentor?.id}`)}
-                              >
-                                <CalendarPlus className="h-3.5 w-3.5 mr-1.5" />
-                                Book Again
-                              </Button>
-                            </>
+                                )}
+                              </>
                           )}
                         </div>
                       </td>
                     </tr>
-                  ))}
+                    ))
+                )}
                 </tbody>
               </table>
+          </div>
+        </div>
+        
+        {/* Mood Mentors Section */}
+        <div className="mt-10" id="mood-mentors-section">
+          <div className="flex justify-between items-center mb-6">
+            <div>
+              <h2 className="text-xl font-bold text-gray-800">Available Mentors</h2>
+              <p className="text-gray-500">Book your next session with a specialist</p>
+            </div>
+            <Button 
+              variant="outline" 
+              onClick={() => navigate('/mood-mentors')}
+              className="text-blue-600 border-blue-200 hover:bg-blue-50"
+            >
+              View All Mentors
+            </Button>
+          </div>
+          
+          {loadingMoodMentors ? (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {[1, 2, 3].map((i) => (
+                <Card key={i} className="border border-gray-100 shadow-sm">
+                  <CardContent className="p-6">
+                    <div className="flex items-center space-x-4">
+                      <Skeleton className="h-12 w-12 rounded-full" />
+                      <div className="space-y-2">
+                        <Skeleton className="h-4 w-[180px]" />
+                        <Skeleton className="h-4 w-[120px]" />
+                      </div>
+                    </div>
+                    <div className="mt-4 space-y-2">
+                      <Skeleton className="h-4 w-full" />
+                      <Skeleton className="h-4 w-3/4" />
+                    </div>
+                    <div className="mt-4 flex gap-2">
+                      <Skeleton className="h-9 w-full rounded-md" />
+                      <Skeleton className="h-9 w-24 rounded-md" />
             </div>
           </CardContent>
         </Card>
-      </>
-    );
-  };
-
-  // Helper to render badge based on count
-  const renderCountBadge = (count: number) => {
-    if (count === 0) return null;
-    return <Badge className="ml-1 bg-blue-600 hover:bg-blue-600 text-white">{count}</Badge>;
-  };
-
-  const renderMoodMentorProfiles = () => {
-    if (loadingMoodMentors) {
-      return (
-        <div className="flex justify-center p-8">
-          <div className="w-8 h-8 border-t-2 border-b-2 border-blue-500 rounded-full animate-spin"></div>
-        </div>
-      );
-    }
-
-    if (moodMentors.length === 0) {
-      return (
-        <div className="text-center p-8">
-          <GraduationCap className="mx-auto h-12 w-12 text-gray-400" />
-          <h3 className="mt-2 text-sm font-semibold text-gray-900">No mood mentors</h3>
-          <p className="mt-1 text-sm text-gray-500">
-            No mood mentors are available at the moment.
-          </p>
-        </div>
-      );
-    }
-
-    return (
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4">
-        {moodMentors.map((mentor) => (
-          <Card 
-            key={mentor.id}
-            className={`overflow-hidden hover:shadow-md transition-shadow ${
-              !mentor.available ? 'opacity-70' : ''
-            }`}
-          >
-            <CardContent className="p-0">
-              <div className="flex items-start p-4">
-                <FallbackAvatar
-                  src={mentor.avatar}
-                  name={mentor.name}
-                  className="h-12 w-12 border"
-                />
-                
-                <div className="flex-1">
-                  <div className="flex justify-between">
-                    <div>
-                      <h3 className="font-medium">{mentor.name}</h3>
-                      <p className="text-sm text-gray-500">{mentor.specialty}</p>
-                    </div>
-                    
-                    <div className="flex items-center">
-                      <Star className="h-4 w-4 text-yellow-400 fill-yellow-400" />
-                      <span className="text-sm font-medium ml-1">{mentor.rating}</span>
-                      <span className="text-xs text-gray-500 ml-1">({mentor.reviews})</span>
-                    </div>
-                  </div>
-                  
-                  <div className="mt-2">
-                    <div className="text-sm flex items-center space-x-1">
-                      <GraduationCap className="h-3.5 w-3.5 text-gray-400" />
-                      <span className="text-gray-600 truncate">{mentor.education}</span>
-                    </div>
-                    
-                    <div className="mt-1 text-sm flex items-center space-x-1">
-                      <Mail className="h-3.5 w-3.5 text-gray-400" />
-                      <span className="text-gray-600 truncate">{mentor.email}</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              
-              <div className="mt-4 space-y-2">
-                <Button 
-                  variant="outline" 
-                  className="w-full justify-start" 
-                  onClick={() => handleViewMentorProfile(mentor.id)}
-                >
-                  <UserRound className="mr-2 h-4 w-4" />
-                  View Profile
-                </Button>
-                
-                <BookingButton 
-                  moodMentorId={mentor.id}
-                  moodMentorName={mentor.name}
-                  className="w-full py-2 px-3"
-                  buttonText="Book Appointment"
-                />
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-    );
-  };
-
-  return (
-    <DashboardLayout>
-      <AlertDialog open={!!cancelAppointmentId} onOpenChange={(open) => {
-        if (!open) {
-          setCancelAppointmentId(null);
-          setCancellationReason('');
-        }
-      }}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Cancel Appointment</AlertDialogTitle>
-            <AlertDialogDescription>
-              Are you sure you want to cancel this appointment? This action cannot be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <div className="py-4">
-            <label htmlFor="cancellation-reason" className="block text-sm font-medium text-gray-700 mb-1">
-              Reason for cancellation (optional)
-            </label>
-            <Textarea
-              id="cancellation-reason"
-              placeholder="Please provide a reason for cancelling this appointment"
-              value={cancellationReason}
-              onChange={(e) => setCancellationReason(e.target.value)}
-              className="w-full"
-            />
-          </div>
-          <AlertDialogFooter>
-            <AlertDialogCancel>No, keep appointment</AlertDialogCancel>
-            <AlertDialogAction 
-              onClick={() => cancelAppointmentId && handleCancelAppointment(cancelAppointmentId)}
-              className="bg-red-600 hover:bg-red-700 text-white"
-            >
-              Yes, cancel appointment
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 space-y-8">
-        {/* Header section */}
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-          <div>
-            <h1 
-              className="text-2xl font-bold text-gray-900 cursor-default" 
-              onClick={handleTitleClick}
-            >
-              My Appointments
-            </h1>
-            <p className="text-slate-500 mt-1">
-              Manage your appointments with mental health mentors
-            </p>
-          </div>
-          <BookingButton
-            moodMentorId={moodMentors.length > 0 ? moodMentors[0].id : ""}
-            moodMentorName=""
-            className="bg-blue-600 hover:bg-blue-700 rounded-lg text-white"
-            scrollToMentors={true}
-            isTopButton={true}
-            buttonText={
-              <>
-                <CalendarPlus className="w-4 h-4 mr-2" />
-                Book Appointment
-              </>
-            }
-          />
-        </div>
-
-        {/* Status tabs and Filter section */}
-        <div className="flex flex-col sm:flex-row justify-between items-center border-b border-gray-200 pb-4">
-          {/* Left side: Status tabs */}
-          <div className="flex items-center space-x-4 overflow-x-auto pb-1">
-            <button 
-              className={cn(
-                "flex items-center gap-2 py-2 px-3 rounded-full font-medium text-sm transition-colors",
-                activeTab === "upcoming" 
-                  ? "bg-blue-50 text-blue-600" 
-                  : "text-gray-600 hover:text-gray-900 hover:bg-gray-50"
-              )}
-              onClick={() => setActiveTab("upcoming")}
-            >
-              <CalendarClock className="h-4 w-4" />
-              <span>Upcoming</span>
-              {counts.upcoming > 0 && (
-                <span className="inline-flex items-center justify-center rounded-full bg-blue-600 h-5 min-w-5 px-1.5 text-xs font-medium text-white">
-                  {counts.upcoming}
-                </span>
-              )}
-            </button>
-            <button 
-              className={cn(
-                "flex items-center gap-2 py-2 px-3 rounded-full font-medium text-sm transition-colors",
-                activeTab === "completed" 
-                  ? "bg-green-50 text-green-600" 
-                  : "text-gray-600 hover:text-gray-900 hover:bg-gray-50"
-              )}
-              onClick={() => setActiveTab("completed")}
-            >
-              <CheckCircle2 className="h-4 w-4" />
-              <span>Completed</span>
-              {counts.completed > 0 && (
-                <span className="inline-flex items-center justify-center rounded-full bg-green-600 h-5 min-w-5 px-1.5 text-xs font-medium text-white">
-                  {counts.completed}
-                </span>
-              )}
-            </button>
-            <button 
-              className={cn(
-                "flex items-center gap-2 py-2 px-3 rounded-full font-medium text-sm transition-colors",
-                activeTab === "cancelled" 
-                  ? "bg-orange-50 text-orange-600" 
-                  : "text-gray-600 hover:text-gray-900 hover:bg-gray-50"
-              )}
-              onClick={() => setActiveTab("cancelled")}
-            >
-              <X className="h-4 w-4" />
-              <span>Cancelled</span>
-              {counts.cancelled > 0 && (
-                <span className="inline-flex items-center justify-center rounded-full bg-orange-600 h-5 min-w-5 px-1.5 text-xs font-medium text-white">
-                  {counts.cancelled}
-                </span>
-              )}
-            </button>
-          </div>
-
-          {/* Right side: Date picker styled like calendar */}
-          <div className="mt-4 sm:mt-0">
-            <Popover open={dateFilterOpen} onOpenChange={setDateFilterOpen}>
-              <PopoverTrigger asChild>
-                <Button 
-                  variant="outline" 
-                  className="border rounded-lg bg-white shadow-sm"
-                >
-                  <CalendarIcon className="h-4 w-4 mr-2 text-blue-600" />
-                  <span className="whitespace-nowrap">
-                    {format(startDate, "MMM d, yyyy")} - {format(endDate, "MMM d, yyyy")}
-                  </span>
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="p-0 w-auto min-w-[240px]" align="end">
-                <div className="bg-white rounded-md shadow-md overflow-hidden">
-                  {dateFilters.map((filter, index) => (
-                    <button
-                      key={index}
-                      className="w-full text-left px-4 py-2.5 text-sm hover:bg-blue-50 focus:bg-blue-50 focus:outline-none transition-colors"
-                      onClick={() => handleApplyDateFilter(filter)}
-                    >
-                      {filter.label}
-                    </button>
-                  ))}
-                  <hr className="border-gray-100" />
-                  <button
-                    className="w-full text-left px-4 py-2.5 text-sm text-blue-600 font-medium hover:bg-blue-50 focus:bg-blue-50 focus:outline-none transition-colors"
-                    onClick={handleCustomDateRange}
-                  >
-                    Custom Range
-                  </button>
-                </div>
-              </PopoverContent>
-            </Popover>
-          </div>
-        </div>
-
-        {/* Main content - full width without mentor sidebar */}
-        <div className="w-full">
-          {/* Appointments section */}
-          <div className="mb-10">
-            {renderAppointmentList()}
-          </div>
-          
-          {/* Mentor profiles section */}
-          <div id="mood-mentors-section">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-medium">Available Mood Mentors</h2>
-              <Button 
-                variant="outline" 
-                size="sm" 
-                className="text-blue-600"
-                onClick={() => navigate('/mood-mentors')}
-              >
-                View All Mentors
-              </Button>
+              ))}
             </div>
-            {renderMoodMentorProfiles()}
-          </div>
-        </div>
+          ) : moodMentors.length === 0 ? (
+            <Card className="border border-gray-100 shadow-sm">
+              <CardContent className="flex flex-col items-center justify-center py-12 text-center">
+                <div className="bg-blue-100 rounded-full p-4 mb-4">
+                  <GraduationCap className="h-8 w-8 text-blue-600" />
+                </div>
+                <h3 className="text-lg font-medium mb-2">No Mentors Available</h3>
+                <p className="text-gray-500 max-w-md mb-6">
+                  There are currently no mood mentors available for booking. Please check back later.
+                </p>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {moodMentors.map((mentor) => (
+                <Card key={mentor.id} className="border border-gray-100 shadow-sm hover:shadow transition-shadow">
+                  <CardContent className="p-6">
+                    <div className="flex items-center space-x-4 mb-4">
+                      <Avatar className="h-12 w-12 border border-gray-100">
+                        <AvatarImage src={mentor.avatar} alt={mentor.name} />
+                        <AvatarFallback className="bg-blue-100 text-blue-600">
+                          {mentor.name.charAt(0)}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div>
+                        <h3 className="font-medium text-gray-900">{mentor.name}</h3>
+                        <p className="text-sm text-gray-500">{mentor.specialty}</p>
+                      </div>
+                    </div>
+                    
+                    {mentor.rating && (
+                      <div className="flex items-center mb-3">
+                        <div className="flex mr-2">
+                          {Array.from({ length: 5 }).map((_, i) => (
+                            <Star
+                              key={i}
+                              className={`h-3.5 w-3.5 ${
+                                i < Math.floor(mentor.rating || 0)
+                                  ? "text-yellow-400 fill-yellow-400"
+                                  : "text-gray-300"
+                              }`}
+                            />
+                          ))}
+                        </div>
+                        <span className="text-xs text-gray-500">
+                          {mentor.rating.toFixed(1)}
+                          {mentor.reviews && mentor.reviews > 0 && ` (${mentor.reviews})`}
+                        </span>
+                      </div>
+                    )}
+                    
+                    <p className="text-sm text-gray-600 line-clamp-2 mb-4">
+                      {mentor.bio || `${mentor.name} is a mental health specialist with expertise in ${mentor.specialty}.`}
+                    </p>
+                    
+                    <div className="flex gap-2">
+                      <BookingButton 
+                        moodMentorId={mentor.id}
+                        moodMentorName={mentor.name}
+                        nameSlug={mentor.name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')}
+                        className="flex-1 bg-blue-600 hover:bg-blue-700 text-white"
+                        buttonText="Book Session"
+                      />
+                <Button 
+                        variant="outline" 
+                        className="border-blue-200 text-blue-600 hover:bg-blue-50"
+                        onClick={() => handleViewMentorProfile(mentor.id)}
+                >
+                        Profile
+                </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+              </div>
+        
+        {/* Cancel Appointment Dialog */}
+        <Dialog open={!!cancelAppointmentId} onOpenChange={() => setCancelAppointmentId(null)}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>Cancel Appointment</DialogTitle>
+              <DialogDescription>
+                Are you sure you want to cancel this appointment? This action cannot be undone.
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter className="sm:justify-start">
+                <Button 
+                  variant="outline" 
+                onClick={() => setCancelAppointmentId(null)}
+                >
+                No, Keep Appointment
+                </Button>
+              <Button 
+                variant="destructive" 
+                onClick={() => handleCancelAppointment(cancelAppointmentId!)}
+                disabled={cancelingAppointment}
+              >
+                {cancelingAppointment ? "Cancelling..." : "Yes, Cancel Appointment"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+        
+        {/* Review Modal */}
+        {selectedAppointmentForReview && (
+          <ReviewModal
+            isOpen={isReviewModalOpen}
+            onClose={() => {
+              setIsReviewModalOpen(false);
+            }}
+            appointmentId={selectedAppointmentForReview.id}
+            mentorId={selectedAppointmentForReview.mentorId}
+            mentorName={selectedAppointmentForReview.mentorName}
+            onSubmitReview={() => {
+              // Let the modal handle the submission internally
+              setIsReviewModalOpen(false);
+              setSelectedAppointmentForReview(null);
+              // Refresh the appointments list after submission
+              fetchAppointments();
+              toast.success("Thank you for your review!");
+            }}
+          />
+        )}
       </div>
-
-      {selectedAppointmentForReview && (
-        <ReviewModal
-          isOpen={isReviewModalOpen}
-          onClose={() => {
-            setIsReviewModalOpen(false);
-            setSelectedAppointmentForReview(null);
-            // Refresh appointments after review submission
-            fetchAppointments();
-          }}
-          appointmentId={selectedAppointmentForReview.id}
-          mentorId={selectedAppointmentForReview.mentorId}
-          mentorName={selectedAppointmentForReview.mentorName}
-        />
-      )}
     </DashboardLayout>
   );
 }
-
-
-

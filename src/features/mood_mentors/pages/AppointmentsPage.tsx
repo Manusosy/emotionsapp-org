@@ -26,7 +26,8 @@ import {
   Edit,
   Phone,
   Download,
-  FileDown
+  FileDown,
+  ChevronDown
 } from "lucide-react";
 // Supabase import removed
 import { useNavigate, useLocation } from "react-router-dom";
@@ -61,13 +62,38 @@ import { Spinner } from '@/components/ui/spinner';
 import { Separator } from '@/components/ui/separator';
 import { User } from 'lucide-react';
 
+interface Appointment {
+  id: string;
+  patient_id: string;
+  mentor_id: string;
+  title: string;
+  date: string;
+  start_time: string;
+  end_time: string;
+  time?: string;
+  type: string;
+  status: string;
+  notes?: string;
+  meeting_link?: string;
+  meeting_type: 'video' | 'audio' | 'chat';
+  patient?: {
+    id: string;
+    name: string;
+    email: string;
+  };
+  created_at: string;
+  updated_at: string;
+}
+
 interface AppointmentDisplay {
   id: string;
   patient_id: string;
+  mentor_id: string;
+  title: string;
   date: string;
   time: string;
   type: string;
-  status: string;
+  status: 'pending' | 'scheduled' | 'completed' | 'cancelled' | 'rescheduled';
   patient: {
     name: string;
     avatar: string;
@@ -75,13 +101,18 @@ interface AppointmentDisplay {
     phone?: string;
   };
   notes?: string;
+  start_time: string;
+  end_time: string;
+  meeting_type: 'video' | 'audio' | 'chat';
+  created_at: string;
+  updated_at: string;
 }
 
 export default function AppointmentsPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const { user } = useAuth();
-  const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [appointments, setAppointments] = useState<AppointmentDisplay[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState("all");
   const [dateFilter, setDateFilter] = useState("all");
@@ -103,7 +134,31 @@ export default function AppointmentsPage() {
   
   useEffect(() => {
     fetchAppointments();
-  }, [user, statusFilter, dateFilter, location.search]);
+
+    // Subscribe to appointment changes
+    const appointmentSubscription = supabase
+      .channel('mentor_appointment_changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'appointments',
+          filter: `mentor_id=eq.${user?.id}`
+        },
+        (payload) => {
+          console.log('Appointment change received:', payload);
+          // Refresh appointments when there's a change
+          fetchAppointments();
+        }
+      )
+      .subscribe();
+
+    // Cleanup subscription
+    return () => {
+      appointmentSubscription.unsubscribe();
+    };
+  }, [user]);
 
   const fetchAppointments = async () => {
     try {
@@ -157,18 +212,26 @@ export default function AppointmentsPage() {
       const transformedData = data.map(appointment => ({
         id: appointment.id,
         patient_id: appointment.patient_id,
+        mentor_id: appointment.mentor_id,
+        title: appointment.title,
         date: appointment.date,
         time: `${appointment.start_time} - ${appointment.end_time}`,
         type: appointment.meeting_type,
-        status: normalizeStatus(appointment.status || "upcoming"),
+        status: normalizeStatus(appointment.status || "upcoming") as AppointmentDisplay['status'],
         notes: appointment.notes,
         patient: {
           name: appointment.patient_name || "Unknown Patient",
           avatar: appointment.patient_avatar_url || "",
           email: appointment.patient_email || "",
           phone: appointment.patient_phone || ""
-        }
-      }));
+        },
+        start_time: appointment.start_time,
+        end_time: appointment.end_time,
+        meeting_type: appointment.meeting_type as 'video' | 'audio' | 'chat',
+        meeting_type: appointment.meeting_type,
+        created_at: appointment.created_at,
+        updated_at: appointment.updated_at
+      } as AppointmentDisplay));
       
       console.log("Transformed appointment data:", transformedData);
       setAppointments(transformedData);
@@ -195,26 +258,18 @@ export default function AppointmentsPage() {
     }
   };
 
-  const handleJoinSession = async (appointment: Appointment) => {
+  const handleStartSession = async (appointment: AppointmentDisplay) => {
     try {
-      console.log('Joining session for appointment:', appointment.id);
-      
-      if (!appointment.id) {
-        console.error('Cannot join session: Appointment ID is missing');
-        toast.error('Cannot join session', {
-          description: 'Appointment information is incomplete'
-        });
-        return;
-      }
-
       // Show loading toast
-      toast.loading('Preparing video call room...');
-
+      const loadingToast = toast.loading('Preparing video call room...', {
+        duration: Infinity // Keep showing until we dismiss it
+      });
+      
       // First, ensure a room is created for this appointment
       const { data: sessionData, error: sessionError } = await appointmentService.startAppointmentSession(appointment.id);
       
-      // Dismiss loading toast
-      toast.dismiss();
+      // Always dismiss the loading toast
+      toast.dismiss(loadingToast);
       
       if (sessionError) {
         console.error('Error starting appointment session:', sessionError);
@@ -231,24 +286,13 @@ export default function AppointmentsPage() {
       
       console.log('Room created successfully:', sessionData.roomUrl);
       
-      // Update the appointment status to "scheduled" if it's not already
-      if (appointment.status.toLowerCase() !== 'scheduled') {
-        await supabase
-          .from('appointments')
-          .update({ 
-            status: 'scheduled',
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', appointment.id);
-      }
-      
       // Now that we have confirmed the room is created, navigate to the call page
       toast.success('Video call room ready, joining session...');
-      navigate(`/mood-mentor-dashboard/appointment/${appointment.id}/call`);
+      navigate(`/mood-mentor-dashboard/appointments/${appointment.id}/call`);
       
     } catch (error: any) {
-      console.error('Error joining session:', error);
-      toast.error('Failed to join session', {
+      console.error('Error starting session:', error);
+      toast.error('Failed to start session', {
         description: error.message || 'An unexpected error occurred'
       });
     }
@@ -470,13 +514,23 @@ export default function AppointmentsPage() {
   });
 
   // Add this new function for exporting all appointments
-  const handleExportAllAppointments = () => {
+  const handleExportAllAppointments = async () => {
+    const toastId = toast.loading("Generating PDF report...", {
+      dismissible: true
+    });
+    
     try {
-      if (filteredAppointments.length === 0) {
-        toast.error('No appointments to export');
+      const displayAppointments = appointments.filter(isAppointmentDisplay);
+      
+      if (displayAppointments.length === 0) {
+        toast.dismiss(toastId);
+        toast.error("No appointments to export", {
+          dismissible: true
+        });
         return;
       }
-      
+
+      // Create PDF document
       const doc = new jsPDF();
       
       // Add title
@@ -486,69 +540,122 @@ export default function AppointmentsPage() {
       // Add export date
       doc.setFontSize(10);
       doc.text(`Generated on: ${format(new Date(), 'yyyy-MM-dd HH:mm')}`, 14, 28);
+      doc.text(`Total Appointments: ${displayAppointments.length}`, 14, 34);
       
-      // Filter info
-      doc.text(`Status Filter: ${statusFilter === 'all' ? 'All Appointments' : statusFilter}`, 14, 34);
-      doc.text(`Date Filter: ${dateFilter === 'all' ? 'All Time' : dateFilter}`, 14, 40);
-      if (searchQuery) doc.text(`Search: "${searchQuery}"`, 14, 46);
+      // Add mentor info
+      if (user) {
+        doc.text(`Mentor: ${user.user_metadata?.name || user.email}`, 14, 40);
+      }
       
-      // Create table headers
-      const tableColumn = ["Patient", "Date", "Time", "Type", "Status"];
+      // Create table data
+      const tableColumn = ["Patient", "Email", "Phone", "Date", "Time", "Type", "Status"];
+      const tableRows = displayAppointments.map(appointment => [
+        appointment.patient?.name || "Unknown Patient",
+        appointment.patient?.email || "",
+        appointment.patient?.phone || "",
+        appointment.date || "",
+        appointment.time || "",
+        appointment.type || "",
+        appointment.status || ""
+      ]);
       
-      // Create rows from filtered appointments with error handling
-      const tableRows = filteredAppointments.map((appointment) => {
-        try {
-          return [
-            appointment.patient?.name || "Unknown Patient",
-            appointment.date || "No date",
-            appointment.time || "No time",
-            appointment.type || "Unknown",
-            appointment.status || "Unknown"
-          ];
-        } catch (err) {
-          console.error("Error processing appointment for export:", err, appointment);
-          return ["Error", "Error", "Error", "Error", "Error"];
+      // Generate table
+      autoTable(doc, {
+        head: [tableColumn],
+        body: tableRows,
+        startY: 46,
+        theme: 'grid',
+        styles: {
+          fontSize: 9,
+          cellPadding: 3,
+        },
+        headStyles: {
+          fillColor: [39, 99, 175],
+          textColor: 255,
+          fontStyle: 'bold',
+        },
+        alternateRowStyles: {
+          fillColor: [240, 247, 255],
         }
       });
       
-      try {
-        // Use autoTable directly
-        autoTable(doc, {
-          head: [tableColumn],
-          body: tableRows,
-          startY: searchQuery ? 52 : 46,
-          theme: 'grid',
-          styles: {
-            fontSize: 8,
-            cellPadding: 2,
-          },
-          headStyles: {
-            fillColor: [66, 139, 202],
-            textColor: 255,
-            fontStyle: 'bold',
-          },
-          alternateRowStyles: {
-            fillColor: [240, 240, 240],
-          }
+      // Add summary at bottom
+      const pageHeight = doc.internal.pageSize.height;
+      doc.setFontSize(10);
+      doc.text("Emotions App - Mentor Appointments Report", 14, pageHeight - 20);
+      
+      // Save the PDF
+      const filename = `mentor_appointments_${format(new Date(), 'yyyy-MM-dd')}.pdf`;
+      doc.save(filename);
+      
+      toast.dismiss(toastId);
+      toast.success("Appointments exported successfully as PDF!", {
+        dismissible: true
+      });
+    } catch (error) {
+      console.error("Error exporting appointments:", error);
+      toast.dismiss(toastId);
+      toast.error("Failed to export appointments. Please try again.", {
+        dismissible: true
+      });
+    }
+  };
+
+  // Add CSV export function
+  const exportAppointmentsToCSV = async () => {
+    const toastId = toast.loading("Generating CSV export...", {
+      dismissible: true
+    });
+    
+    try {
+      const displayAppointments = appointments.filter(isAppointmentDisplay);
+      
+      if (displayAppointments.length === 0) {
+        toast.dismiss(toastId);
+        toast.error("No appointments to export", {
+          dismissible: true
         });
-        
-        // Add summary at bottom
-        const finalY = (doc as any).lastAutoTable.finalY || 60;
-        doc.text(`Total Appointments: ${filteredAppointments.length}`, 14, finalY + 10);
-        
-        // Save the PDF
-        const filename = `appointments-report-${format(new Date(), 'yyyy-MM-dd')}.pdf`;
-        doc.save(filename);
-        
-        toast.success(`${filteredAppointments.length} appointments exported successfully!`);
-        console.log(`Export completed: ${filename}`);
-      } catch (err) {
-        console.error("Error generating bulk PDF:", err);
-        toast.error("Failed to generate PDF report");
+        return;
       }
-    } catch (error: any) {
-      console.error('Error exporting appointments:', error);
-      toast.error('Failed to export appointments: ' + (error.message || 'Unknown error'));
+
+      // Create CSV content
+      const headers = ["Patient", "Email", "Phone", "Date", "Time", "Type", "Status"];
+      const rows = displayAppointments.map(appointment => [
+        appointment.patient?.name || "Unknown Patient",
+        appointment.patient?.email || "",
+        appointment.patient?.phone || "",
+        appointment.date || "",
+        appointment.time || "",
+        appointment.type || "",
+        appointment.status || ""
+      ]);
+
+      // Convert to CSV string
+      const csvContent = [
+        headers.join(","),
+        ...rows.map(row => row.join(","))
+      ].join("\n");
+
+      // Create blob and download
+      const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+      const link = document.createElement("a");
+      const url = URL.createObjectURL(blob);
+      link.setAttribute("href", url);
+      link.setAttribute("download", `mentor_appointments_${format(new Date(), 'yyyy-MM-dd')}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      toast.dismiss(toastId);
+      toast.success("Appointments exported successfully as CSV!", {
+        dismissible: true
+      });
+    } catch (error) {
+      console.error("Error exporting appointments to CSV:", error);
+      toast.dismiss(toastId);
+      toast.error("Failed to export appointments to CSV. Please try again.", {
+        dismissible: true
+      });
     }
   };
 
@@ -608,24 +715,45 @@ export default function AppointmentsPage() {
                   </SelectContent>
                 </Select>
                 
-                {/* Add Export All button */}
-                <Button 
-                  variant="outline" 
-                  size="sm"
-                  className="flex items-center gap-1"
-                  onClick={() => {
-                    try {
-                      handleExportAllAppointments();
-                    } catch (error) {
-                      console.error("Error in export all click handler:", error);
-                      toast.error("Failed to initiate bulk export");
-                    }
-                  }}
-                  disabled={filteredAppointments.length === 0}
-                >
-                  <Download className="h-4 w-4" />
-                  Export All
-                </Button>
+                {/* Add Export dropdown */}
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      className="flex items-center gap-1"
+                      disabled={filteredAppointments.length === 0}
+                    >
+                      <Download className="h-4 w-4" />
+                      Export
+                      <ChevronDown className="h-4 w-4 ml-1" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem onClick={() => {
+                      try {
+                        handleExportAllAppointments();
+                      } catch (error) {
+                        console.error("Error in export PDF click handler:", error);
+                        toast.error("Failed to initiate PDF export");
+                      }
+                    }}>
+                      <FileText className="h-4 w-4 mr-2" />
+                      Export as PDF
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => {
+                      try {
+                        exportAppointmentsToCSV();
+                      } catch (error) {
+                        console.error("Error in export CSV click handler:", error);
+                        toast.error("Failed to initiate CSV export");
+                      }
+                    }}>
+                      <FileDown className="h-4 w-4 mr-2" />
+                      Export as CSV
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </div>
             </div>
 
@@ -709,7 +837,7 @@ export default function AppointmentsPage() {
                                     size="sm"
                                     onClick={(e) => {
                                       e.stopPropagation();
-                                      handleJoinSession(appointment);
+                                      handleStartSession(appointment);
                                     }}
                                     className={
                                       appointment.status.toLowerCase() === "scheduled"
@@ -764,7 +892,7 @@ export default function AppointmentsPage() {
                                     </DropdownMenuItem>
                                     <DropdownMenuItem onClick={(e) => {
                                       e.stopPropagation();
-                                      handleJoinSession(appointment);
+                                      handleStartSession(appointment);
                                     }}>
                                       {appointment.status.toLowerCase() === "scheduled" ? (
                                         <><X className="w-4 h-4 mr-2" /> End Session</>
@@ -912,7 +1040,7 @@ export default function AppointmentsPage() {
             appointment={selectedAppointment}
             open={isDialogOpen}
             onOpenChange={setIsDialogOpen}
-            onJoinSession={() => handleJoinSession(selectedAppointment)}
+            onJoinSession={() => handleStartSession(selectedAppointment as AppointmentDisplay)}
             isMentor={true}
           />
         )}
@@ -1074,5 +1202,10 @@ const AppointmentList: React.FC<AppointmentListProps> = ({
     </div>
   );
 };
+
+// Add type guard function
+function isAppointmentDisplay(appointment: Appointment | AppointmentDisplay): appointment is AppointmentDisplay {
+  return 'time' in appointment && 'type' in appointment && 'patient' in appointment;
+}
 
 

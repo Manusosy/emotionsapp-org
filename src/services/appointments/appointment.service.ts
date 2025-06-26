@@ -242,7 +242,7 @@ class SupabaseAppointmentService implements AppointmentService {
       // First, get the appointment details to verify it exists
       const { data: appointment, error: fetchError } = await supabase
         .from(tables.appointments)
-        .select('id, mentor_id, patient_id, status')
+        .select('id, mentor_id, patient_id, status, meeting_link')
         .eq('id', appointmentId)
         .single();
       
@@ -270,11 +270,12 @@ class SupabaseAppointmentService implements AppointmentService {
         return { error: `Cannot complete appointment with status: ${appointment.status}` };
       }
       
-      // Update the appointment status to completed
+      // Update the appointment status to completed and clear the meeting_link
       const { error: updateError } = await supabase
         .from(tables.appointments)
         .update({ 
           status: 'completed',
+          meeting_link: null, // Clear the meeting link when completing
           updated_at: new Date().toISOString()
         })
         .eq('id', appointmentId);
@@ -282,6 +283,20 @@ class SupabaseAppointmentService implements AppointmentService {
       if (updateError) {
         console.error('Error updating appointment status:', updateError);
         return { error: 'Failed to complete the appointment: ' + updateError.message };
+      }
+      
+      // If there was a meeting link, try to delete the Daily.co room
+      if (appointment.meeting_link) {
+        try {
+          const roomName = appointment.meeting_link.split('/').pop(); // Get room name from URL
+          if (roomName) {
+            await dailyService.deleteRoom(roomName);
+            console.log('Successfully deleted Daily.co room:', roomName);
+          }
+        } catch (roomError) {
+          console.warn('Error deleting Daily.co room:', roomError);
+          // Don't fail the completion if room deletion fails
+        }
       }
       
       // Notify the patient that their appointment was completed (optional)
@@ -542,7 +557,7 @@ class SupabaseAppointmentService implements AppointmentService {
       // Fetch the basic appointment data
       const { data: appointment, error: fetchError } = await supabase
         .from(tables.appointments)
-        .select('id, status, patient_id, mentor_id, meeting_type')
+        .select('id, status, patient_id, mentor_id, meeting_type, meeting_link')
         .eq('id', appointmentId)
         .single();
       
@@ -554,15 +569,13 @@ class SupabaseAppointmentService implements AppointmentService {
       if (!appointment) {
         return { error: 'Appointment not found' };
       }
-      
-      console.log('Creating new room for appointment:', appointmentId);
-      
-      // Generate a unique room name based on appointment ID and timestamp
-      // This ensures a new room is created for each session
+
+      // Generate a unique room name that includes a timestamp to ensure uniqueness
       const timestamp = Date.now();
       const roomName = `appointment-${appointmentId.replace(/[^a-zA-Z0-9]/g, '')}-${timestamp}`;
       
-      console.log('Generated unique room name:', roomName);
+      console.log('Creating new room for appointment:', appointmentId);
+      console.log('Generated room name:', roomName);
       
       // Create a new room with Daily.co
       const isAudioOnly = appointment.meeting_type && appointment.meeting_type.toLowerCase() === 'audio';
@@ -571,7 +584,6 @@ class SupabaseAppointmentService implements AppointmentService {
       const { data: roomData, error: roomError } = await dailyService.createRoom({
         name: roomName,
         privacy: 'public',
-        expiry: 24 * 60 * 60, // 24 hours
         properties: {
           enable_chat: true,
           enable_screenshare: true,
@@ -593,26 +605,19 @@ class SupabaseAppointmentService implements AppointmentService {
       const roomUrl = roomData.url;
       console.log('Room created successfully with URL:', roomUrl);
         
-      // Update the appointment with the meeting link
+      // Update the appointment with the meeting link and status
       const { error: updateError } = await supabase
         .from(tables.appointments)
         .update({ 
           meeting_link: roomUrl,
+          status: 'scheduled',
           updated_at: new Date().toISOString()
         })
         .eq('id', appointmentId);
         
       if (updateError) {
         console.error('Error updating appointment with meeting link:', updateError);
-        // Still return the room URL even if we couldn't update the DB
-        return { 
-          data: { 
-            roomUrl: roomUrl,
-            isNew: true,
-            warning: 'Room created but appointment not updated in database'
-          },
-          error: `Room created but appointment not updated: ${updateError.message}`
-        };
+        return { error: `Failed to update appointment: ${updateError.message}` };
       }
         
       // Emit event to notify that a session was started

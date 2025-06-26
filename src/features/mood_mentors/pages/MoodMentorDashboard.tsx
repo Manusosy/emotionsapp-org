@@ -1034,7 +1034,7 @@ export default function MoodMentorDashboard() {
                             }`}
                             onClick={(e) => {
                               e.stopPropagation();
-                              navigate(`/mood-mentor-dashboard/appointment/${appointment.id}/call`);
+                              navigate(`/mood-mentor-dashboard/appointments/${appointment.id}/call`);
                             }}
                           >
                             <Video className="h-3.5 w-3.5 mr-1.5" />

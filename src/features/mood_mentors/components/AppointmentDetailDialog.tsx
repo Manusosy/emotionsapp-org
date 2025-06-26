@@ -149,7 +149,7 @@ export function AppointmentDetailDialog({
         onJoinSession();
       } else {
         // Otherwise navigate directly
-        navigate(`/mood-mentor-dashboard/appointment/${appointment.id}/call`);
+        navigate(`/mood-mentor-dashboard/appointments/${appointment.id}/call`);
       }
     } catch (error: any) {
       console.error('Error starting session:', error);

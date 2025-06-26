@@ -9,6 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { motion } from "framer-motion";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { dataService } from '@/services';
 import { 
   BookOpen, 
   Wrench, 
@@ -53,6 +54,7 @@ type Resource = {
   mood_mentor_id?: string;
   created_at: string;
   updated_at?: string;
+  is_favorite?: boolean;
 };
 
 // Default images for resource types
@@ -94,17 +96,22 @@ const Resources = () => {
       try {
         setIsLoading(true);
         
-        const { data, error } = await supabase
-          .from('resources')
-          .select('*');
+        let result;
+        if (user?.id) {
+          // If user is logged in, get resources with favorite status
+          result = await dataService.getResourcesWithFavorites(user.id);
+        } else {
+          // If not logged in, get regular resources
+          result = await dataService.getResources();
+        }
         
-        if (error) {
-          console.error('Error fetching resources:', error);
+        if (result.error) {
+          console.error('Error fetching resources:', result.error);
           toast.error('Failed to load resources');
           return;
         }
         
-        setResources(data || []);
+        setResources(result.data || []);
       } catch (error) {
         console.error('Error fetching resources:', error);
         toast.error('Failed to load resources');
@@ -114,7 +121,7 @@ const Resources = () => {
     };
     
     fetchResources();
-  }, []);
+  }, [user]);
 
   // Process resources for UI display
   const processedResources = resources.map(resource => {
@@ -338,6 +345,36 @@ const Resources = () => {
     }
   ];
 
+  // Handle favorite toggle
+  const handleFavoriteToggle = async (resource: Resource) => {
+    if (!user) {
+      toast.error('Please sign in to save resources');
+      return;
+    }
+
+    try {
+      if (resource.is_favorite) {
+        await dataService.removeFavoriteResource(user.id, resource.id);
+        toast.success('Removed from favorites');
+      } else {
+        await dataService.addFavoriteResource(user.id, resource.id);
+        toast.success('Added to favorites');
+      }
+
+      // Update local state
+      setResources(prevResources =>
+        prevResources.map(r =>
+          r.id === resource.id
+            ? { ...r, is_favorite: !r.is_favorite }
+            : r
+        )
+      );
+    } catch (error) {
+      console.error('Error toggling favorite:', error);
+      toast.error('Failed to update favorites');
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Hero Section */}
@@ -409,95 +446,105 @@ const Resources = () => {
         </section>
         
         {/* Featured Resources */}
-        <section className="mb-16">
-          <h2 className="text-2xl font-bold text-gray-900 mb-6">Featured Resources</h2>
-          
-          {isLoading ? (
-            <div className="text-center py-12">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
-              <p className="text-gray-500">Loading resources...</p>
-            </div>
-          ) : featuredResources.length > 0 ? (
-            <motion.div
-              initial="hidden"
-              animate="visible"
-              variants={staggerContainer}
-              className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
-            >
-              {featuredResources.map((resource) => (
-                <motion.div
-                  key={resource.id}
-                  variants={fadeInUp}
-                >
-                  <Card className="overflow-hidden bg-white border-none shadow-md h-full">
-                    <div className="relative aspect-[4/3] h-52">
-                      <img 
-                        src={resource.image} 
-                        alt={resource.title}
-                        className="w-full h-full object-cover"
-                      />
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent flex flex-col justify-end p-5">
-                        <div className="flex items-center mb-2">
-                          <Badge className="bg-[#00D2FF] text-white border-0">
-                            {getResourceTypeIcon(resource.type)}
-                            <span className="ml-1">{getResourceTypeLabel(resource.type)}</span>
-                          </Badge>
-                          {resource.isNew && (
-                            <Badge className="ml-2 bg-amber-500 text-white border-0">New</Badge>
-                          )}
-                          {resource.isPopular && (
-                            <Badge className="ml-2 bg-pink-500 text-white border-0">Popular</Badge>
-                          )}
-                        </div>
-                        <h3 className="text-xl font-bold text-white text-left">{resource.title}</h3>
+        <section className="mb-12">
+          <h2 className="text-2xl font-bold mb-6">Featured Resources</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {featuredResources.map((resource) => (
+              <Card key={resource.id} className="overflow-hidden bg-white border-none shadow-md h-full">
+                <div className="relative aspect-[4/3] h-52">
+                  <img 
+                    src={resource.image} 
+                    alt={resource.title}
+                    className="w-full h-full object-cover"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent flex flex-col justify-end p-5">
+                    <div className="flex items-center mb-2">
+                      <Badge className="bg-[#00D2FF] text-white border-0">
+                        {getResourceTypeIcon(resource.type)}
+                        <span className="ml-1">{getResourceTypeLabel(resource.type)}</span>
+                      </Badge>
+                      {resource.isNew && (
+                        <Badge className="ml-2 bg-amber-500 text-white border-0">New</Badge>
+                      )}
+                      {resource.isPopular && (
+                        <Badge className="ml-2 bg-pink-500 text-white border-0">Popular</Badge>
+                      )}
+                    </div>
+                    <h3 className="text-xl font-bold text-white text-left">{resource.title}</h3>
+                  </div>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleFavoriteToggle(resource);
+                    }}
+                    className="absolute top-2 right-2 p-2 rounded-full bg-white/10 hover:bg-white/20 transition-colors"
+                  >
+                    <Heart
+                      className={`w-5 h-5 ${
+                        resource.is_favorite
+                          ? 'text-red-500 fill-current'
+                          : 'text-white'
+                      }`}
+                    />
+                  </button>
+                </div>
+                <CardContent className="p-5">
+                  <p className="text-gray-600 mb-4 line-clamp-2">{resource.description}</p>
+                  {resource.author && (
+                    <div className="flex items-center mb-4">
+                      <Avatar className="h-8 w-8 mr-2">
+                        <AvatarImage src={resource.author_avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(resource.author)}&background=random`} alt={resource.author} />
+                        <AvatarFallback>{resource.author.charAt(0)}</AvatarFallback>
+                      </Avatar>
+                      <div>
+                        <p className="text-sm font-medium">{resource.author}</p>
+                        <p className="text-xs text-gray-500">{resource.author_role || "Contributor"}</p>
                       </div>
                     </div>
-                    <CardContent className="p-5">
-                      <p className="text-gray-600 mb-4 line-clamp-2">{resource.description}</p>
-                      {resource.author && (
-                        <div className="flex items-center mb-4">
-                          <Avatar className="h-8 w-8 mr-2">
-                            <AvatarImage src={resource.author_avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(resource.author)}&background=random`} alt={resource.author} />
-                            <AvatarFallback>{resource.author.charAt(0)}</AvatarFallback>
-                          </Avatar>
-                          <div>
-                            <p className="text-sm font-medium">{resource.author}</p>
-                            <p className="text-xs text-gray-500">{resource.author_role || "Contributor"}</p>
-                          </div>
-                        </div>
-                      )}
-                      {(resource.read_time || resource.duration) && (
-                        <div className="flex items-center text-sm text-gray-500 mb-4">
-                          <Clock className="h-4 w-4 mr-1" />
-                          <span>{resource.read_time || resource.duration}</span>
-                        </div>
-                      )}
-                    </CardContent>
-                    <CardFooter className="p-5 pt-0 flex justify-between items-center">
-                      <div className="flex items-center gap-2">
-                        {getResourceActionButton(resource)}
-                        <Button 
-                          variant="ghost" 
-                          size="icon" 
-                          className="text-gray-500 hover:text-blue-500"
-                          onClick={() => handleResourceShare(resource)}
-                        >
-                          <Share2 className="h-5 w-5" />
-                        </Button>
-                      </div>
-                      <Button variant="ghost" size="icon" className="text-gray-500 hover:text-red-500">
-                        <Heart className="h-5 w-5" />
-                      </Button>
-                    </CardFooter>
-                  </Card>
-                </motion.div>
-              ))}
-            </motion.div>
-          ) : (
-            <div className="text-center py-8 text-gray-500">
-              No featured resources available
-            </div>
-          )}
+                  )}
+                  {(resource.read_time || resource.duration) && (
+                    <div className="flex items-center text-sm text-gray-500 mb-4">
+                      <Clock className="h-4 w-4 mr-1" />
+                      <span>{resource.read_time || resource.duration}</span>
+                    </div>
+                  )}
+                </CardContent>
+                <CardFooter className="p-5 pt-0 flex justify-between">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleResourceShare(resource);
+                    }}
+                  >
+                    <Share2 className="w-4 h-4 mr-2" />
+                    Share
+                  </Button>
+                  <Button
+                    variant="default"
+                    size="sm"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleResourceAccess(resource);
+                    }}
+                  >
+                    {resource.file_url ? (
+                      <>
+                        <Download className="w-4 h-4 mr-2" />
+                        Download
+                      </>
+                    ) : (
+                      <>
+                        <ExternalLink className="w-4 h-4 mr-2" />
+                        View
+                      </>
+                    )}
+                  </Button>
+                </CardFooter>
+              </Card>
+            ))}
+          </div>
         </section>
         
         {/* All Resources */}
@@ -562,9 +609,24 @@ const Resources = () => {
                           <Badge className="bg-amber-500 text-white">New</Badge>
                         </div>
                       )}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleFavoriteToggle(resource);
+                        }}
+                        className="absolute top-2 right-2 p-2 rounded-full bg-white/10 hover:bg-white/20 transition-colors"
+                      >
+                        <Heart
+                          className={`w-5 h-5 ${
+                            resource.is_favorite
+                              ? 'text-red-500 fill-current'
+                              : 'text-white'
+                          }`}
+                        />
+                      </button>
                     </div>
-                    <CardContent className="p-4 flex-grow">
-                      <h3 className="font-semibold text-lg mb-2 line-clamp-1">{resource.title}</h3>
+                    <CardContent className="p-5 flex-grow">
+                      <h3 className="font-semibold text-lg mb-2">{resource.title}</h3>
                       <p className="text-gray-600 text-sm mb-4 line-clamp-2">{resource.description}</p>
                       {resource.author && (
                         <div className="flex items-center text-xs text-gray-500 mb-2">
@@ -580,37 +642,39 @@ const Resources = () => {
                         </div>
                       )}
                     </CardContent>
-                    <CardFooter className="p-4 pt-0 border-t">
-                      <div className="flex items-center justify-between w-full">
-                        <div className="flex items-center gap-2">
-                          {getResourceActionButton(resource)}
-                          <Button 
-                            variant="ghost" 
-                            size="icon" 
-                            className="text-gray-500 hover:text-blue-500"
-                            onClick={() => handleResourceShare(resource)}
-                          >
-                            <Share2 className="h-5 w-5" />
-                          </Button>
-                        </div>
-                        
-                        {/* Show download/share counts if they exist */}
-                        {(resource.downloads || resource.shares) && (
-                          <div className="flex items-center gap-3 text-xs text-gray-500">
-                            {resource.downloads && (
-                              <div className="flex items-center">
-                                <Download className="h-3 w-3 mr-1" />
-                                <span>{resource.downloads}</span>
-                              </div>
-                            )}
-                            {resource.shares && (
-                              <div className="flex items-center">
-                                <Share2 className="h-3 w-3 mr-1" />
-                                <span>{resource.shares}</span>
-                              </div>
-                            )}
-                          </div>
-                        )}
+                    <CardFooter className="p-5 pt-0">
+                      <div className="flex justify-between w-full">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleResourceShare(resource);
+                          }}
+                        >
+                          <Share2 className="w-4 h-4 mr-2" />
+                          Share
+                        </Button>
+                        <Button
+                          variant="default"
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleResourceAccess(resource);
+                          }}
+                        >
+                          {resource.file_url ? (
+                            <>
+                              <Download className="w-4 h-4 mr-2" />
+                              Download
+                            </>
+                          ) : (
+                            <>
+                              <ExternalLink className="w-4 h-4 mr-2" />
+                              View
+                            </>
+                          )}
+                        </Button>
                       </div>
                     </CardFooter>
                   </Card>
@@ -618,31 +682,14 @@ const Resources = () => {
               ))}
             </motion.div>
           ) : (
-            <div className="text-center py-16 bg-gray-50 rounded-lg">
-              <BookOpen className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 mb-1">No resources found</h3>
+            <div className="text-center py-12">
+              <BookOpen className="h-12 w-12 text-gray-300 mx-auto mb-4" />
+              <h3 className="text-lg font-medium mb-2">No resources found</h3>
               <p className="text-gray-500">
-                {searchQuery ? 
-                  `No resources matching "${searchQuery}" in the selected category.` : 
-                  "No resources available in the selected category."}
+                {searchQuery
+                  ? "Try adjusting your search terms"
+                  : "Check back later for new resources"}
               </p>
-              {searchQuery && (
-                <Button 
-                  variant="outline" 
-                  className="mt-4"
-                  onClick={() => setSearchQuery("")}
-                >
-                  Clear search
-                </Button>
-              )}
-              {user?.user_metadata?.role === "mood_mentor" && (
-                <Button 
-                  className="mt-4"
-                  onClick={() => window.location.href = "/mood-mentors/resources"}
-                >
-                  <Plus className="mr-2 h-4 w-4" /> Add Resources
-                </Button>
-              )}
             </div>
           )}
         </section>

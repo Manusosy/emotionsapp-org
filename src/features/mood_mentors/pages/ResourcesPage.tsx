@@ -1,5 +1,4 @@
 import { useEffect, useState, useRef } from 'react';
-import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/authContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -49,30 +48,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-
-// Resource interface
-interface Resource {
-  id: string;
-  title: string;
-  description: string;
-  type: 'article' | 'video' | 'podcast' | 'document' | 'group' | 'workshop';
-  url: string;
-  file_url?: string;
-  thumbnail_url?: string;
-  category: string;
-  tags?: string[];
-  author?: string;
-  author_role?: string;
-  author_avatar?: string;
-  read_time?: string;
-  duration?: string;
-  featured?: boolean;
-  downloads?: number;
-  shares?: number;
-  mood_mentor_id?: string;
-  created_at: string;
-  updated_at?: string;
-}
+import { ResourceThumbnailUpload } from '../components/ResourceThumbnailUpload';
+import { resourceService } from '@/services/resource/resource.service';
+import { Resource } from '@/types/database.types';
 
 // Form data interface
 interface ResourceFormData {
@@ -85,7 +63,7 @@ interface ResourceFormData {
   file: File | null;
 }
 
-// Resource categories
+// Resource categories and types
 const resourceCategories = [
   { value: "educational", label: "Educational Materials" },
   { value: "self-help", label: "Self-Help Tools" },
@@ -95,7 +73,6 @@ const resourceCategories = [
   { value: "digital", label: "Digital Tools" },
 ];
 
-// Resource types
 const resourceTypes = [
   { value: "document", label: "Document", icon: <FileText className="h-4 w-4" /> },
   { value: "video", label: "Video", icon: <Video className="h-4 w-4" /> },
@@ -123,7 +100,6 @@ const ResourcesPage = () => {
   const [selectedCategory, setSelectedCategory] = useState("all");
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Form state
@@ -137,44 +113,54 @@ const ResourcesPage = () => {
     file: null,
   });
 
+  // Check if user is a mood mentor
+  const isMoodMentor = user?.user_metadata?.role === 'mood_mentor';
+
   // Fetch resources created by this mood mentor
   useEffect(() => {
     const fetchResources = async () => {
       try {
         setIsLoading(true);
         
-        if (!user?.id) return;
+        if (!user?.id) {
+          throw new Error('User not authenticated');
+        }
+
+        if (!isMoodMentor) {
+          throw new Error('Only mood mentors can access this page');
+        }
         
-        const { data, error } = await supabase
-          .from('resources')
-          .select('*')
-          .eq('mood_mentor_id', user.id);
+        const { success, data, error } = await resourceService.getResources({
+          mentorId: user.id
+        });
         
-        if (error) {
-          throw error;
+        if (!success || error) {
+          throw new Error(error || 'Failed to fetch resources');
         }
         
         setResources(data || []);
-      } catch (error) {
+      } catch (error: any) {
         console.error('Error fetching resources:', error);
-        toast.error('Failed to load resources');
+        toast.error(error.message || 'Failed to load resources');
+        setResources([]);
       } finally {
         setIsLoading(false);
       }
     };
     
-    fetchResources();
-  }, [user]);
+    if (user?.id && isMoodMentor) {
+      fetchResources();
+    }
+  }, [user, isMoodMentor]);
 
   // Filter resources based on search and category
   const filteredResources = resources.filter(resource => {
-    const matchesSearch = !searchQuery || 
+    const matchesSearch = searchQuery.toLowerCase() === '' || 
       resource.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
       resource.description.toLowerCase().includes(searchQuery.toLowerCase());
-      
-    const matchesCategory = selectedCategory === "all" || 
-      resource.category === selectedCategory;
-      
+    
+    const matchesCategory = selectedCategory === 'all' || resource.category === selectedCategory;
+    
     return matchesSearch && matchesCategory;
   });
 
@@ -189,14 +175,7 @@ const ResourcesPage = () => {
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
-  // Handle file input changes
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0] || null;
-    setFormData(prev => ({ ...prev, file }));
-    setUploadedFile(file);
-  };
-
-  // Reset form to initial state
+  // Reset form
   const resetForm = () => {
     setFormData({
       title: "",
@@ -205,114 +184,141 @@ const ResourcesPage = () => {
       category: "educational",
       url: "",
       thumbnail_url: "",
-      file: null
+      file: null,
     });
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
     }
-    setUploadedFile(null);
   };
 
-  // Upload file to Supabase storage
-  const uploadFile = async (file: File): Promise<string | null> => {
-    try {
-      if (!file) return null;
-      
-      const fileExt = file.name.split('.').pop();
-      const fileName = `${Date.now()}-${Math.random().toString(36).substring(2, 15)}.${fileExt}`;
-      const filePath = `resources/${fileName}`;
-      
-      // Try to upload to 'resources' bucket
-      const { data: uploadData, error: uploadError } = await supabase.storage
-        .from('resources')
-        .upload(filePath, file, {
-          cacheControl: '3600',
-          upsert: true
-        });
-      
-      if (uploadError) {
-        console.error('Upload error:', uploadError);
-        return null;
-      }
-      
-      // Get the public URL
-      const { data: urlData } = await supabase.storage
-        .from('resources')
-        .getPublicUrl(filePath);
-      
-      return urlData?.publicUrl || null;
-    } catch (error) {
-      console.error('Error uploading file:', error);
-      return null;
+  // Handle file change
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setFormData(prev => ({ ...prev, file }));
     }
   };
 
-  // Handle resource download/view
-  const handleResourceView = async (resource: Resource) => {
-    try {
-      const viewUrl = resource.file_url || resource.url;
-      
-      if (!viewUrl) {
-        toast.error("No URL available for this resource");
-        return;
-      }
-      
-      // Increment download count
-      const currentDownloads = resource.downloads || 0;
-      await supabase
-        .from('resources')
-        .update({ downloads: currentDownloads + 1 })
-        .eq('id', resource.id);
-      
-      // Update local state
-      setResources(prev => 
-        prev.map(res => 
-          res.id === resource.id 
-            ? { ...res, downloads: (res.downloads || 0) + 1 } 
-            : res
-        )
-      );
-      
-      // Open the URL
-      window.open(viewUrl, "_blank");
-    } catch (error) {
-      console.error('Error viewing resource:', error);
-      toast.error("Failed to view resource");
+  // Handle resource view
+  const handleResourceView = (resource: Resource) => {
+    if (resource.file_url) {
+      window.open(resource.file_url, '_blank');
+    } else if (resource.url) {
+      window.open(resource.url, '_blank');
+    } else {
+      toast.error('No viewable content available');
     }
   };
 
   // Handle resource sharing
   const handleShare = async (resource: Resource) => {
     try {
-      const shareUrl = resource.url || resource.file_url;
+      await navigator.clipboard.writeText(resource.url || resource.file_url || '');
+      toast.success('Resource link copied to clipboard');
+    } catch (error) {
+      toast.error('Failed to copy link');
+    }
+  };
+
+  // Toggle resource featured status
+  const toggleFeature = async (resource: Resource) => {
+    try {
+      const { success, error } = await resourceService.updateResource(resource.id, {
+        featured: !resource.featured
+      });
+
+      if (!success) {
+        throw new Error(error || 'Failed to update resource');
+      }
+
+      setResources(prev => prev.map(r => 
+        r.id === resource.id ? { ...r, featured: !r.featured } : r
+      ));
+
+      toast.success(
+        resource.featured ? 
+        'Resource removed from featured' : 
+        'Resource marked as featured'
+      );
+    } catch (error: any) {
+      console.error('Error updating resource:', error);
+      toast.error(error.message || 'Failed to update resource');
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    try {
+      if (!user?.id) {
+        throw new Error('User not authenticated');
+      }
+
+      if (!isMoodMentor) {
+        throw new Error('Only mood mentors can create resources');
+      }
+
+      setIsSubmitting(true);
+
+      // Validate required fields
+      if (!formData.title.trim()) throw new Error('Title is required');
+      if (!formData.description.trim()) throw new Error('Description is required');
+      if (!formData.type) throw new Error('Resource type is required');
+      if (!formData.category) throw new Error('Category is required');
+
+      let fileUrl = '';
+      if (formData.file) {
+        const { success, url, error } = await resourceService.uploadFile(
+          formData.file,
+          user.id,
+          'resource'
+        );
+
+        if (!success || !url) {
+          throw new Error(error || 'Failed to upload file');
+        }
+
+        fileUrl = url;
+      }
+
+      const { success, data, error } = await resourceService.addResource({
+        title: formData.title.trim(),
+        description: formData.description.trim(),
+        type: formData.type as Resource['type'],
+        category: formData.category,
+        url: formData.url || fileUrl,
+        file_url: fileUrl || undefined,
+        thumbnail_url: formData.thumbnail_url || defaultThumbnails[formData.type as keyof typeof defaultThumbnails],
+        author: user.user_metadata?.name || 'Mood Mentor',
+        author_role: 'Mentor',
+        author_avatar: user.user_metadata?.avatar_url,
+        mood_mentor_id: user.id
+      });
+
+      if (!success || !data) {
+        throw new Error(error || 'Failed to add resource');
+      }
+
+      setResources(prev => [...prev, data]);
+      toast.success('Resource added successfully');
+      resetForm();
+      setIsAddDialogOpen(false);
       
-      if (!shareUrl) {
-        toast.error("No URL available to share");
-        return;
+      // Refresh the resources list
+      const { success: fetchSuccess, data: newData, error: fetchError } = await resourceService.getResources({
+        mentorId: user.id
+      });
+        
+      if (!fetchSuccess) {
+        throw new Error(fetchError || 'Failed to refresh resources');
       }
       
-      await navigator.clipboard.writeText(shareUrl);
-      
-      // Increment share count
-      const currentShares = resource.shares || 0;
-      await supabase
-        .from('resources')
-        .update({ shares: currentShares + 1 })
-        .eq('id', resource.id);
-      
-      // Update local state
-      setResources(prev => 
-        prev.map(res => 
-          res.id === resource.id 
-            ? { ...res, shares: (res.shares || 0) + 1 } 
-            : res
-        )
-      );
-      
-      toast.success("Resource link copied to clipboard");
-    } catch (error) {
-      console.error('Error sharing resource:', error);
-      toast.error("Failed to share resource");
+      setResources(newData);
+    } catch (error: any) {
+      console.error('Error adding resource:', error);
+      toast.error(error.message || 'Failed to add resource');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -323,179 +329,31 @@ const ResourcesPage = () => {
     }
     
     try {
-      const { error } = await supabase
-        .from('resources')
-        .delete()
-        .eq('id', resourceId);
+      const { success, error } = await resourceService.deleteResource(resourceId);
       
-      if (error) throw error;
+      if (!success) {
+        throw new Error(error || 'Failed to delete resource');
+      }
       
-      // Update local state
-      setResources(prev => prev.filter(resource => resource.id !== resourceId));
-      
+      setResources(prev => prev.filter(r => r.id !== resourceId));
       toast.success("Resource deleted successfully");
-    } catch (error) {
-      console.error('Error deleting resource:', error);
-      toast.error("Failed to delete resource");
-    }
-  };
-
-  // Toggle featured status
-  const toggleFeature = async (resource: Resource) => {
-    try {
-      const newFeaturedValue = !resource.featured;
-      
-      const { error } = await supabase
-        .from('resources')
-        .update({ featured: newFeaturedValue })
-        .eq('id', resource.id);
-      
-      if (error) throw error;
-      
-      // Update local state
-      setResources(prev => 
-        prev.map(res => 
-          res.id === resource.id 
-            ? { ...res, featured: newFeaturedValue } 
-            : res
-        )
-      );
-      
-      toast.success(newFeaturedValue 
-        ? "Resource is now featured on the public page" 
-        : "Resource removed from featured section");
-    } catch (error) {
-      console.error('Error toggling feature status:', error);
-      toast.error("Failed to update resource");
-    }
-  };
-
-  // Handle form submission
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsSubmitting(true);
-    
-    try {
-      if (!user?.id) {
-        throw new Error("User not authenticated");
-      }
-      
-      // Validate form data
-      if (!formData.title) throw new Error("Title is required");
-      if (!formData.description) throw new Error("Description is required");
-      
-      let fileUrl: string | null = null;
-      let resourceUrl = formData.url;
-      let thumbnailUrl = formData.thumbnail_url;
-      
-      // Handle file upload if provided
-      if (formData.file) {
-        fileUrl = await uploadFile(formData.file);
-        
-        if (!fileUrl) {
-          throw new Error("Failed to upload file");
-        }
-        
-        // If no URL was provided, use the file URL
-        if (!resourceUrl) {
-          resourceUrl = fileUrl;
-        }
-      }
-      
-      // Ensure we have a URL
-      if (!resourceUrl && !fileUrl) {
-        throw new Error("Either a URL or file must be provided");
-      }
-      
-      // If no thumbnail URL was provided, use default based on resource type
-      if (!thumbnailUrl) {
-        thumbnailUrl = defaultThumbnails[formData.type as keyof typeof defaultThumbnails];
-      }
-      
-      // Current timestamp
-      const now = new Date().toISOString();
-      
-      // Author information
-      const author = user.user_metadata?.name || user.email || "Mood Mentor";
-      const authorRole = "Mentor";
-      
-      // Prepare resource data
-      const resourceData = {
-        title: formData.title,
-        description: formData.description,
-        type: formData.type as Resource['type'],
-        category: formData.category,
-        url: resourceUrl,
-        file_url: fileUrl,
-        thumbnail_url: thumbnailUrl,
-        mood_mentor_id: user.id,
-        author,
-        author_role: authorRole,
-        featured: false,
-        downloads: 0,
-        shares: 0,
-        created_at: now,
-        updated_at: now
-      };
-      
-      // Insert into database
-      const { data: insertedData, error: insertError } = await supabase
-        .from('resources')
-        .insert(resourceData)
-        .select();
-      
-      if (insertError) {
-        throw new Error(`Failed to add resource: ${insertError.message}`);
-      }
-      
-      if (!insertedData || insertedData.length === 0) {
-        throw new Error("Failed to add resource: No data returned");
-      }
-      
-      // Update local state
-      setResources(prev => [insertedData[0], ...prev]);
-      
-      // Reset form and close dialog
-      resetForm();
-      setIsAddDialogOpen(false);
-      toast.success("Resource added successfully");
     } catch (error: any) {
-      toast.error(error.message || "Failed to add resource");
-    } finally {
-      setIsSubmitting(false);
+      console.error('Error deleting resource:', error);
+      toast.error(error.message || "Failed to delete resource");
     }
   };
 
-  // Get icon for resource type
-  const getResourceIcon = (type: string) => {
-    switch (type) {
-      case 'document': return <FileText className="h-6 w-6 text-blue-500" />;
-      case 'video': return <Video className="h-6 w-6 text-purple-500" />;
-      case 'article': return <BookOpen className="h-6 w-6 text-gray-500" />;
-      case 'podcast': return <Headphones className="h-6 w-6 text-green-500" />;
-      case 'group': return <Users className="h-6 w-6 text-red-500" />;
-      case 'workshop': return <Calendar className="h-6 w-6 text-teal-500" />;
-      default: return <BookOpen className="h-6 w-6 text-gray-500" />;
-    }
-  };
-
-  // Get label for resource type
-  const getResourceTypeLabel = (type: string) => {
-    switch (type) {
-      case 'document': return 'Document';
-      case 'video': return 'Video';
-      case 'article': return 'Article';
-      case 'podcast': return 'Podcast';
-      case 'group': return 'Support Group';
-      case 'workshop': return 'Workshop';
-      default: return type;
-    }
-  };
-
-  // Open public resources page
-  const viewPublicResourcesPage = () => {
-    window.open('/resources', '_blank');
-  };
+  // Add role check to the render
+  if (!isMoodMentor) {
+    return (
+      <DashboardLayout>
+        <div className="p-6">
+          <h1 className="text-2xl font-bold mb-4">Resources</h1>
+          <p className="text-red-500">Only mood mentors can access this page.</p>
+        </div>
+      </DashboardLayout>
+    );
+  }
 
   return (
     <DashboardLayout>
@@ -515,14 +373,6 @@ const ResourcesPage = () => {
             >
               <Plus size={16} />
               Add Resource
-            </Button>
-            <Button
-              variant="outline"
-              className="flex items-center gap-2"
-              onClick={viewPublicResourcesPage}
-            >
-              <Eye size={16} />
-              View Public Page
             </Button>
           </div>
         </div>
@@ -572,7 +422,7 @@ const ResourcesPage = () => {
                     />
                   ) : (
                     <div className="w-full h-full bg-gray-200 flex items-center justify-center">
-                      {getResourceIcon(resource.type)}
+                      {resourceTypes.find(t => t.value === resource.type)?.icon}
                     </div>
                   )}
                   {resource.featured && (
@@ -582,7 +432,7 @@ const ResourcesPage = () => {
                   )}
                   <div className="absolute top-2 left-2">
                     <Badge variant="secondary">
-                      {getResourceTypeLabel(resource.type)}
+                      {resourceTypes.find(t => t.value === resource.type)?.label}
                     </Badge>
                   </div>
                 </div>
@@ -690,7 +540,7 @@ const ResourcesPage = () => {
           
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="title">Title</Label>
+              <Label htmlFor="title" className="font-medium">Title *</Label>
               <Input
                 id="title"
                 name="title"
@@ -702,7 +552,7 @@ const ResourcesPage = () => {
             </div>
             
             <div className="space-y-2">
-              <Label htmlFor="description">Description</Label>
+              <Label htmlFor="description" className="font-medium">Description *</Label>
               <Textarea
                 id="description"
                 name="description"
@@ -716,7 +566,7 @@ const ResourcesPage = () => {
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="type">Resource Type</Label>
+                <Label htmlFor="type" className="font-medium">Resource Type *</Label>
                 <Select
                   value={formData.type}
                   onValueChange={(value) => handleSelectChange("type", value)}
@@ -738,7 +588,7 @@ const ResourcesPage = () => {
               </div>
               
               <div className="space-y-2">
-                <Label htmlFor="category">Category</Label>
+                <Label htmlFor="category" className="font-medium">Category *</Label>
                 <Select
                   value={formData.category}
                   onValueChange={(value) => handleSelectChange("category", value)}
@@ -758,7 +608,7 @@ const ResourcesPage = () => {
             </div>
             
             <div className="space-y-2">
-              <Label htmlFor="url">URL (external link or embedded content)</Label>
+              <Label htmlFor="url" className="font-medium">URL</Label>
               <Input
                 id="url"
                 name="url"
@@ -767,66 +617,61 @@ const ResourcesPage = () => {
                 value={formData.url}
                 onChange={handleInputChange}
               />
-            </div>
-            
-            <div className="space-y-2">
-              <Label htmlFor="thumbnail_url">Thumbnail URL</Label>
-              <Input
-                id="thumbnail_url"
-                name="thumbnail_url"
-                type="url"
-                placeholder="Enter thumbnail image URL"
-                value={formData.thumbnail_url}
-                onChange={handleInputChange}
-              />
               <p className="text-xs text-gray-500">
-                Provide a URL to an image that represents this resource. If left empty, a default image will be used.
+                For articles, videos, or external resources, provide the URL where the content can be accessed.
               </p>
             </div>
             
+            <div className="space-y-4">
+              <ResourceThumbnailUpload
+                onThumbnailChange={(url) => setFormData(prev => ({ ...prev, thumbnail_url: url }))}
+                existingThumbnail={formData.thumbnail_url}
+              />
+            </div>
+            
             <div className="space-y-2">
-              <Label>File Upload (for documents or videos)</Label>
-              <div className="border-2 border-dashed border-gray-300 rounded-md p-6 text-center">
+              <Label className="font-medium">File Upload</Label>
+              <div className="border-2 border-dashed border-gray-300 rounded-md p-4">
                 <Input
                   id="file"
                   type="file"
                   className="hidden"
                   onChange={handleFileChange}
                   ref={fileInputRef}
-                  accept=".pdf,.doc,.docx,.ppt,.pptx,.mp4,.mov,.avi"
+                  accept={formData.type === 'document' ? '.pdf,.doc,.docx' : 
+                         formData.type === 'video' ? '.mp4,.mov' :
+                         formData.type === 'podcast' ? '.mp3,.m4a' : undefined}
                 />
                 <div className="space-y-2">
-                  {uploadedFile ? (
+                  {formData.file && (
                     <div className="text-sm">
-                      <p className="font-medium">{uploadedFile.name}</p>
+                      <p className="font-medium">{formData.file.name}</p>
                       <p className="text-gray-500">
-                        {(uploadedFile.size / 1024 / 1024).toFixed(2)} MB
+                        {(formData.file.size / 1024 / 1024).toFixed(2)} MB
                       </p>
                     </div>
-                  ) : (
-                    <>
-                      <Upload className="mx-auto h-12 w-12 text-gray-400" />
-                      <p className="text-sm text-gray-500">
-                        Click to upload or drag and drop
-                      </p>
-                      <p className="text-xs text-gray-400">
-                        PDF, Word, PowerPoint, Videos (max 100MB)
-                      </p>
-                    </>
                   )}
                   <Button
                     type="button"
-                    variant={uploadedFile ? "outline" : "secondary"}
+                    variant={formData.file ? "outline" : "secondary"}
                     onClick={() => fileInputRef.current?.click()}
-                    className="mt-2"
+                    className="mt-2 w-full"
+                    disabled={!['document', 'video', 'podcast'].includes(formData.type)}
                   >
-                    {uploadedFile ? "Change File" : "Select File"}
+                    {formData.file ? "Change File" : "Select File"}
                   </Button>
                 </div>
               </div>
+              <p className="text-xs text-gray-500">
+                {formData.type === 'document' && 'Supported formats: PDF, DOC, DOCX'}
+                {formData.type === 'video' && 'Supported formats: MP4, MOV'}
+                {formData.type === 'podcast' && 'Supported formats: MP3, M4A'}
+                {!['document', 'video', 'podcast'].includes(formData.type) && 
+                  'Select a resource type to see supported file formats'}
+              </p>
             </div>
             
-            <DialogFooter className="pt-4">
+            <DialogFooter className="mt-6">
               <Button
                 variant="outline"
                 type="button"
@@ -838,12 +683,15 @@ const ResourcesPage = () => {
               >
                 Cancel
               </Button>
-              <Button type="submit" disabled={isSubmitting}>
+              <Button 
+                type="submit" 
+                disabled={isSubmitting || !formData.title || !formData.description || !formData.type || !formData.category}
+              >
                 {isSubmitting ? (
-                  <>
+                  <div className="flex items-center">
                     <span className="animate-spin mr-2">⟳</span>
                     Saving...
-                  </>
+                  </div>
                 ) : 'Add Resource'}
               </Button>
             </DialogFooter>

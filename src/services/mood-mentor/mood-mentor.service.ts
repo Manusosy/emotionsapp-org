@@ -473,12 +473,12 @@ export class MoodMentorService implements IMoodMentorService {
         rating: review.rating,
         reviewText: review.review_text,
         createdAt: review.created_at,
-        patientName: review.patient_name || 'Anonymous',
-        patientAvatar: review.patient_avatar || null,
+        patientName: review.patient_name || 'Patient', // Use Patient as default
+        patientAvatar: null, // Since our SQL doesn't provide avatar information
         appointmentId: review.appointment_id,
         status: review.status
       }));
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error in getMoodMentorReviews:', error);
       return [];
     }
@@ -486,21 +486,39 @@ export class MoodMentorService implements IMoodMentorService {
 
   async addMoodMentorReview(review: Omit<MoodMentorReview, 'id' | 'createdAt'>): Promise<MoodMentorReview> {
     try {
-      // First check if the patient can review this mentor
-      const { data: canReview, error: checkError } = await supabase
-        .rpc('can_patient_review_appointment', { 
-          appointment_id: review.appointmentId,
-          patient_uuid: review.patientId
-        });
+      // Simplified eligibility check that doesn't rely on RPC function
+      // First check if the appointment exists and belongs to the patient
+      const { data: appointmentData, error: appointmentError } = await supabase
+        .from('appointments')
+        .select('status')
+        .eq('id', review.appointmentId)
+        .eq('patient_id', review.patientId)
+        .single();
       
-      if (checkError) {
-        throw new Error(`Error checking review eligibility: ${checkError.message}`);
+      if (appointmentError || !appointmentData) {
+        throw new Error('Cannot review this appointment. Appointment not found or does not belong to you.');
+      }
+
+      // Check if the appointment is completed
+      if (appointmentData.status !== 'completed') {
+        throw new Error('Cannot review this appointment. The appointment must be completed first.');
+      }
+
+      // Check if this appointment is already reviewed
+      const { count: existingReviews, error: reviewCheckError } = await supabase
+        .from('mentor_reviews')
+        .select('id', { count: 'exact', head: true })
+        .eq('appointment_id', review.appointmentId);
+      
+      if (reviewCheckError) {
+        throw new Error(`Error checking review eligibility: ${reviewCheckError.message}`);
       }
       
-      if (!canReview) {
-        throw new Error('You cannot review this appointment. It may already be reviewed or not completed.');
+      if (existingReviews && existingReviews > 0) {
+        throw new Error('You have already reviewed this appointment.');
       }
       
+      // If we've made it here, the patient can review this appointment
       const { data, error } = await supabase
         .from('mentor_reviews')
         .insert({
@@ -523,8 +541,8 @@ export class MoodMentorService implements IMoodMentorService {
         rating: data.rating,
         reviewText: data.review_text,
         createdAt: data.created_at,
-        patientName: review.patientName || 'Anonymous',
-        patientAvatar: review.patientAvatar || null,
+        patientName: review.patientName || 'Patient', // Use Patient as default
+        patientAvatar: null, // Since our SQL doesn't provide avatar information
         appointmentId: data.appointment_id,
         status: data.status
       };
