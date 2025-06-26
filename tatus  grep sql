@@ -1,0 +1,82 @@
+warning: in the working copy of 'src/services/mood-mentor/mood-mentor.service.ts', LF will be replaced by CRLF the next time Git touches it
+[1mdiff --git a/src/services/mood-mentor/mood-mentor.service.ts b/src/services/mood-mentor/mood-mentor.service.ts[m
+[1mindex 9cb5701..505f799 100644[m
+[1m--- a/src/services/mood-mentor/mood-mentor.service.ts[m
+[1m+++ b/src/services/mood-mentor/mood-mentor.service.ts[m
+[36m@@ -473,12 +473,12 @@[m [mexport class MoodMentorService implements IMoodMentorService {[m
+         rating: review.rating,[m
+         reviewText: review.review_text,[m
+         createdAt: review.created_at,[m
+[31m-        patientName: review.patient_name || 'Anonymous',[m
+[31m-        patientAvatar: review.patient_avatar || null,[m
+[32m+[m[32m        patientName: review.patient_name || 'Patient', // Use Patient as default[m
+[32m+[m[32m        patientAvatar: null, // Since our SQL doesn't provide avatar information[m
+         appointmentId: review.appointment_id,[m
+         status: review.status[m
+       }));[m
+[31m-    } catch (error) {[m
+[32m+[m[32m    } catch (error: any) {[m
+       console.error('Error in getMoodMentorReviews:', error);[m
+       return [];[m
+     }[m
+[36m@@ -486,21 +486,39 @@[m [mexport class MoodMentorService implements IMoodMentorService {[m
+ [m
+   async addMoodMentorReview(review: Omit<MoodMentorReview, 'id' | 'createdAt'>): Promise<MoodMentorReview> {[m
+     try {[m
+[31m-      // First check if the patient can review this mentor[m
+[31m-      const { data: canReview, error: checkError } = await supabase[m
+[31m-        .rpc('can_patient_review_appointment', { [m
+[31m-          appointment_id: review.appointmentId,[m
+[31m-          patient_uuid: review.patientId[m
+[31m-        });[m
+[32m+[m[32m      // Simplified eligibility check that doesn't rely on RPC function[m
+[32m+[m[32m      // First check if the appointment exists and belongs to the patient[m
+[32m+[m[32m      const { data: appointmentData, error: appointmentError } = await supabase[m
+[32m+[m[32m        .from('appointments')[m
+[32m+[m[32m        .select('status')[m
+[32m+[m[32m        .eq('id', review.appointmentId)[m
+[32m+[m[32m        .eq('patient_id', review.patientId)[m
+[32m+[m[32m        .single();[m
+[32m+[m[41m      [m
+[32m+[m[32m      if (appointmentError || !appointmentData) {[m
+[32m+[m[32m        throw new Error('Cannot review this appointment. Appointment not found or does not belong to you.');[m
+[32m+[m[32m      }[m
+[32m+[m
+[32m+[m[32m      // Check if the appointment is completed[m
+[32m+[m[32m      if (appointmentData.status !== 'completed') {[m
+[32m+[m[32m        throw new Error('Cannot review this appointment. The appointment must be completed first.');[m
+[32m+[m[32m      }[m
+[32m+[m
+[32m+[m[32m      // Check if this appointment is already reviewed[m
+[32m+[m[32m      const { count: existingReviews, error: reviewCheckError } = await supabase[m
+[32m+[m[32m        .from('mentor_reviews')[m
+[32m+[m[32m        .select('id', { count: 'exact', head: true })[m
+[32m+[m[32m        .eq('appointment_id', review.appointmentId);[m
+       [m
+[31m-      if (checkError) {[m
+[31m-        throw new Error(`Error checking review eligibility: ${checkError.message}`);[m
+[32m+[m[32m      if (reviewCheckError) {[m
+[32m+[m[32m        throw new Error(`Error checking review eligibility: ${reviewCheckError.message}`);[m
+       }[m
+       [m
+[31m-      if (!canReview) {[m
+[31m-        throw new Error('You cannot review this appointment. It may already be reviewed or not completed.');[m
+[32m+[m[32m      if (existingReviews && existingReviews > 0) {[m
+[32m+[m[32m        throw new Error('You have already reviewed this appointment.');[m
+       }[m
+       [m
+[32m+[m[32m      // If we've made it here, the patient can review this appointment[m
+       const { data, error } = await supabase[m
+         .from('mentor_reviews')[m
+         .insert({[m
+[36m@@ -523,8 +541,8 @@[m [mexport class MoodMentorService implements IMoodMentorService {[m
+         rating: data.rating,[m
+         reviewText: data.review_text,[m
+         createdAt: data.created_at,[m
+[31m-        patientName: review.patientName || 'Anonymous',[m
+[31m-        patientAvatar: review.patientAvatar || null,[m
+[32m+[m[32m        patientName: review.patientName || 'Patient', // Use Patient as default[m
+[32m+[m[32m        patientAvatar: null, // Since our SQL doesn't provide avatar information[m
+         appointmentId: data.appointment_id,[m
+         status: data.status[m
+       };[m

@@ -26,6 +26,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useAuth } from "@/contexts/authContext";
 import { MoodMentorUI } from "@/services/mood-mentor/mood-mentor.interface";
+import { supabase } from "@/lib/supabase";
 
 const steps = [
   { id: 1, name: "Specialty" },
@@ -49,15 +50,13 @@ const BookingPage = () => {
   const navigate = useNavigate();
   const { user, isAuthenticated } = useAuth();
   
-  // Get mentor ID from either search params or location state
-  const moodMentorId = searchParams.get("mentor") || searchParams.get("moodMentorId") || 
-    (location.state as any)?.mentorId;
+  const { mentorId, mentorName, preselectedMentor, specialty } = location.state || {};
   
   // Get call type from location state
   const initialCallType = (location.state as any)?.callType;
   
   // State for form fields
-  const [selectedSpecialty, setSelectedSpecialty] = useState("Mental Health");
+  const [selectedSpecialty, setSelectedSpecialty] = useState(specialty || "Mental Health");
   const [selectedAppointmentType, setSelectedAppointmentType] = useState(initialCallType || "");
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
   const [selectedTime, setSelectedTime] = useState("");
@@ -78,9 +77,9 @@ const BookingPage = () => {
     const initPage = async () => {
       setLoading(true);
       
-      // If we have a mood mentor ID, fetch mood mentor details
-      if (moodMentorId) {
-        await fetchMoodMentorDetails(moodMentorId);
+      // If we have a preselected mentor, fetch their details and set them
+      if (preselectedMentor && mentorId) {
+        await fetchMentorDetails();
       } else {
         setLoading(false);
       }
@@ -95,37 +94,55 @@ const BookingPage = () => {
       }
     };
     
-    const fetchMoodMentorDetails = async (id: string) => {
+    const fetchMentorDetails = async () => {
       try {
-        setLoading(true);
-        console.log("Fetching mood mentor details for ID:", id);
+        const { data: mentor, error } = await supabase
+          .from('mood_mentor_profiles')
+          .select('*')
+          .eq('user_id', mentorId)
+          .single();
+          
+        if (error) throw error;
         
-        const result = await moodMentorService.getMoodMentorById(id);
-        
-        if (result.error || !result.data) {
-          console.error("Error fetching mood mentor:", result.error || "No data returned");
-          toast.error("Could not load mood mentor details");
-          setLoading(false);
-          return;
-        }
-        
-        console.log("Fetched mood mentor details:", JSON.stringify(result.data, null, 2));
-        console.log("Mood mentor userId:", result.data.userId);
-        
-        setMoodMentor(result.data);
-        if (result.data.specialty) {
-          setSelectedSpecialty(result.data.specialty.split(" ")[0]);
+        if (mentor) {
+          setMoodMentor({
+            id: mentor.id,
+            userId: mentor.user_id,
+            fullName: mentorName || mentor.full_name,
+            email: mentor.email,
+            bio: mentor.bio,
+            specialty: specialty || mentor.specialty,
+            hourlyRate: mentor.hourly_rate,
+            availabilityStatus: mentor.availability_status,
+            avatarUrl: mentor.avatar_url,
+            isFree: mentor.is_free,
+            languages: mentor.languages,
+            education: mentor.education,
+            experience: mentor.experience,
+            therapyTypes: mentor.therapy_types,
+            specialties: mentor.specialties,
+            sessionDuration: mentor.session_duration,
+            rating: mentor.rating,
+            gender: mentor.gender,
+            location: mentor.location,
+            nameSlug: mentor.name_slug,
+            isProfileComplete: mentor.is_profile_complete,
+            isActive: mentor.is_active
+          });
+          setSelectedSpecialty(specialty || mentor.specialty);
+          // Stay on step 1 to show the mentor's profile
+          setCurrentStep(1);
         }
       } catch (error) {
-        console.error("Error in fetchMoodMentorDetails:", error);
-        toast.error("Failed to load mood mentor information");
+        console.error('Error fetching mentor details:', error);
+        toast.error('Failed to load mentor details');
       } finally {
         setLoading(false);
       }
     };
     
     initPage();
-  }, [moodMentorId, isAuthenticated, user, navigate]);
+  }, [mentorId, mentorName, specialty, preselectedMentor, isAuthenticated, user]);
   
   // Update the useEffect that handles date selection
   useEffect(() => {
@@ -206,7 +223,7 @@ const BookingPage = () => {
         return;
       }
       
-      if (!moodMentorId || !selectedDate) {
+      if (!moodMentor?.userId || !selectedDate) {
         toast.error("Missing required booking information");
         return;
       }
@@ -220,19 +237,6 @@ const BookingPage = () => {
       const [hours, minutes] = startTime.split(":");
       const endHour = (parseInt(hours) + 1) % 24;
       const endTime = `${endHour.toString().padStart(2, '0')}:${minutes}`;
-      
-      // Get the mood mentor's userId which is linked to auth.users
-      if (!moodMentor) {
-        toast.error("Mood mentor information is missing");
-        return;
-      }
-      
-      // Verify that we have a valid userId
-      if (!moodMentor.userId) {
-        console.error("Mentor user ID is missing from moodMentor object:", moodMentor);
-        toast.error("Could not find mentor user ID");
-        return;
-      }
       
       // Verify the mentor ID format - it should be a UUID
       const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;

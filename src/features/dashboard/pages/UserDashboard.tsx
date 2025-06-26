@@ -13,7 +13,7 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
-import { ReviewModal } from '@/features/mood_mentors/components/ReviewModal';
+import { ReviewModal } from '@/features/reviews/components/ReviewModal';
 import { LogOut } from 'lucide-react';
 
 interface Booking {

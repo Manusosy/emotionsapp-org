@@ -48,7 +48,7 @@ import TermsOfService from "./pages/TermsOfService";
 import Contact from "./pages/Contact";
 import FAQs from "./pages/FAQs";
 import About from "./pages/About";
-import MoodMentorReviewsPage from "@/features/mood_mentors/pages/ReviewsPage";
+import ReviewsPage from "@/features/reviews/pages/ReviewsPage";
 import './styles/App.css';
 import { Spinner } from "@/components/ui/spinner";
 import JournalEntryPage from "@/features/journal/pages/JournalEntryPage";
@@ -450,7 +450,7 @@ const AppContent = () => {
               } />
               <Route path="/mood-mentor-dashboard/reviews" element={
                 <ProtectedErrorBoundary dashboardPath="/mood-mentor-dashboard">
-                  <MoodMentorReviewsPage />
+                  <ReviewsPage />
                 </ProtectedErrorBoundary>
               } />
               <Route path="/mood-mentor-dashboard/analytics" element={
@@ -472,13 +472,13 @@ const AppContent = () => {
               } />
               
               {/* Keep only these new routes for video calls */}
-              <Route path="/patient-dashboard/appointment/:id/call" element={
+              <Route path="/patient-dashboard/appointments/:id/call" element={
                 <ProtectedErrorBoundary dashboardPath="/patient-dashboard">
                   <PatientDirectCallPage />
                 </ProtectedErrorBoundary>
               } />
               
-              <Route path="/mood-mentor-dashboard/appointment/:id/call" element={
+              <Route path="/mood-mentor-dashboard/appointments/:id/call" element={
                 <ProtectedErrorBoundary dashboardPath="/mood-mentor-dashboard">
                   <MentorDirectCallPage />
                 </ProtectedErrorBoundary>
@@ -547,9 +547,19 @@ const App = () => {
       <ErrorBoundary>
         <AuthProvider>
           <TooltipProvider>
-                          <ScrollToTop />
-              <Toaster position="top-center" richColors closeButton />
-              <AppContent />
+            <ScrollToTop />
+            <Toaster 
+              position="top-center"
+              richColors
+              closeButton
+              duration={4000}
+              style={{
+                background: 'var(--background)',
+                border: '1px solid var(--border)',
+                color: 'var(--foreground)'
+              }}
+            />
+            <AppContent />
           </TooltipProvider>
         </AuthProvider>
       </ErrorBoundary>

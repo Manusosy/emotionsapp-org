@@ -10,6 +10,7 @@ import { dailyService } from '@/services/daily/daily.service';
 import { getEnvVar } from '@/lib/utils';
 import { EventBus } from '@/App';
 import { supabase } from '@/lib/supabase';
+import { RealtimePostgresChangesPayload } from '@supabase/supabase-js';
 
 // Function to aggressively clean up any existing Daily.co iframes
 const destroyAllDailyIframes = () => {
@@ -59,6 +60,22 @@ const getApiKeyErrorMessage = (error: string | null): string | null => {
   
   return error;
 };
+
+interface AppointmentUpdate {
+  new: {
+    id: string;
+    meeting_link?: string;
+    status: string;
+  } | null;
+  old: {
+    id: string;
+    meeting_link?: string;
+    status: string;
+  } | null;
+  eventType: 'INSERT' | 'UPDATE' | 'DELETE';
+  schema: string;
+  table: string;
+}
 
 // Base Call Page Component
 const DirectCallPage = ({ isMentor, redirectPath }: { isMentor: boolean, redirectPath: string }) => {
@@ -142,6 +159,38 @@ const DirectCallPage = ({ isMentor, redirectPath }: { isMentor: boolean, redirec
     toast.info('Refreshing call data...');
   }, []);
   
+  // Add subscription for real-time updates
+  useEffect(() => {
+    if (!id) return;
+
+    const appointmentSubscription = supabase
+      .channel('appointment_room_updates')
+      .on(
+        'postgres_changes' as any,
+        {
+          event: '*',
+          schema: 'public',
+          table: 'appointments',
+          filter: `id=eq.${id}`
+        },
+        (payload: AppointmentUpdate) => {
+          console.log('Appointment update received:', payload);
+          
+          // If we receive an update with a meeting link, update our state
+          if (payload.new && payload.new.meeting_link) {
+            setRoomUrl(payload.new.meeting_link);
+            setIsRoomReady(true);
+            setIsLoading(false);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      appointmentSubscription.unsubscribe();
+    };
+  }, [id]);
+  
   // Fetch appointment details and get/create room when component mounts
   useEffect(() => {
     if (!id) return;
@@ -186,24 +235,35 @@ const DirectCallPage = ({ isMentor, redirectPath }: { isMentor: boolean, redirec
           return;
         }
         
-        // No meeting link found, create a new room
-        console.log('No meeting link found, creating a new room...');
-        toast.info('Creating video call room...');
-        
-        // Explicitly create a room for this appointment
-        const { data: sessionData, error: sessionError } = await appointmentService.startAppointmentSession(id);
-        
-        if (sessionError || !sessionData || !sessionData.roomUrl) {
-          console.error('Failed to create room:', sessionError);
-          throw new Error(sessionError || 'Failed to create video call room');
+        // If we're not the mentor and there's no meeting link, show waiting message
+        if (!isMentor) {
+          setIsLoading(false);
+          setError('Waiting for mentor to start the session...');
+          return;
         }
         
-        console.log('Room created successfully:', sessionData.roomUrl);
-        toast.success('Video call room ready');
+        // Only mentors can create rooms
+        if (isMentor) {
+          // No meeting link found, create a new room
+          console.log('No meeting link found, creating a new room...');
+          toast.info('Creating video call room...');
+          
+          // Explicitly create a room for this appointment
+          const { data: sessionData, error: sessionError } = await appointmentService.startAppointmentSession(id);
+          
+          if (sessionError || !sessionData || !sessionData.roomUrl) {
+            console.error('Failed to create room:', sessionError);
+            throw new Error(sessionError || 'Failed to create video call room');
+          }
+          
+          console.log('Room created successfully:', sessionData.roomUrl);
+          toast.success('Video call room ready');
+          
+          // Set the room URL
+          setRoomUrl(sessionData.roomUrl);
+          setIsRoomReady(true);
+        }
         
-        // Set the room URL
-        setRoomUrl(sessionData.roomUrl);
-        setIsRoomReady(true);
         setIsLoading(false);
       } catch (error: any) {
         console.error('Error in fetchAppointmentAndPrepareRoom:', error);
@@ -216,7 +276,7 @@ const DirectCallPage = ({ isMentor, redirectPath }: { isMentor: boolean, redirec
     };
     
     fetchAppointmentAndPrepareRoom();
-  }, [id, refreshKey]);
+  }, [id, refreshKey, isMentor]);
   
   const startCall = () => {
     try {

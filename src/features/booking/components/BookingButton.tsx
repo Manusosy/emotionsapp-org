@@ -65,7 +65,9 @@ export default function BookingButton({
 
     navigate('/booking', {
       state: {
-        mentorId: moodMentorId
+        mentorId: moodMentorId,
+        mentorName: moodMentorName,
+        preselectedMentor: true
       }
     });
   };
