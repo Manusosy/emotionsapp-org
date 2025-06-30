@@ -139,6 +139,7 @@ const patientNavigation = [
     items: [
       { name: "Mood Tracker", href: "/patient-dashboard/mood-tracker", icon: Activity },
       { name: "Reports", href: "/patient-dashboard/reports", icon: FileText }, 
+      { name: "Support Groups", href: "/patient-dashboard/support-groups", icon: Users },
       { name: "Resources", href: "/patient-dashboard/resources", icon: BookOpen },
     ]
   },
@@ -236,6 +237,11 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
       const fetchPatientProfile = async () => {
         try {
           if (!user?.id) return;
+          
+          // Only fetch patient profile if the user is actually a patient
+          if (userRole !== 'patient') {
+            return;
+          }
           
           const { data: patientProfile, error: profileError } = await supabase
             .from('patient_profiles')

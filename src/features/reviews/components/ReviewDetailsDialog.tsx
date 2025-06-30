@@ -18,7 +18,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { format, parseISO } from 'date-fns';
-import { Star, MessageSquare, FilePenLine, Loader2 } from 'lucide-react';
+import { Star, MessageSquare, Edit, Loader2 } from 'lucide-react';
 import { Review, ReviewResponse } from '../types';
 import { toast } from 'sonner';
 
@@ -255,6 +255,50 @@ export function ReviewDetailsDialog({
               </div>
             </div>
 
+            {/* Appointment Details Section */}
+            {review.appointmentDetails && (
+              <div className="border-t pt-4">
+                <h4 className="font-medium mb-3 flex items-center">
+                  <MessageSquare className="h-4 w-4 mr-2" />
+                  Appointment Details
+                </h4>
+                <div className="bg-background border rounded-md p-4 space-y-3">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <p className="text-xs text-muted-foreground">Date & Time</p>
+                      <p className="text-sm font-medium">
+                        {format(parseISO(review.appointmentDetails.scheduled_at), 'MMM d, yyyy h:mm a')}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground">Duration</p>
+                      <p className="text-sm font-medium">{review.appointmentDetails.duration} minutes</p>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <p className="text-xs text-muted-foreground">Type</p>
+                      <p className="text-sm font-medium capitalize">{review.appointmentDetails.type}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground">Status</p>
+                      <Badge variant={review.appointmentDetails.status === 'completed' ? 'success' : 'outline'}>
+                        {review.appointmentDetails.status}
+                      </Badge>
+                    </div>
+                  </div>
+                  {review.appointmentDetails.notes && (
+                    <div>
+                      <p className="text-xs text-muted-foreground mb-1">Session Notes</p>
+                      <div className="bg-muted p-3 rounded text-sm">
+                        {review.appointmentDetails.notes}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
             {review.status === 'pending' && (
               <div className="flex justify-end gap-2 pt-4">
                 <Button variant="outline" onClick={handleReviewReject} disabled={isSubmitting}>
@@ -326,7 +370,7 @@ export function ReviewDetailsDialog({
             {/* Existing notes */}
             {hasNotes && (
               <div className="space-y-3">
-                {review.notes.map((note) => (
+                {review.notes?.map((note) => (
                   <div key={note.id} className="bg-muted p-3 rounded-md">
                     <div className="flex justify-between items-center mb-1">
                       <p className="text-xs text-muted-foreground">

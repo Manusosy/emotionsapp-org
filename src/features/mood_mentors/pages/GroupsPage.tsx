@@ -1,4 +1,3 @@
-import { authService, userService, dataService, apiService, messageService, patientService, moodMentorService, appointmentService } from '@/services';
 import React, { useState, useEffect, useContext } from "react";
 import DashboardLayout from "@/features/dashboard/components/DashboardLayout";
 import { Card } from "@/components/ui/card";
@@ -10,9 +9,24 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Users, MoreVertical, Calendar, MessageSquare, Settings } from "lucide-react";
+import { 
+  Users, 
+  MoreVertical, 
+  Calendar, 
+  MessageSquare, 
+  Settings, 
+  Plus,
+  Video,
+  MapPin,
+  Clock,
+  UserPlus,
+  Edit,
+  Trash2,
+  ArrowLeft
+} from "lucide-react";
 import { AuthContext } from "@/contexts/authContext";
 import { toast } from "sonner";
+import { supabase } from "@/lib/supabase";
 import {
   Dialog,
   DialogContent,
@@ -41,23 +55,10 @@ import {
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-// Supabase import removed
 import { Label } from '@/components/ui/label';
-
-interface SupportGroup {
-  id: string;
-  name: string;
-  description: string;
-  schedule: Array<{
-    day: string;
-    time: string;
-  }>;
-  max_participants: number;
-  current_participants: number;
-  status: 'active' | 'inactive';
-  category: string;
-  created_at: string;
-}
+import { Badge } from '@/components/ui/badge';
+import { supportGroupsService, SupportGroup, CreateGroupData } from '@/services/support-groups/support-groups.service';
+import GroupManagement from '@/features/mood_mentors/components/GroupManagement';
 
 const groupTypes = [
   'anxiety',
@@ -70,137 +71,88 @@ const groupTypes = [
   'other'
 ] as const;
 
+const meetingTypes = [
+  { value: 'online', label: 'Online' },
+  { value: 'in-person', label: 'In-Person' },
+  { value: 'hybrid', label: 'Hybrid' }
+] as const;
+
 const createGroupSchema = z.object({
   name: z.string().min(3, 'Name must be at least 3 characters'),
   description: z.string().min(10, 'Description must be at least 10 characters'),
   group_type: z.enum(groupTypes),
-  meeting_schedule: z.string().min(3, 'Schedule is required'),
-  max_participants: z.string().transform(Number).pipe(
-    z.number().min(2, 'Minimum 2 participants').max(50, 'Maximum 50 participants')
-  ),
+  meeting_type: z.enum(['online', 'in-person', 'hybrid']),
+  max_participants: z.coerce.number().min(2, 'Minimum 2 participants').max(50, 'Maximum 50 participants'),
+  location: z.string().optional(),
+  meeting_day: z.string().min(1, 'Please select a day'),
+  meeting_time: z.string().min(1, 'Please select a time'),
 });
 
 type CreateGroupFormValues = z.infer<typeof createGroupSchema>;
 
 export default function GroupsPage() {
-  const { user } = useContext(AuthContext);
-  const [groups, setGroups] = useState<SupportGroup[]>([
-    {
-      id: "1",
-      name: "Anxiety Support",
-      description: "Weekly support group for managing anxiety and stress",
-      schedule: [
-        { day: "Monday", time: "7:00 PM" },
-        { day: "Thursday", time: "6:00 PM" }
-      ],
-      max_participants: 15,
-      current_participants: 8,
-      status: 'active',
-      category: 'anxiety',
-      created_at: new Date().toISOString()
-    },
-    {
-      id: "2",
-      name: "Depression Recovery",
-      description: "A safe space to discuss depression and recovery strategies",
-      schedule: [
-        { day: "Wednesday", time: "5:30 PM" }
-      ],
-      max_participants: 12,
-      current_participants: 5,
-      status: 'active',
-      category: 'depression',
-      created_at: new Date().toISOString()
-    }
-  ]);
+  const authContext = useContext(AuthContext);
+  const user = authContext?.user;
+  const [groups, setGroups] = useState<SupportGroup[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [selectedGroup, setSelectedGroup] = useState<SupportGroup | null>(null);
-  const [patients, setPatients] = useState<any[]>([
-    { id: "p1", first_name: "John", last_name: "Doe", email: "john@example.com" },
-    { id: "p2", first_name: "Jane", last_name: "Smith", email: "jane@example.com" },
-    { id: "p3", first_name: "Alice", last_name: "Johnson", email: "alice@example.com" }
-  ]);
+  const [showGroupManagement, setShowGroupManagement] = useState(false);
 
-  const form = useForm({
+  const form = useForm<CreateGroupFormValues>({
     resolver: zodResolver(createGroupSchema),
     defaultValues: {
       name: '',
       description: '',
       group_type: 'anxiety',
-      meeting_schedule: '',
-      max_participants: '20',
+      meeting_type: 'online',
+      max_participants: 20,
+      location: '',
+      meeting_day: '',
+      meeting_time: '',
     },
   });
 
-  const [isAddPatientOpen, setIsAddPatientOpen] = useState(false);
-  const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
-  const [selectedPatient, setSelectedPatient] = useState<string>("");
-  const [patientNotes, setPatientNotes] = useState("");
-
   useEffect(() => {
+    if (user) {
     fetchGroups();
-    fetchPatients();
+    }
   }, [user]);
 
   async function fetchGroups() {
     if (!user) return;
     
-    const { data, error } = await supabase
-      .from('support_groups')
-      .select(`
-        *,
-        group_members (
-          id,
-          user_id,
-          status,
-          notes,
-          users (
-            full_name,
-            email
-          )
-        )
-      `)
-      .eq('mood_mentor_id', user.id);
-
-    if (error) {
+    try {
+      setIsLoading(true);
+      const data = await supportGroupsService.getMentorGroups(user.id);
+      setGroups(data);
+    } catch (error) {
+      console.error('Error fetching groups:', error);
       toast.error('Failed to fetch groups');
-      return;
+    } finally {
+      setIsLoading(false);
     }
-
-    setGroups(data || []);
-  }
-
-  async function fetchPatients() {
-    const { data, error } = await supabase
-      .from('patient_profiles')
-      .select(`
-        id,
-        first_name,
-        last_name,
-        email
-      `);
-
-    if (error) {
-      toast.error('Failed to fetch patients');
-      return;
-    }
-
-    setPatients(data || []);
   }
 
   async function onSubmit(values: CreateGroupFormValues) {
+    if (!user) return;
+
     try {
-      const { error } = await supabase
-        .from('support_groups')
-        .insert({
-          ...values,
-          mood_mentor_id: user?.id,
-          status: 'active',
-        });
+      const groupData: CreateGroupData = {
+        name: values.name,
+        description: values.description,
+        group_type: values.group_type,
+        meeting_type: values.meeting_type,
+        max_participants: values.max_participants,
+        location: values.location || undefined,
+        meeting_schedule: [{
+          day: values.meeting_day,
+          time: values.meeting_time,
+          frequency: 'weekly'
+        }]
+      };
 
-      if (error) throw error;
-
+      await supportGroupsService.createGroup(user.id, groupData);
       toast.success('Group created successfully');
       setIsCreateOpen(false);
       form.reset();
@@ -210,82 +162,253 @@ export default function GroupsPage() {
     }
   }
 
-  async function addPatientToGroup(groupId: string, patientId: string, notes: string = '') {
-    try {
-      const { error } = await supabase
-        .from('group_members')
-        .insert({
-          group_id: groupId,
-          user_id: patientId,
-          added_by: user?.id,
-          notes,
-          status: 'active',
-        });
-
-      if (error) throw error;
-
-      toast.success('Patient added to group');
-      fetchGroups();
-    } catch (error: any) {
-      toast.error(error.message || 'Failed to add patient to group');
-    }
-  }
-
-  const handleCreateGroup = () => {
-    setIsCreateOpen(true);
-  };
-
-  const handleEditGroup = (groupId: string) => {
-    window.location.href = `/mood-mentor-dashboard/groups/${groupId}/edit`;
-  };
-
-  const handleViewParticipants = (groupId: string) => {
-    window.location.href = `/mood-mentor-dashboard/groups/${groupId}/participants`;
-  };
-
-  const handleMessageGroup = (groupId: string) => {
-    window.location.href = `/mood-mentor-dashboard/groups/${groupId}/messages`;
-  };
-
-  const handleAddPatientClick = (groupId: string) => {
-    setSelectedGroupId(groupId);
-    setIsAddPatientOpen(true);
-  };
-
-  const handleAddPatient = async () => {
-    if (!selectedGroupId || !selectedPatient) {
-      toast.error("Please select a patient");
+  const handleStartMeeting = async (group: SupportGroup) => {
+    if (group.current_participants === 0) {
+      toast.error('Cannot start meeting - no members in the group yet');
       return;
     }
 
-    await addPatientToGroup(selectedGroupId, selectedPatient, patientNotes);
-    setIsAddPatientOpen(false);
-    setSelectedPatient("");
-    setPatientNotes("");
+    if (group.room_url) {
+      window.open(group.room_url, '_blank');
+    } else {
+      toast.error('No meeting room configured for this group');
+    }
+  };
+
+  const canStartMeeting = (group: SupportGroup) => {
+    return group.current_participants > 0;
+  };
+
+  const handleDeleteGroup = async (groupId: string) => {
+    const group = groups.find(g => g.id === groupId);
+    if (!group) return;
+
+    const memberText = group.current_participants === 0 
+      ? "no members" 
+      : `${group.current_participants} member${group.current_participants === 1 ? '' : 's'}`;
+
+    const confirmMessage = `Are you sure you want to delete "${group.name}"?\n\nThis group currently has ${memberText}.\n\nThis action will permanently delete:\n• The support group\n• All member records\n• All session history\n• All attendance records\n\nThis cannot be undone.`;
+
+    if (!confirm(confirmMessage)) {
+      return;
+    }
+
+    try {
+      await supportGroupsService.deleteGroup(groupId);
+      toast.success(`"${group.name}" has been permanently deleted`);
+      fetchGroups();
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to delete group');
+    }
+  };
+
+  const handleManageGroup = (group: SupportGroup) => {
+    setSelectedGroup(group);
+    setShowGroupManagement(true);
+  };
+
+  const handleCloseGroupManagement = () => {
+    setShowGroupManagement(false);
+    setSelectedGroup(null);
+    fetchGroups(); // Refresh groups data when closing management view
+  };
+
+  const getMeetingTypeIcon = (type: string) => {
+    switch(type) {
+      case "in-person": return <MapPin className="w-4 h-4" />;
+      case "online": return <Video className="w-4 h-4" />;
+      case "hybrid": return <Users className="w-4 h-4" />;
+      default: return <Users className="w-4 h-4" />;
+    }
+  };
+
+  const formatSchedule = (schedule: { day: string; time: string; frequency?: string }[]) => {
+    if (!schedule || schedule.length === 0) return "Schedule TBD";
+    
+    const firstSchedule = schedule[0];
+    const time = new Date(`2000-01-01T${firstSchedule.time}`).toLocaleTimeString([], { 
+      hour: 'numeric', 
+      minute: '2-digit', 
+      hour12: true 
+    });
+    
+    return `Every ${firstSchedule.day}, ${time}`;
   };
 
   return (
     <DashboardLayout>
       <div className="space-y-6">
+        {showGroupManagement && selectedGroup ? (
+          <GroupManagement
+            group={selectedGroup}
+            onClose={handleCloseGroupManagement}
+          />
+        ) : (
+          <>
         <div className="flex justify-between items-center">
           <div>
-            <h1 className="text-2xl font-bold tracking-tight">Support Groups</h1>
-            <p className="text-muted-foreground">Manage your support groups and sessions</p>
+                <h1 className="text-2xl font-bold text-gray-900">Support Groups</h1>
+                <p className="text-gray-600">Manage your support groups and sessions</p>
           </div>
-          <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
-            <DialogTrigger asChild>
               <Button 
-                className="bg-[#0078FF] text-white hover:bg-blue-700"
+                onClick={() => setIsCreateOpen(true)}
+                className="bg-[#20c0f3] hover:bg-[#0bb2e8] text-white"
               >
-                + Create New Group
+                <Plus className="w-4 h-4 mr-2" />
+                Create Group
               </Button>
-            </DialogTrigger>
-            <DialogContent>
+            </div>
+
+            {isLoading ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {[1, 2, 3].map((i) => (
+                  <Card key={i} className="p-6 animate-pulse">
+                    <div className="h-4 bg-gray-200 rounded w-3/4 mb-2"></div>
+                    <div className="h-3 bg-gray-200 rounded w-1/2 mb-4"></div>
+                    <div className="h-20 bg-gray-200 rounded mb-4"></div>
+                    <div className="h-8 bg-gray-200 rounded"></div>
+                  </Card>
+                ))}
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {groups.length === 0 ? (
+                  <div className="col-span-full text-center py-12">
+                    <div className="bg-gray-100 inline-flex p-4 rounded-full mb-4">
+                      <Users className="h-8 w-8 text-gray-400" />
+                    </div>
+                    <h3 className="text-xl font-medium mb-2">No support groups yet</h3>
+                    <p className="text-gray-500 mb-6">Create your first group to get started with community support.</p>
+                    <Button 
+                      onClick={() => setIsCreateOpen(true)}
+                      className="bg-[#20c0f3] hover:bg-[#0bb2e8] text-white"
+                    >
+                      <Plus className="w-4 h-4 mr-2" />
+                      Create Your First Group
+                    </Button>
+                  </div>
+                ) : (
+                  groups.map((group) => (
+                    <Card key={group.id} className="overflow-hidden hover:shadow-lg transition-shadow">
+                      <div className="p-6">
+                        <div className="flex justify-between items-start mb-4">
+                          <div className="flex-1">
+                            <h3 className="font-semibold text-lg mb-1">{group.name}</h3>
+                            <div className="flex items-center gap-2 mb-2">
+                              <Badge variant="outline" className="text-xs">
+                                {getMeetingTypeIcon(group.meeting_type)}
+                                <span className="ml-1">{group.meeting_type}</span>
+                              </Badge>
+                              <Badge variant="outline" className="text-xs">
+                                {group.group_type}
+                              </Badge>
+                            </div>
+                          </div>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" className="h-8 w-8 p-0">
+                                <MoreVertical className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem 
+                                onClick={() => handleStartMeeting(group)}
+                                disabled={!canStartMeeting(group)}
+                                className={!canStartMeeting(group) ? "opacity-50 cursor-not-allowed" : ""}
+                              >
+                                <Video className="h-4 w-4 mr-2" />
+                                {canStartMeeting(group) ? "Start Meeting" : "No Members - Cannot Start"}
+                              </DropdownMenuItem>
+                              <DropdownMenuItem>
+                                <UserPlus className="h-4 w-4 mr-2" />
+                                Add Members
+                              </DropdownMenuItem>
+                              <DropdownMenuItem>
+                                <Edit className="h-4 w-4 mr-2" />
+                                Edit Group
+                              </DropdownMenuItem>
+                              <DropdownMenuItem 
+                                onClick={() => handleDeleteGroup(group.id)}
+                                className="text-red-600"
+                              >
+                                <Trash2 className="h-4 w-4 mr-2" />
+                                Delete Group
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
+
+                        <p className="text-gray-600 text-sm mb-4 line-clamp-2">
+                          {group.description}
+                        </p>
+
+                        <div className="space-y-2 mb-4">
+                          <div className="flex items-center text-sm text-gray-600">
+                            <Clock className="h-4 w-4 mr-2" />
+                            {formatSchedule(group.meeting_schedule)}
+                          </div>
+                          {group.location && (
+                            <div className="flex items-center text-sm text-gray-600">
+                              <MapPin className="h-4 w-4 mr-2" />
+                              {group.location}
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <Users className="h-4 w-4 text-gray-500" />
+                            <span className="text-sm text-gray-600">
+                              {group.current_participants} / {group.max_participants}
+                            </span>
+                          </div>
+                          <div className="w-24">
+                            <Progress 
+                              value={(group.current_participants / group.max_participants) * 100}
+                              className="h-2"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="flex gap-2 mt-4">
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            className="flex-1"
+                            onClick={() => handleManageGroup(group)}
+                          >
+                            <Settings className="h-4 w-4 mr-1" />
+                            Manage
+                          </Button>
+                          <Button 
+                            size="sm" 
+                            className={`flex-1 ${canStartMeeting(group) 
+                              ? "bg-[#20c0f3] hover:bg-[#0bb2e8] text-white" 
+                              : "bg-gray-300 text-gray-500 cursor-not-allowed"
+                            }`}
+                            onClick={() => handleStartMeeting(group)}
+                            disabled={!canStartMeeting(group)}
+                            title={!canStartMeeting(group) ? "No members in group - cannot start meeting" : "Start meeting with group members"}
+                          >
+                            <Video className="h-4 w-4 mr-1" />
+                            {canStartMeeting(group) ? "Meet" : "No Members"}
+                          </Button>
+                        </div>
+                      </div>
+                    </Card>
+                  ))
+                )}
+              </div>
+            )}
+
+            <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
+              <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
               <DialogHeader>
-                <DialogTitle>Create Support Group</DialogTitle>
+                  <DialogTitle>Create New Support Group</DialogTitle>
               </DialogHeader>
+                
               <Form {...form}>
-                <form onSubmit={form.handleSubmit((data: CreateGroupFormValues) => onSubmit(data))} className="space-y-4">
+                  <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
                   <FormField
                     control={form.control}
                     name="name"
@@ -293,12 +416,13 @@ export default function GroupsPage() {
                       <FormItem>
                         <FormLabel>Group Name</FormLabel>
                         <FormControl>
-                          <Input {...field} />
+                            <Input placeholder="e.g., Anxiety Support Circle" {...field} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
                     )}
                   />
+
                   <FormField
                     control={form.control}
                     name="description"
@@ -306,12 +430,18 @@ export default function GroupsPage() {
                       <FormItem>
                         <FormLabel>Description</FormLabel>
                         <FormControl>
-                          <Textarea {...field} />
+                            <Textarea 
+                              placeholder="Describe the purpose and goals of this support group..."
+                              className="min-h-[100px]"
+                              {...field} 
+                            />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
                     )}
                   />
+
+                    <div className="grid grid-cols-2 gap-4">
                   <FormField
                     control={form.control}
                     name="group_type"
@@ -321,7 +451,7 @@ export default function GroupsPage() {
                         <Select onValueChange={field.onChange} defaultValue={field.value}>
                           <FormControl>
                             <SelectTrigger>
-                              <SelectValue placeholder="Select group type" />
+                                  <SelectValue placeholder="Select type" />
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent>
@@ -336,19 +466,33 @@ export default function GroupsPage() {
                       </FormItem>
                     )}
                   />
+
                   <FormField
                     control={form.control}
-                    name="meeting_schedule"
+                        name="meeting_type"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Meeting Schedule</FormLabel>
+                            <FormLabel>Meeting Type</FormLabel>
+                            <Select onValueChange={field.onChange} defaultValue={field.value}>
                         <FormControl>
-                          <Input {...field} placeholder="e.g., Every Monday at 2 PM" />
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Select meeting type" />
+                                </SelectTrigger>
                         </FormControl>
+                              <SelectContent>
+                                {meetingTypes.map((type) => (
+                                  <SelectItem key={type.value} value={type.value}>
+                                    {type.label}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
                         <FormMessage />
                       </FormItem>
                     )}
                   />
+                    </div>
+
                   <FormField
                     control={form.control}
                     name="max_participants"
@@ -356,161 +500,82 @@ export default function GroupsPage() {
                       <FormItem>
                         <FormLabel>Maximum Participants</FormLabel>
                         <FormControl>
-                          <Input {...field} type="number" min="2" max="50" />
+                            <Input type="number" min="2" max="50" {...field} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
                     )}
                   />
-                  <Button type="submit" className="w-full">Create Group</Button>
-                </form>
-              </Form>
-            </DialogContent>
-          </Dialog>
-        </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {groups.length === 0 ? (
-            <div className="col-span-full text-center py-8 text-gray-500">
-              No support groups found. Create your first group to get started.
-            </div>
-          ) : (
-            groups.map((group) => (
-              <Card key={group.id} className="overflow-hidden">
-                <div className="p-4 border-b">
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <h3 className="font-semibold text-lg">{group.name}</h3>
-                      <span className="inline-block px-2 py-1 text-xs rounded-full bg-blue-100 text-blue-700 mt-2">
-                        {group.category}
-                      </span>
-                    </div>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" className="h-8 w-8 p-0">
-                          <MoreVertical className="h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => handleEditGroup(group.id)}>
-                          <Settings className="mr-2 h-4 w-4" />
-                          Edit Group
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => handleAddPatientClick(group.id)}>
-                          <Users className="mr-2 h-4 w-4" />
-                          Add Patient
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => handleViewParticipants(group.id)}>
-                          <Users className="mr-2 h-4 w-4" />
-                          View Participants
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => handleMessageGroup(group.id)}>
-                          <MessageSquare className="mr-2 h-4 w-4" />
-                          Message All
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </div>
-                </div>
+                    <FormField
+                      control={form.control}
+                      name="location"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Location (Optional)</FormLabel>
+                          <FormControl>
+                            <Input placeholder="e.g., Community Center, Kigali" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
 
-                <div className="p-4">
-                  <p className="text-sm text-gray-600 mb-4 line-clamp-2">
-                    {group.description}
-                  </p>
-
-                  <div className="space-y-4">
-                    <div>
-                      <div className="flex justify-between text-sm mb-1">
-                        <span className="text-gray-600">Participants</span>
-                        <span className="font-medium">
-                          {group.current_participants}/{group.max_participants}
-                        </span>
-                      </div>
-                      <Progress 
-                        value={(group.current_participants / group.max_participants) * 100} 
-                        className="h-2"
-                      />
-                    </div>
-
-                    <div className="space-y-2">
-                      <div className="text-sm text-gray-600">Schedule</div>
-                      {group.schedule.map((schedule, index) => (
-                        <div 
-                          key={index}
-                          className="flex items-center text-sm"
-                        >
-                          <Calendar className="h-4 w-4 mr-2 text-gray-400" />
-                          <span>{schedule.day} at {schedule.time}</span>
-                        </div>
-                      ))}
-                    </div>
-
-                    <div className="pt-4 border-t">
-                      <div className="flex justify-between items-center">
-                        <span className={`px-2 py-1 rounded-full text-xs ${
-                          group.status === 'active'
-                            ? 'bg-green-100 text-green-700'
-                            : 'bg-gray-100 text-gray-700'
-                        }`}>
-                          {group.status}
-                        </span>
-                        <Button 
-                          variant="outline"
-                          onClick={() => handleViewParticipants(group.id)}
-                          className="text-sm"
-                        >
-                          View Details
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </Card>
-            ))
-          )}
-        </div>
-
-        <Dialog open={isAddPatientOpen} onOpenChange={setIsAddPatientOpen}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Add Patient to Group</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4 py-4">
-              <div className="space-y-2">
-                <Label>Select Patient</Label>
-                <Select onValueChange={setSelectedPatient} value={selectedPatient}>
+                    <div className="grid grid-cols-2 gap-4">
+                      <FormField
+                        control={form.control}
+                        name="meeting_day"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Meeting Day</FormLabel>
+                            <Select onValueChange={field.onChange} defaultValue={field.value}>
+                              <FormControl>
                   <SelectTrigger>
-                    <SelectValue placeholder="Choose a patient" />
+                                  <SelectValue placeholder="Select day" />
                   </SelectTrigger>
+                              </FormControl>
                   <SelectContent>
-                    {patients.map((patient) => (
-                      <SelectItem key={patient.id} value={patient.id}>
-                        {patient.first_name} {patient.last_name} - {patient.email}
+                                {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].map((day) => (
+                                  <SelectItem key={day} value={day}>
+                                    {day}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
-              </div>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
 
-              <div className="space-y-2">
-                <Label>Notes (Optional)</Label>
-                <Textarea
-                  value={patientNotes}
-                  onChange={(e) => setPatientNotes(e.target.value)}
-                  placeholder="Add any notes about the patient's participation..."
+                      <FormField
+                        control={form.control}
+                        name="meeting_time"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Meeting Time</FormLabel>
+                            <FormControl>
+                              <Input type="time" {...field} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
                 />
               </div>
-            </div>
+
             <DialogFooter>
-              <Button variant="outline" onClick={() => setIsAddPatientOpen(false)}>
+                      <Button type="button" variant="outline" onClick={() => setIsCreateOpen(false)}>
                 Cancel
               </Button>
-              <Button onClick={handleAddPatient}>
-                Add to Group
+                      <Button type="submit" className="bg-[#20c0f3] hover:bg-[#0bb2e8] text-white">
+                        Create Group
               </Button>
             </DialogFooter>
+                  </form>
+                </Form>
           </DialogContent>
         </Dialog>
+          </>
+        )}
       </div>
     </DashboardLayout>
   );

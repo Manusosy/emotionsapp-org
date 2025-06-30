@@ -60,11 +60,6 @@ export class MoodMentorService implements IMoodMentorService {
         query = query.contains('therapy_types', options.specialties);
       }
 
-      // Add rating filter if provided
-      if (options?.minRating) {
-        query = query.gte('rating', options.minRating);
-      }
-
       // Add hourly rate filter if provided
       if (options?.maxHourlyRate) {
         query = query.lte('hourly_rate', options.maxHourlyRate);
@@ -79,15 +74,63 @@ export class MoodMentorService implements IMoodMentorService {
         query = query.range(options.offset, options.offset + (options.limit || 10) - 1);
       }
 
-      // Sort by rating in descending order
-      query = query.order('rating', { ascending: false });
-
       const { data, error } = await query;
 
       if (error) throw error;
       
-      // Convert snake_case to camelCase
-      return (data || []).map(mentor => convertObjectToCamelCase(mentor)) as MoodMentorUI[];
+      // Fetch real review statistics for each mentor
+      const mentorsWithRealRatings = await Promise.all((data || []).map(async (mentor) => {
+        try {
+          // Get real review stats from our reviews table
+          const { data: reviewStats, error: reviewError } = await supabase.rpc('get_mentor_review_stats', {
+            mentor_uuid: mentor.user_id
+          });
+
+          let realRating = null;
+          let reviewCount = 0;
+
+          if (!reviewError && reviewStats && reviewStats.length > 0) {
+            const stats = reviewStats[0];
+            realRating = parseFloat(stats.average_rating || '0');
+            reviewCount = stats.total_reviews || 0;
+          }
+
+          // Convert to camelCase and add real review data
+          const camelMentor = convertObjectToCamelCase(mentor) as MoodMentorUI;
+          
+          // Override rating with real data if available, otherwise keep original or set to null
+          camelMentor.rating = realRating && realRating > 0 ? realRating : null;
+          camelMentor.reviewCount = reviewCount;
+
+          return camelMentor;
+        } catch (error) {
+          console.warn('Error fetching review stats for mentor:', mentor.user_id, error);
+          // Return mentor with original rating if review stats fail
+          const camelMentor = convertObjectToCamelCase(mentor) as MoodMentorUI;
+          camelMentor.reviewCount = 0;
+          return camelMentor;
+        }
+      }));
+
+      // Apply rating filter after getting real ratings
+      let filteredMentors = mentorsWithRealRatings;
+      if (options?.minRating) {
+        filteredMentors = mentorsWithRealRatings.filter(mentor => 
+          mentor.rating && mentor.rating >= options.minRating!
+        );
+      }
+
+      // Sort by real rating in descending order (mentors with reviews first)
+      filteredMentors.sort((a, b) => {
+        // Prioritize mentors with reviews
+        if (a.rating && !b.rating) return -1;
+        if (!a.rating && b.rating) return 1;
+        if (a.rating && b.rating) return b.rating - a.rating;
+        // If neither has reviews, maintain original order
+        return 0;
+      });
+
+      return filteredMentors;
     } catch (error) {
       console.error('Error in getMoodMentors:', error);
       return [];

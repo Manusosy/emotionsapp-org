@@ -131,4 +131,15 @@ export interface IReviewsService {
     filters?: ReviewFilter,
     format?: 'csv' | 'pdf'
   ): Promise<ReviewsServiceResponse<string>>;
+
+  /**
+   * Submit a new review
+   */
+  submitReview(
+    appointmentId: string,
+    mentorId: string,
+    rating: ReviewRating,
+    content: string,
+    patientId: string
+  ): Promise<ReviewsServiceResponse<Review>>;
 } 

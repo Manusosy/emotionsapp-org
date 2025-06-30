@@ -13,7 +13,8 @@ interface MoodMentor {
   specialties: string[];
   location: string;
   duration: string;
-  rating: number;
+  rating: number | null;
+  reviewCount?: number;
   available: boolean;
   languages: string[];
   education: string;
@@ -57,7 +58,8 @@ export default function MoodMentorGrid() {
           specialties: mentor.specialties || [],
           location: mentor.location || 'Remote',
           duration: mentor.sessionDuration || '30 Min',
-          rating: mentor.rating || 4.7,
+          rating: mentor.rating,
+          reviewCount: mentor.reviewCount || 0,
           available: mentor.availabilityStatus === 'available',
           languages: mentor.languages || ['English'],
           education: Array.isArray(mentor.education) && mentor.education.length > 0
@@ -180,7 +182,13 @@ export default function MoodMentorGrid() {
                   <h3 className="font-semibold text-lg">{mentor.full_name}</h3>
                   <div className="flex items-center gap-1">
                     <Star className="w-4 h-4 text-yellow-400 fill-yellow-400" />
-                    <span className="text-sm font-medium">{mentor.rating || 5.0}</span>
+                    {mentor.rating ? (
+                      <span className="text-sm font-medium">
+                        {mentor.rating.toFixed(1)} ({mentor.reviewCount || 0} reviews)
+                      </span>
+                    ) : (
+                      <span className="text-sm text-gray-500">No reviews yet</span>
+                    )}
                   </div>
                 </div>
               </div>

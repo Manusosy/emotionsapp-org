@@ -791,24 +791,31 @@ export default function AppointmentsPage() {
       return;
     }
 
+    if (!user?.id) {
+      toast.error('You must be logged in to submit a review');
+      return;
+    }
+
     try {
-      // Check if the patient can review this appointment
+      // Check if the patient can review this appointment using our new function
       const { data: canReview, error: checkError } = await supabase
         .rpc('can_patient_review_appointment', { 
-          appointment_id: appointment.id,
-          patient_uuid: user?.id
+          p_appointment_id: appointment.id,
+          p_patient_uuid: user.id
         });
       
       if (checkError) {
         console.error("Error checking if can review:", checkError);
-        throw new Error("Couldn't verify if you can review this appointment");
+        toast.error("Couldn't verify if you can review this appointment. Please try again.");
+        return;
       }
       
-      if (!canReview) {
+      if (canReview === null || canReview === false) {
         toast.error('You cannot review this appointment. It may already be reviewed or not completed.');
         return;
       }
       
+      // Use the mentor ID from the appointment data
       setSelectedAppointmentForReview({
         id: appointment.id,
         mentorId: appointment.mentor.id,
@@ -937,14 +944,14 @@ export default function AppointmentsPage() {
       notes: appointment.notes,
       meeting_link: appointment.meeting_link,
       meeting_type: appointment.meeting_type,
-      mentor: appointment.mentor ? {
-        id: appointment.mentor.id,
-        name: appointment.mentor.name,
-        specialty: appointment.mentor.specialty,
-        avatar: appointment.mentor.avatar,
-        email: appointment.mentor.email,
-        phone: appointment.mentor.phone
-      } : undefined,
+      mentor: {
+        id: appointment.mentor_id,
+        name: appointment.mentor_name,
+        specialty: appointment.mentor_specialty,
+        avatar: appointment.mentor_avatar_url,
+        email: appointment.mentor_email,
+        phone: appointment.mentor_phone
+      },
       created_at: appointment.created_at,
       updated_at: appointment.updated_at,
       isReviewed: appointment.rating !== null

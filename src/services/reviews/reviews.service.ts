@@ -35,122 +35,130 @@ class ReviewsService implements IReviewsService {
         };
       }
 
-      // Start building our query
-      let query = supabase
-        .from('mentor_reviews')
-        .select(`
-          *,
-          review_responses (
-            id,
-            review_id,
-            mentor_id,
-            content,
-            created_at,
-            updated_at,
-            published_at,
-            is_published
-          ),
-          review_notes (
-            id,
-            review_id,
-            mentor_id,
-            content,
-            created_at,
-            updated_at
-          )
-        `)
-        .eq('mentor_id', mentorId);
+      // Use the new database function to get mentor reviews
+      const { data: items, error } = await supabase.rpc('get_mentor_reviews', {
+        mentor_uuid: mentorId
+      });
 
-      // Apply filters if provided
-      if (filters) {
-        // Status filter
-        if (filters.status && filters.status !== 'all') {
-          query = query.eq('status', filters.status);
+      if (error) throw error;
+
+      if (!items || items.length === 0) {
+        return {
+          success: true,
+          data: [],
+          error: null,
+        };
+      }
+
+      // Transform the data to match our Review interface
+      let reviews: Review[] = await Promise.all(items.map(async (item: any) => {
+        // Fetch appointment details if appointment_id exists
+        let appointmentDetails = null;
+        if (item.appointment_id) {
+          try {
+            const { data: appointment, error: appointmentError } = await supabase
+              .from('appointments')
+              .select('id, date, start_time, end_time, notes, status, meeting_type')
+              .eq('id', item.appointment_id)
+              .single();
+            
+            if (!appointmentError && appointment) {
+              // Transform appointment data to match AppointmentDetails interface
+              appointmentDetails = {
+                id: appointment.id,
+                scheduled_at: `${appointment.date}T${appointment.start_time}`,
+                duration: appointment.end_time && appointment.start_time ? 
+                  Math.round((new Date(`1970-01-01T${appointment.end_time}`).getTime() - 
+                             new Date(`1970-01-01T${appointment.start_time}`).getTime()) / (1000 * 60)) : 60,
+                notes: appointment.notes,
+                status: appointment.status,
+                type: appointment.meeting_type || 'video'
+              };
+            }
+          } catch (error) {
+            console.warn('Could not fetch appointment details for review:', item.id);
+          }
         }
 
+        return {
+          id: item.id,
+          appointmentId: item.appointment_id,
+          mentorId: item.mentor_id,
+          patientId: item.patient_id,
+          patient: {
+            id: item.patient_id,
+            name: item.is_anonymous ? 'Anonymous Patient' : (item.patient_name || 'Anonymous Patient'),
+            avatarUrl: null,
+            email: undefined,
+          },
+          rating: item.rating as ReviewRating,
+          content: item.review_text || '',
+          status: 'published' as ReviewStatus, // All reviews in the new system are published
+          createdAt: item.created_at,
+          updatedAt: item.updated_at,
+          publishedAt: item.created_at, // Same as created_at for now
+          response: null, // No responses in the new simple system yet
+          notes: [], // No notes in the new simple system yet
+          isFeatured: false,
+          displayOrder: 0,
+          keywords: [],
+          tags: [],
+          // Add appointment details
+          appointmentDetails: appointmentDetails,
+        };
+      }));
+
+      // Apply client-side filtering if needed
+      if (filters) {
         // Rating filter
         if (filters.rating && filters.rating !== 'all') {
-          query = query.eq('rating', filters.rating);
+          const targetRating = parseInt(filters.rating.toString());
+          reviews = reviews.filter(review => review.rating === targetRating);
         }
 
         // Date range filter
         if (filters.dateRange) {
           if (filters.dateRange.start) {
-            query = query.gte('created_at', filters.dateRange.start);
+            reviews = reviews.filter(review => 
+              new Date(review.createdAt) >= new Date(filters.dateRange!.start!)
+            );
           }
           if (filters.dateRange.end) {
-            query = query.lte('created_at', filters.dateRange.end);
+            reviews = reviews.filter(review => 
+              new Date(review.createdAt) <= new Date(filters.dateRange!.end!)
+            );
           }
         }
 
         // Search filter
         if (filters.search && filters.search.trim() !== '') {
-          const searchQuery = `%${filters.search.toLowerCase()}%`;
-          query = query.or(`content.ilike.${searchQuery},patients(full_name).ilike.${searchQuery}`);
+          const searchLower = filters.search.toLowerCase();
+          reviews = reviews.filter(review => 
+            review.content.toLowerCase().includes(searchLower) ||
+            review.patient.name.toLowerCase().includes(searchLower)
+          );
         }
 
-        // Sorting
+        // Apply sorting
         if (filters.sortBy) {
-          const column = 
-            filters.sortBy === 'date' ? 'created_at' : 
-            filters.sortBy === 'rating' ? 'rating' : 'status';
-          
-          const order = filters.sortOrder === 'asc' ? true : false;
-          query = query.order(column, { ascending: order });
-        } else {
-          // Default sort by most recent
-          query = query.order('created_at', { ascending: false });
+          if (filters.sortBy === 'rating') {
+            reviews.sort((a, b) => 
+              filters.sortOrder === 'asc' ? a.rating - b.rating : b.rating - a.rating
+            );
+          } else if (filters.sortBy === 'date') {
+            reviews.sort((a, b) => {
+              const dateA = new Date(a.createdAt).getTime();
+              const dateB = new Date(b.createdAt).getTime();
+              return filters.sortOrder === 'asc' ? dateA - dateB : dateB - dateA;
+            });
         }
-      } else {
-        // Default sort by most recent
-        query = query.order('created_at', { ascending: false });
       }
-
-      const { data, error } = await query;
-
-      if (error) throw error;
-
-      // Transform the data to match our Review interface
-      const reviews: Review[] = data.map((item) => ({
-        id: item.id,
-        appointmentId: item.appointment_id,
-        mentorId: item.mentor_id,
-        patientId: item.patient_id,
-        patient: {
-          id: item.patient_id || '',
-          name: 'Anonymous Patient',
-          avatarUrl: null,
-          email: undefined,
-        },
-        rating: item.rating as ReviewRating,
-        content: item.review_text || '',
-        status: item.status as ReviewStatus,
-        createdAt: item.created_at,
-        updatedAt: item.updated_at,
-        publishedAt: item.published_at,
-        response: item.review_responses && item.review_responses.length > 0 ? {
-          id: item.review_responses[0].id,
-          reviewId: item.review_responses[0].review_id,
-          mentorId: item.review_responses[0].mentor_id,
-          content: item.review_responses[0].content,
-          createdAt: item.review_responses[0].created_at,
-          updatedAt: item.review_responses[0].updated_at,
-          publishedAt: item.review_responses[0].published_at,
-          isPublished: item.review_responses[0].is_published,
-        } : null,
-        notes: item.review_notes ? item.review_notes.map((note: any) => ({
-          id: note.id,
-          reviewId: note.review_id,
-          mentorId: note.mentor_id,
-          content: note.content,
-          createdAt: note.created_at,
-          updatedAt: note.updated_at,
-        })) : [],
-        isFeatured: item.is_featured || false,
-        displayOrder: item.display_order || 0,
-        keywords: item.keywords || [],
-        tags: item.tags || [],
-      }));
+      } else {
+        // Default sorting by created_at desc
+        reviews.sort((a, b) => 
+          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+        );
+      }
 
       return {
         success: true,
@@ -180,6 +188,53 @@ class ReviewsService implements IReviewsService {
         };
       }
 
+      // First try to get from the new reviews table
+      const { data: reviewItem, error: reviewError } = await supabase
+        .from('reviews')
+        .select('*')
+        .eq('id', reviewId)
+        .single();
+
+      if (!reviewError && reviewItem) {
+        // Get patient profile separately
+        const { data: patientProfile } = await supabase
+          .from('patient_profiles')
+          .select('id, user_id, full_name, avatar_url, email')
+          .eq('user_id', reviewItem.patient_id)
+          .single();
+
+        // Found in new reviews table
+        return {
+          success: true,
+          data: {
+            id: reviewItem.id,
+            appointmentId: reviewItem.appointment_id,
+            mentorId: reviewItem.mentor_id,
+            patientId: reviewItem.patient_id,
+            patient: {
+              id: patientProfile?.user_id || reviewItem.patient_id,
+              name: reviewItem.is_anonymous ? 'Anonymous Patient' : (patientProfile?.full_name || 'Anonymous Patient'),
+              avatarUrl: patientProfile?.avatar_url || null,
+              email: patientProfile?.email || undefined,
+            },
+            rating: reviewItem.rating as ReviewRating,
+            content: reviewItem.review_text || '',
+            status: 'published' as ReviewStatus, // All reviews in new table are published
+            createdAt: reviewItem.created_at,
+            updatedAt: reviewItem.updated_at,
+            publishedAt: reviewItem.created_at, // Same as created_at for new reviews
+            response: null, // No responses in new system yet
+            notes: [], // No notes in new system yet
+            isFeatured: false,
+            displayOrder: 0,
+            keywords: [],
+            tags: [],
+          },
+          error: null,
+        };
+      }
+
+      // If not found in new table, try the old mentor_reviews table
       const { data: item, error } = await supabase
         .from('mentor_reviews')
         .select(`
@@ -204,56 +259,74 @@ class ReviewsService implements IReviewsService {
           )
         `)
         .eq('id', reviewId)
+        .maybeSingle(); // Use maybeSingle instead of single to avoid error if no rows
+
+      if (error) {
+        console.error('Error fetching review by ID:', error);
+        return {
+          success: false,
+          data: null,
+          error: error.message || 'Failed to fetch review',
+        };
+      }
+
+      if (!item) {
+        return {
+          success: false,
+          data: null,
+          error: 'Review not found',
+        };
+      }
+
+      // Get patient profile for mentor_reviews table too
+      const { data: mentorReviewPatientProfile } = await supabase
+        .from('patient_profiles')
+        .select('id, user_id, full_name, avatar_url, email')
+        .eq('user_id', item.patient_id)
         .single();
-
-      if (error) throw error;
-      if (!item) throw new Error('Review not found');
-
-      // Transform to our Review interface
-      const review: Review = {
-        id: item.id,
-        appointmentId: item.appointment_id,
-        mentorId: item.mentor_id,
-        patientId: item.patient_id,
-        patient: {
-          id: item.patient_id || '',
-          name: 'Anonymous Patient',
-          avatarUrl: null,
-          email: undefined,
-        },
-        rating: item.rating as ReviewRating,
-        content: item.review_text || '',
-        status: item.status as ReviewStatus,
-        createdAt: item.created_at,
-        updatedAt: item.updated_at,
-        publishedAt: item.published_at,
-        response: item.review_responses && item.review_responses.length > 0 ? {
-          id: item.review_responses[0].id,
-          reviewId: item.review_responses[0].review_id,
-          mentorId: item.review_responses[0].mentor_id,
-          content: item.review_responses[0].content,
-          createdAt: item.review_responses[0].created_at,
-          updatedAt: item.review_responses[0].updated_at,
-          publishedAt: item.review_responses[0].published_at,
-          isPublished: item.review_responses[0].is_published,
-        } : null,
-        notes: item.review_notes ? item.review_notes.map((note: any) => ({
-          id: note.id,
-          reviewId: note.review_id,
-          mentorId: note.mentor_id,
-          content: note.content,
-          createdAt: note.created_at,
-          updatedAt: note.updated_at,
-        })) : [],
-        isFeatured: item.is_featured || false,
-        displayOrder: item.display_order || 0,
-        keywords: item.keywords || [],
-        tags: item.tags || [],
-      };
 
       return {
         success: true,
-        data: review,
+        data: {
+          id: item.id,
+          appointmentId: item.appointment_id,
+          mentorId: item.mentor_id,
+          patientId: item.patient_id,
+          patient: {
+            id: mentorReviewPatientProfile?.user_id || item.patient_id,
+            name: mentorReviewPatientProfile?.full_name || 'Anonymous Patient',
+            avatarUrl: mentorReviewPatientProfile?.avatar_url || null,
+            email: mentorReviewPatientProfile?.email || undefined,
+          },
+          rating: item.rating as ReviewRating,
+          content: item.review_text || '',
+          status: item.status as ReviewStatus,
+          createdAt: item.created_at,
+          updatedAt: item.updated_at,
+          publishedAt: item.published_at,
+          response: item.review_responses?.[0] ? {
+            id: item.review_responses[0].id,
+            reviewId: item.review_responses[0].review_id,
+            mentorId: item.review_responses[0].mentor_id,
+            content: item.review_responses[0].content,
+            createdAt: item.review_responses[0].created_at,
+            updatedAt: item.review_responses[0].updated_at,
+            publishedAt: item.review_responses[0].published_at,
+            isPublished: item.review_responses[0].is_published,
+          } : null,
+          notes: item.review_notes?.map((note: any) => ({
+            id: note.id,
+            reviewId: note.review_id,
+            mentorId: note.mentor_id,
+            content: note.content,
+            createdAt: note.created_at,
+            updatedAt: note.updated_at,
+          })) || [],
+          isFeatured: item.is_featured,
+          displayOrder: item.display_order,
+          keywords: item.keywords || [],
+          tags: item.tags || [],
+        },
         error: null,
       };
     } catch (error: any) {
@@ -672,10 +745,10 @@ class ReviewsService implements IReviewsService {
         mentorId: data.mentor_id,
         patientId: data.patient_id,
         patient: {
-          id: data.patient_id || '',
-          name: 'Anonymous Patient',
-          avatarUrl: null,
-          email: undefined,
+          id: data.patient_profiles?.id || '',
+          name: data.patient_profiles?.full_name || 'Anonymous Patient',
+          avatarUrl: data.patient_profiles?.avatar_url || null,
+          email: data.patient_profiles?.email || undefined,
         },
         rating: data.rating as ReviewRating,
         content: data.review_text || '',
@@ -780,10 +853,10 @@ class ReviewsService implements IReviewsService {
         mentorId: data.mentor_id,
         patientId: data.patient_id,
         patient: {
-          id: data.patient_id || '',
-          name: 'Anonymous Patient',
-          avatarUrl: null,
-          email: undefined,
+          id: data.patient_profiles?.id || '',
+          name: data.patient_profiles?.full_name || 'Anonymous Patient',
+          avatarUrl: data.patient_profiles?.avatar_url || null,
+          email: data.patient_profiles?.email || undefined,
         },
         rating: data.rating as ReviewRating,
         content: data.review_text || '',
@@ -843,39 +916,46 @@ class ReviewsService implements IReviewsService {
         };
       }
 
-      // Get all reviews for this mentor
-      const { data: reviews, error } = await supabase
-        .from('mentor_reviews')
-        .select('*')
-        .eq('mentor_id', mentorId);
+      // Use the new database function to get mentor review stats
+      const { data: statsData, error: statsError } = await supabase.rpc('get_mentor_review_stats', {
+        mentor_uuid: mentorId
+      });
 
-      if (error) throw error;
+      if (statsError) throw statsError;
 
-      // Initialize the stats object
+      // Also get the individual reviews for time-based analysis
+      const { data: reviews, error: reviewsError } = await supabase.rpc('get_mentor_reviews', {
+        mentor_uuid: mentorId
+      });
+
+      if (reviewsError) throw reviewsError;
+
+      // Initialize the stats object using data from the database function
+      const dbStats = statsData?.[0];
       const stats: ReviewStats = {
-        totalReviews: reviews.length,
-        averageRating: 0,
+        totalReviews: dbStats?.total_reviews || 0,
+        averageRating: parseFloat(dbStats?.average_rating || '0'),
         ratingDistribution: {
-          1: 0,
-          2: 0,
-          3: 0,
-          4: 0,
-          5: 0,
+          1: dbStats?.rating_distribution?.['1'] || 0,
+          2: dbStats?.rating_distribution?.['2'] || 0,
+          3: dbStats?.rating_distribution?.['3'] || 0,
+          4: dbStats?.rating_distribution?.['4'] || 0,
+          5: dbStats?.rating_distribution?.['5'] || 0,
         },
         statusDistribution: {
           pending: 0,
-          published: 0,
+          published: dbStats?.total_reviews || 0, // All reviews are published in new system
           rejected: 0,
           flagged: 0,
         },
         pendingCount: 0,
-        publishedCount: 0,
+        publishedCount: dbStats?.total_reviews || 0,
         rejectedCount: 0,
         flaggedCount: 0,
         reviewsOverTime: [],
       };
 
-      if (reviews.length === 0) {
+      if (!reviews || reviews.length === 0) {
         return {
           success: true,
           data: stats,
@@ -883,73 +963,53 @@ class ReviewsService implements IReviewsService {
         };
       }
 
-      // Calculate the average rating
-      const totalRating = reviews.reduce((acc, review) => {
-        return acc + (review.rating || 0);
-      }, 0);
-
-      stats.averageRating = parseFloat((totalRating / reviews.length).toFixed(1));
-
-      // Calculate rating distribution
-      reviews.forEach(review => {
-        if (review.rating) {
-          stats.ratingDistribution[review.rating as ReviewRating]++;
-        }
-      });
-
-      // Calculate status distribution and counts
-      reviews.forEach(review => {
-        if (review.status) {
-          stats.statusDistribution[review.status as ReviewStatus]++;
-
-          switch (review.status) {
-            case 'pending':
-              stats.pendingCount++;
-              break;
-            case 'published':
-              stats.publishedCount++;
-              break;
-            case 'rejected':
-              stats.rejectedCount++;
-              break;
-            case 'flagged':
-              stats.flaggedCount++;
-              break;
-          }
-        }
-      });
-
       // Calculate reviews over time (last 6 months)
       const now = new Date();
       const monthsData: { [key: string]: number } = {};
 
-      // Initialize the months
+      // Initialize the months with proper ISO date strings
       for (let i = 5; i >= 0; i--) {
         const date = subMonths(now, i);
         const monthKey = format(date, 'MMM yyyy');
-        monthsData[monthKey] = 0;
+        const isoDate = date.toISOString();
+        monthsData[isoDate] = 0;
       }
 
       // Count reviews for each month
-      reviews.forEach(review => {
+      if (reviews && reviews.length > 0) {
+        reviews.forEach((review: any) => {
         if (review.created_at) {
-          const reviewDate = parseISO(review.created_at);
+            try {
+              const reviewDate = new Date(review.created_at);
           // Only include reviews from the last 6 months
           if (reviewDate >= subMonths(now, 6)) {
-            const monthKey = format(reviewDate, 'MMM yyyy');
-            if (monthsData[monthKey] !== undefined) {
-              monthsData[monthKey]++;
-            } else {
-              monthsData[monthKey] = 1;
+                const monthStart = new Date(reviewDate.getFullYear(), reviewDate.getMonth(), 1);
+                const monthKey = monthStart.toISOString();
+                
+                // Find the closest month in our monthsData
+                const monthKeys = Object.keys(monthsData);
+                const closestMonth = monthKeys.find(key => {
+                  const keyDate = new Date(key);
+                  return keyDate.getMonth() === monthStart.getMonth() && keyDate.getFullYear() === monthStart.getFullYear();
+                });
+                
+                if (closestMonth) {
+                  monthsData[closestMonth]++;
             }
+              }
+            } catch (error) {
+              console.warn('Invalid date in review:', review.created_at);
           }
         }
       });
+      }
 
-      // Transform the months data into the expected format
-      stats.reviewsOverTime = Object.keys(monthsData).map(date => ({
-        date,
-        count: monthsData[date],
+      // Transform the months data into the expected format with proper ISO dates
+      stats.reviewsOverTime = Object.keys(monthsData)
+        .sort((a, b) => new Date(a).getTime() - new Date(b).getTime())
+        .map(isoDate => ({
+          date: isoDate,
+          count: monthsData[isoDate],
       }));
 
       return {
@@ -1128,9 +1188,9 @@ class ReviewsService implements IReviewsService {
 
       if (reviews.length === 0) {
         return {
-          success: true,
-          data: 'No reviews to export',
-          error: null,
+          success: false,
+          data: null,
+          error: 'No reviews to export',
         };
       }
 
@@ -1157,17 +1217,84 @@ class ReviewsService implements IReviewsService {
         ].join(','));
 
         const csv = [headers, ...rows].join('\n');
+        
+        // Create a blob and generate a download URL
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        
         return {
           success: true,
-          data: csv,
+          data: url,
+          error: null,
+        };
+      } else if (format === 'pdf') {
+        // Dynamic import for jsPDF to avoid SSR issues
+        const { default: jsPDF } = await import('jspdf');
+        const { default: autoTable } = await import('jspdf-autotable');
+
+        const doc = new jsPDF();
+        
+        // Add title
+        doc.setFontSize(20);
+        doc.text('Reviews Export', 14, 22);
+        
+        // Add export date
+        doc.setFontSize(10);
+        doc.text(`Exported on: ${new Date().toLocaleDateString()}`, 14, 32);
+        
+        // Prepare table data
+        const tableData = reviews.map(review => [
+          review.patient.name,
+          `${review.rating}/5`,
+          review.content.length > 50 ? review.content.substring(0, 50) + '...' : review.content,
+          review.status,
+          new Date(review.createdAt).toLocaleDateString(),
+          review.response?.content ? 'Yes' : 'No'
+        ]);
+
+        // Add table
+        autoTable(doc, {
+          head: [['Patient', 'Rating', 'Review', 'Status', 'Date', 'Response']],
+          body: tableData,
+          startY: 40,
+          styles: {
+            fontSize: 8,
+            cellPadding: 3,
+          },
+          headStyles: {
+            fillColor: [66, 139, 202],
+            textColor: 255,
+          },
+          columnStyles: {
+            2: { cellWidth: 60 }, // Review column wider
+          },
+          margin: { top: 40 },
+        });
+
+        // Add summary
+        const finalY = (doc as any).lastAutoTable.finalY || 40;
+        doc.setFontSize(12);
+        doc.text('Summary:', 14, finalY + 20);
+        doc.setFontSize(10);
+        doc.text(`Total Reviews: ${reviews.length}`, 14, finalY + 30);
+        
+        const avgRating = reviews.reduce((sum, review) => sum + review.rating, 0) / reviews.length;
+        doc.text(`Average Rating: ${avgRating.toFixed(1)}/5`, 14, finalY + 40);
+
+        // Generate blob and URL
+        const pdfBlob = doc.output('blob');
+        const url = URL.createObjectURL(pdfBlob);
+        
+        return {
+          success: true,
+          data: url,
           error: null,
         };
       } else {
-        // PDF export would be implemented here
         return {
           success: false,
           data: null,
-          error: 'PDF export is not yet implemented',
+          error: 'Unsupported export format',
         };
       }
     } catch (error: any) {
@@ -1176,6 +1303,161 @@ class ReviewsService implements IReviewsService {
         success: false,
         data: null,
         error: error.message || 'Failed to export reviews',
+      };
+    }
+  }
+
+  /**
+   * Submit a new review using the new reviews table
+   */
+  async submitReview(
+    appointmentId: string,
+    mentorId: string,
+    rating: ReviewRating,
+    content: string,
+    patientId: string,
+    isAnonymous: boolean = false
+  ): Promise<ReviewsServiceResponse<Review>> {
+    try {
+      if (!appointmentId || !mentorId || !patientId) {
+        return {
+          success: false,
+          data: null,
+          error: 'Missing required parameters',
+        };
+      }
+
+      if (rating < 1 || rating > 5) {
+        return {
+          success: false,
+          data: null,
+          error: 'Rating must be between 1 and 5',
+        };
+      }
+
+      // Insert into the new reviews table
+      const { data: review, error } = await supabase
+        .from('reviews')
+        .insert({
+          patient_id: patientId,
+          mentor_id: mentorId,
+          appointment_id: appointmentId,
+          rating: rating,
+          review_text: content,
+          is_anonymous: isAnonymous
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      // Update appointment to mark review as submitted
+      await supabase
+        .from('appointments')
+        .update({ review_submitted: true })
+        .eq('id', appointmentId);
+
+      return {
+        success: true,
+        data: {
+          id: review.id,
+          appointmentId: review.appointment_id,
+          mentorId: review.mentor_id,
+          patientId: review.patient_id,
+          patient: {
+            id: patientId,
+            name: isAnonymous ? 'Anonymous' : 'Patient',
+            avatarUrl: null,
+          },
+          rating: review.rating as ReviewRating,
+          content: review.review_text || '',
+          status: 'published' as ReviewStatus,
+          createdAt: review.created_at,
+          updatedAt: review.updated_at,
+          publishedAt: review.created_at,
+          response: null,
+          notes: [],
+          isFeatured: false,
+          displayOrder: 0,
+          keywords: [],
+          tags: [],
+        },
+        error: null,
+      };
+    } catch (error: any) {
+      console.error('Error submitting review:', error);
+        return {
+          success: false,
+          data: null,
+        error: error.message || 'Failed to submit review',
+        };
+    }
+      }
+
+  /**
+   * Get mentor reviews using the new database function
+   */
+  async getMentorReviews(mentorId: string): Promise<ReviewsServiceResponse<any[]>> {
+    try {
+      if (!mentorId) {
+        return {
+          success: false,
+          data: null,
+          error: 'Mentor ID is required',
+        };
+      }
+
+      const { data: reviews, error } = await supabase.rpc('get_mentor_reviews', {
+        mentor_uuid: mentorId
+      });
+
+      if (error) throw error;
+
+      return {
+        success: true,
+        data: reviews || [],
+        error: null,
+      };
+    } catch (error: any) {
+      console.error('Error fetching mentor reviews:', error);
+        return {
+          success: false,
+          data: null,
+        error: error.message || 'Failed to fetch mentor reviews',
+        };
+      }
+  }
+
+  /**
+   * Get mentor review statistics using the new database function
+   */
+  async getMentorReviewStats(mentorId: string): Promise<ReviewsServiceResponse<any>> {
+    try {
+      if (!mentorId) {
+        return {
+          success: false,
+          data: null,
+          error: 'Mentor ID is required',
+        };
+      }
+
+      const { data: stats, error } = await supabase.rpc('get_mentor_review_stats', {
+        mentor_uuid: mentorId
+      });
+
+      if (error) throw error;
+
+      return {
+        success: true,
+        data: stats?.[0] || null,
+        error: null,
+      };
+    } catch (error: any) {
+      console.error('Error fetching mentor review stats:', error);
+      return {
+        success: false,
+        data: null,
+        error: error.message || 'Failed to fetch mentor review stats',
       };
     }
   }

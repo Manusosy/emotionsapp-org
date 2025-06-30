@@ -242,7 +242,7 @@ export default function MoodMentorProfile() {
                   <div className="flex items-center mt-1 mb-2">
                     <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
                     <span className="ml-1 font-medium">
-                      {mentor.rating?.toFixed(1) || "5.0"}
+                      {mentor.rating ? mentor.rating.toFixed(1) : "No rating"}
                     </span>
                     <span className="ml-1 text-muted-foreground text-sm">
                       ({mentor.reviewCount || reviews.length || 0} reviews)

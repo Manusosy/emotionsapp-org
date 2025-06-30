@@ -9,13 +9,31 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
-import { RefreshCcw, MessageSquare, Eye } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { RefreshCcw, MessageSquare, Eye, Users, Plus, UserPlus, X } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Link } from "react-router-dom";
 import { useAuth } from "@/contexts/authContext";
 import { ChatButton } from "@/components/messaging/ChatButton";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+  DialogFooter,
+} from '@/components/ui/dialog';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { toast } from "sonner";
+import { supportGroupsService, SupportGroup } from '@/services/support-groups/support-groups.service';
 
 // Interface matching the patient_profiles table
 interface PatientProfile {
@@ -24,6 +42,19 @@ interface PatientProfile {
   full_name: string;
   email: string;
   created_at: string;
+  groups?: GroupMembership[];
+}
+
+interface GroupMembership {
+  id: string;
+  group_id: string;
+  status: string;
+  joined_at: string;
+  group: {
+    id: string;
+    name: string;
+    group_type: string;
+  };
 }
 
 // Helper function to get initials from a name
@@ -49,6 +80,10 @@ export default function PatientsPage() {
   const [patients, setPatients] = useState<PatientProfile[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [supportGroups, setSupportGroups] = useState<SupportGroup[]>([]);
+  const [selectedPatient, setSelectedPatient] = useState<PatientProfile | null>(null);
+  const [isAddToGroupOpen, setIsAddToGroupOpen] = useState(false);
+  const [selectedGroupId, setSelectedGroupId] = useState<string>("");
   const { user } = useAuth();
 
   const fetchPatients = async () => {
@@ -58,10 +93,10 @@ export default function PatientsPage() {
       
       console.log("Starting patient fetch process...");
       
-      // Query the patient_profiles table
+      // First, get all patient profiles
       const { data: patientProfiles, error: profilesError } = await supabase
         .from("patient_profiles")
-        .select("*");
+        .select('*');
         
       if (profilesError) {
         console.error("Error fetching from patient_profiles:", profilesError);
@@ -70,7 +105,56 @@ export default function PatientsPage() {
       
       if (patientProfiles && patientProfiles.length > 0) {
         console.log(`Found ${patientProfiles.length} patients`);
-        setPatients(patientProfiles);
+        
+        // Get all group memberships for these patients
+        const patientUserIds = patientProfiles.map(p => p.user_id);
+        
+        const { data: groupMemberships, error: membershipsError } = await supabase
+          .from("group_members")
+          .select(`
+            id,
+            group_id,
+            user_id,
+            status,
+            joined_at,
+            support_groups (
+              id,
+              name,
+              group_type
+            )
+          `)
+          .in('user_id', patientUserIds)
+          .eq('status', 'active');
+        
+        if (membershipsError) {
+          console.error("Error fetching group memberships:", membershipsError);
+          // Continue without group data
+        }
+        
+        // Map group memberships by user_id
+        const membershipsByUser = new Map<string, any[]>();
+        if (groupMemberships) {
+          groupMemberships.forEach(membership => {
+            if (!membershipsByUser.has(membership.user_id)) {
+              membershipsByUser.set(membership.user_id, []);
+            }
+            membershipsByUser.get(membership.user_id)!.push({
+              id: membership.id,
+              group_id: membership.group_id,
+              status: membership.status,
+              joined_at: membership.joined_at,
+              group: membership.support_groups
+            });
+          });
+        }
+        
+        // Transform the data to match our interface
+        const transformedPatients = patientProfiles.map(patient => ({
+          ...patient,
+          groups: membershipsByUser.get(patient.user_id) || []
+        }));
+        
+        setPatients(transformedPatients);
       } else {
         console.log("No patients found in patient_profiles table");
         
@@ -95,7 +179,8 @@ export default function PatientsPage() {
             user_id: p.auth_user_id,
             full_name: p.auth_full_name || p.auth_email.split('@')[0],
             email: p.auth_email,
-            created_at: new Date().toISOString()
+            created_at: new Date().toISOString(),
+            groups: []
           }));
           
           setPatients(formattedPatients);
@@ -109,6 +194,49 @@ export default function PatientsPage() {
     }
   };
 
+  const fetchSupportGroups = async () => {
+    if (!user) return;
+    
+    try {
+      const groups = await supportGroupsService.getMentorGroups(user.id);
+      setSupportGroups(groups);
+    } catch (error) {
+      console.error('Error fetching support groups:', error);
+    }
+  };
+
+  const handleAddToGroup = async () => {
+    if (!selectedPatient || !selectedGroupId || !user) return;
+
+    try {
+      await supportGroupsService.addMember(selectedGroupId, selectedPatient.user_id);
+      toast.success(`${selectedPatient.full_name} added to group successfully`);
+      setIsAddToGroupOpen(false);
+      setSelectedPatient(null);
+      setSelectedGroupId("");
+      fetchPatients(); // Refresh the patient list
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to add patient to group');
+    }
+  };
+
+  const handleRemoveFromGroup = async (patientId: string, groupId: string, patientName: string) => {
+    if (!confirm(`Remove ${patientName} from this group?`)) return;
+
+    try {
+      await supportGroupsService.removeMember(groupId, patientId);
+      toast.success(`${patientName} removed from group`);
+      fetchPatients(); // Refresh the patient list
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to remove patient from group');
+    }
+  };
+
+  const openAddToGroupDialog = (patient: PatientProfile) => {
+    setSelectedPatient(patient);
+    setIsAddToGroupOpen(true);
+  };
+
   const handleStartChat = (patient: PatientProfile) => {
     // In a real app, this would navigate to a chat page or open a chat modal
     console.log(`Starting chat with ${patient.full_name}`);
@@ -119,6 +247,7 @@ export default function PatientsPage() {
   useEffect(() => {
     // First fetch the initial data
     fetchPatients();
+    fetchSupportGroups();
 
     // Set up the real-time subscription
     const subscription = supabase
@@ -131,14 +260,7 @@ export default function PatientsPage() {
         }, 
         (payload) => {
           console.log('Real-time INSERT received:', payload);
-          
-          // Add the new patient to the list without refetching everything
-          if (payload.new) {
-            setPatients(currentPatients => [...currentPatients, payload.new as PatientProfile]);
-          } else {
-            // If we don't have the full data, refresh the list
-            fetchPatients();
-          }
+          fetchPatients(); // Refresh to get group memberships
         }
       )
       .on('postgres_changes',
@@ -149,18 +271,7 @@ export default function PatientsPage() {
         },
         (payload) => {
           console.log('Real-time UPDATE received:', payload);
-          
-          // Update the patient in the list without refetching everything
-          if (payload.new && payload.new.id) {
-            setPatients(currentPatients => 
-              currentPatients.map(patient => 
-                patient.id === payload.new.id ? {...patient, ...payload.new} : patient
-              )
-            );
-          } else {
-            // If we don't have the full data, refresh the list
-            fetchPatients();
-          }
+          fetchPatients(); // Refresh to get updated group memberships
         }
       )
       .on('postgres_changes',
@@ -178,9 +289,19 @@ export default function PatientsPage() {
               currentPatients.filter(patient => patient.id !== payload.old.id)
             );
           } else {
-            // If we don't have the full data, refresh the list
             fetchPatients();
           }
+        }
+      )
+      .on('postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'group_members'
+        },
+        () => {
+          // Refresh patient list when group memberships change
+          fetchPatients();
         }
       )
       .subscribe();
@@ -198,10 +319,17 @@ export default function PatientsPage() {
       console.log("Patient list for debugging:", patients.map(p => ({
         patient_id: p.id,
         patient_user_id: p.user_id,
-        patient_name: p.full_name
+        patient_name: p.full_name,
+        group_count: p.groups?.length || 0
       })));
     }
   }, [patients, user]);
+
+  // Get available groups for a patient (excluding groups they're already in)
+  const getAvailableGroups = (patient: PatientProfile) => {
+    const patientGroupIds = patient.groups?.map(g => g.group_id) || [];
+    return supportGroups.filter(group => !patientGroupIds.includes(group.id));
+  };
 
   return (
     <DashboardLayout>
@@ -232,6 +360,7 @@ export default function PatientsPage() {
                 <TableRow>
                   <TableHead>Patient</TableHead>
                   <TableHead>Email</TableHead>
+                  <TableHead>Support Groups</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -250,8 +379,45 @@ export default function PatientsPage() {
                     <TableCell className="font-mono text-sm select-none">
                       {maskEmail(patient.email)}
                     </TableCell>
+                    <TableCell>
+                      <div className="flex flex-wrap gap-1">
+                        {patient.groups && patient.groups.length > 0 ? (
+                          patient.groups.map((membership) => (
+                            <Badge 
+                              key={membership.id} 
+                              variant="secondary" 
+                              className="text-xs flex items-center gap-1"
+                            >
+                              <Users className="h-3 w-3" />
+                              {membership.group.name}
+                              <button
+                                onClick={() => handleRemoveFromGroup(
+                                  patient.user_id, 
+                                  membership.group_id, 
+                                  patient.full_name
+                                )}
+                                className="ml-1 hover:text-red-500"
+                              >
+                                <X className="h-3 w-3" />
+                              </button>
+                            </Badge>
+                          ))
+                        ) : (
+                          <span className="text-gray-500 text-sm">No groups</span>
+                        )}
+                      </div>
+                    </TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-2">
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          onClick={() => openAddToGroupDialog(patient)}
+                          disabled={getAvailableGroups(patient).length === 0}
+                        >
+                          <UserPlus className="h-4 w-4 mr-1" />
+                          Add to Group
+                        </Button>
                         <Button variant="outline" size="sm" asChild>
                           <Link to={`/mood-mentor-dashboard/patient-profile/${patient.id}`}>
                             <Eye className="h-4 w-4 mr-1" />
@@ -277,6 +443,70 @@ export default function PatientsPage() {
             No patients found. Please make sure the patient_profiles table exists in your Supabase database.
           </div>
         )}
+
+        {/* Add to Group Dialog */}
+        <Dialog open={isAddToGroupOpen} onOpenChange={setIsAddToGroupOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Add Patient to Support Group</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              {selectedPatient && (
+                <div className="p-4 bg-gray-50 rounded-lg">
+                  <div className="flex items-center gap-3">
+                    <Avatar>
+                      <AvatarImage src={`https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(selectedPatient.full_name)}`} />
+                      <AvatarFallback>{getInitials(selectedPatient.full_name)}</AvatarFallback>
+                    </Avatar>
+                    <div>
+                      <div className="font-medium">{selectedPatient.full_name}</div>
+                      <div className="text-sm text-gray-500">{maskEmail(selectedPatient.email)}</div>
+                    </div>
+                  </div>
+                </div>
+              )}
+              <div>
+                <label className="text-sm font-medium mb-2 block">Select Support Group</label>
+                <Select value={selectedGroupId} onValueChange={setSelectedGroupId}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Choose a support group" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {selectedPatient && getAvailableGroups(selectedPatient).map((group) => (
+                      <SelectItem key={group.id} value={group.id}>
+                        <div className="flex items-center gap-2">
+                          <Users className="h-4 w-4" />
+                          <span>{group.name}</span>
+                          <Badge variant="outline" className="ml-auto">
+                            {group.current_participants}/{group.max_participants}
+                          </Badge>
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button 
+                variant="outline" 
+                onClick={() => {
+                  setIsAddToGroupOpen(false);
+                  setSelectedPatient(null);
+                  setSelectedGroupId("");
+                }}
+              >
+                Cancel
+              </Button>
+              <Button 
+                onClick={handleAddToGroup}
+                disabled={!selectedGroupId}
+              >
+                Add to Group
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </DashboardLayout>
   );

@@ -11,13 +11,14 @@ import { moodMentorService } from "@/services"
 import "../styles/MoodMentors.css"
 import { motion, useScroll, useTransform, AnimatePresence } from "framer-motion"
 import { slugify } from '@/utils/formatters'
+import { supabase } from '@/lib/supabase'
 
 type MoodMentor = {
   id: string
   name: string
   credentials: string
   specialty: string
-  rating: number
+  rating: number | null
   totalRatings: number
   feedback: number
   location: string
@@ -72,8 +73,8 @@ const MoodMentors = () => {
         console.log("Mood mentor service response:", mentorsData)
         
         if (mentorsData && mentorsData.length > 0) {
-          // Map to expected MoodMentor format
-          const mappedMoodMentors = mentorsData.map((mentor) => {
+          // Map to expected MoodMentor format with real review data
+          const mappedMoodMentors = await Promise.all(mentorsData.map(async (mentor) => {
             console.log("Processing mood mentor:", mentor.fullName || mentor.id)
             
             // Get location data
@@ -113,6 +114,33 @@ const MoodMentors = () => {
             if (mentor.education && Array.isArray(mentor.education) && mentor.education.length > 0) {
               education = mentor.education[0].degree || "";
             }
+
+            // Get real review statistics
+            let realRating = null;
+            let reviewCount = 0;
+            let satisfaction = 95; // Default satisfaction
+
+            if (mentor.userId) {
+              try {
+                // Use the same RPC function we created earlier
+                const { data: reviewStats, error: reviewError } = await supabase.rpc('get_mentor_review_stats', {
+                  mentor_uuid: mentor.userId
+                });
+
+                if (!reviewError && reviewStats && reviewStats.length > 0) {
+                  const stats = reviewStats[0];
+                  realRating = parseFloat(stats.average_rating || '0');
+                  reviewCount = stats.total_reviews || 0;
+                  
+                  // Calculate satisfaction percentage based on rating (rating/5 * 100)
+                  if (realRating > 0) {
+                    satisfaction = Math.round((realRating / 5) * 100);
+                  }
+                }
+              } catch (error) {
+                console.warn('Error fetching review stats for mentor:', mentor.userId, error);
+              }
+            }
               
             // Format data into our frontend model  
             return {
@@ -120,38 +148,41 @@ const MoodMentors = () => {
               name: name,
               credentials: mentor.specialty || "Mental Health Specialist",
               specialty: mentor.specialty || "Mental Health Support",
-              rating: mentor.rating || 4.5,
-              totalRatings: 10,
-              feedback: 10,
+              rating: realRating,
+              totalRatings: reviewCount,
+              feedback: reviewCount,
               location: mentor.location || "Kigali, Rwanda",
               city: city,
               country: country,
               isFree: mentor.isFree ?? true,
               therapyTypes: therapyTypes,
               image: image,
-              satisfaction: 95,
+              satisfaction: satisfaction,
               gender: mentor.gender || "Male",
               nameSlug: nameSlug,
               education: education
             }
-          })
+          }))
+          
+          // Wait for all async operations to complete
+          const mentorsWithReviews = await mappedMoodMentors;
           
           // Immediately set both real mentors and filtered mentors to show all
-          setRealMoodMentors(mappedMoodMentors)
-          setFilteredMoodMentors(mappedMoodMentors)
+          setRealMoodMentors(mentorsWithReviews)
+          setFilteredMoodMentors(mentorsWithReviews)
           
           // Extract unique specialties from the mentors
-          const allTherapyTypes = mappedMoodMentors.flatMap(mentor => mentor.therapyTypes);
+          const allTherapyTypes = mentorsWithReviews.flatMap(mentor => mentor.therapyTypes);
           const uniqueSpecialties = Array.from(new Set(allTherapyTypes)).filter(Boolean);
           setAvailableSpecialties(uniqueSpecialties.length > 0 ? uniqueSpecialties : availableSpecialties);
           
           // Extract unique countries
           const countries = Array.from(new Set(
-            mappedMoodMentors.map(mentor => mentor.country)
+            mentorsWithReviews.map(mentor => mentor.country)
           )).filter(Boolean);
           setAvailableCountries(countries.length > 0 ? countries : []);
           
-          console.log("Successfully fetched real mood mentors:", mappedMoodMentors.length)
+          console.log("Successfully fetched real mood mentors:", mentorsWithReviews.length)
         } else {
           console.log("No mood mentors returned from service")
           setRealMoodMentors([])
@@ -551,7 +582,7 @@ const MoodMentors = () => {
                                 transition={{ duration: 0.5, delay: 0.5 }}
                               >
                                 <MessageSquare className="h-4 w-4 mr-1" />
-                                {moodMentor.feedback} Feedback
+                                {moodMentor.feedback > 0 ? `${moodMentor.feedback} Reviews` : 'No reviews yet'}
                               </motion.div>
                               <motion.div 
                                 className="mt-1 text-sm text-gray-600 flex items-center"
@@ -574,29 +605,43 @@ const MoodMentors = () => {
                             viewport={{ once: false }}
                             transition={{ duration: 0.6, delay: 0.7 }}
                           >
-                            {[...Array(5)].map((_, i) => (
-                              <motion.svg 
-                                key={i} 
-                                className="w-4 h-4 text-yellow-400" 
-                                fill="currentColor" 
-                                viewBox="0 0 20 20"
-                                initial={{ opacity: 0, scale: 0 }}
-                                whileInView={{ opacity: 1, scale: 1 }}
+                            {moodMentor.rating ? (
+                              <>
+                                {[...Array(5)].map((_, i) => (
+                                  <motion.svg 
+                                    key={i} 
+                                    className={`w-4 h-4 ${i < Math.round(moodMentor.rating!) ? 'text-yellow-400' : 'text-gray-300'}`}
+                                    fill="currentColor" 
+                                    viewBox="0 0 20 20"
+                                    initial={{ opacity: 0, scale: 0 }}
+                                    whileInView={{ opacity: 1, scale: 1 }}
+                                    viewport={{ once: false }}
+                                    transition={{ duration: 0.3, delay: 0.8 + (i * 0.1) }}
+                                  >
+                                    <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                                  </motion.svg>
+                                ))}
+                                <motion.span 
+                                  className="text-sm text-gray-600 ml-1"
+                                  initial={{ opacity: 0 }}
+                                  whileInView={{ opacity: 1 }}
+                                  viewport={{ once: false }}
+                                  transition={{ duration: 0.3, delay: 1.3 }}
+                                >
+                                  {moodMentor.rating.toFixed(1)} ({moodMentor.totalRatings})
+                                </motion.span>
+                              </>
+                            ) : (
+                              <motion.span 
+                                className="text-sm text-gray-500 ml-1"
+                                initial={{ opacity: 0 }}
+                                whileInView={{ opacity: 1 }}
                                 viewport={{ once: false }}
-                                transition={{ duration: 0.3, delay: 0.8 + (i * 0.1) }}
+                                transition={{ duration: 0.3, delay: 1.3 }}
                               >
-                                <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                              </motion.svg>
-                            ))}
-                            <motion.span 
-                              className="text-sm text-gray-600 ml-1"
-                              initial={{ opacity: 0 }}
-                              whileInView={{ opacity: 1 }}
-                              viewport={{ once: false }}
-                              transition={{ duration: 0.3, delay: 1.3 }}
-                            >
-                              ({moodMentor.totalRatings})
-                            </motion.span>
+                                No rating yet
+                              </motion.span>
+                            )}
                           </motion.div>
                           
                           <motion.div 

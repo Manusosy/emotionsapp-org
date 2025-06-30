@@ -134,6 +134,57 @@ export interface SupportGroup {
   updated_at: string;
 }
 
+export interface MentorReview {
+  id: string;
+  mentor_id: string;
+  patient_id: string;
+  appointment_id: string | null;
+  rating: number;
+  review_text: string | null;
+  status: 'pending' | 'published' | 'rejected' | 'flagged';
+  is_featured: boolean;
+  display_order: number;
+  keywords: string[];
+  tags: string[];
+  created_at: string;
+  updated_at: string;
+  published_at: string | null;
+}
+
+export interface ReviewResponse {
+  id: string;
+  review_id: string;
+  mentor_id: string;
+  content: string;
+  is_published: boolean;
+  published_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ReviewNote {
+  id: string;
+  review_id: string;
+  mentor_id: string;
+  content: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ReviewRequestLink {
+  id: string;
+  mentor_id: string;
+  appointment_id: string | null;
+  patient_id: string | null;
+  token: string;
+  is_used: boolean;
+  used_at: string | null;
+  email_sent: boolean;
+  email_sent_at: string | null;
+  created_at: string;
+  expires_at: string;
+}
+
 // Database namespace mock to match Supabase-generated types
 export namespace Database {
   export namespace schema {
@@ -164,6 +215,18 @@ export namespace Database {
       }
       export interface support_groups {
         Row: SupportGroup;
+      }
+      export interface mentor_reviews {
+        Row: MentorReview;
+      }
+      export interface review_responses {
+        Row: ReviewResponse;
+      }
+      export interface review_notes {
+        Row: ReviewNote;
+      }
+      export interface review_request_links {
+        Row: ReviewRequestLink;
       }
     }
     export namespace Enums {

@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -21,7 +21,9 @@ import {
   Heart,
   ExternalLink,
   ArrowRight,
-  Star
+  Star,
+  Video,
+  MapPinIcon
 } from "lucide-react"
 import { 
   Dialog,
@@ -38,27 +40,11 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { toast } from "sonner";
-
-type HelpGroup = {
-  id: string;
-  name: string;
-  description: string;
-  category: string;
-  meetingType: "in-person" | "online" | "hybrid";
-  schedule: string;
-  location?: string;
-  facilitator: {
-    name: string;
-    role: string;
-    avatar: string;
-  };
-  memberCount: number;
-  topics: string[];
-  nextMeeting?: string;
-  isOpen: boolean;
-}
+import { supportGroupsService, SupportGroup } from "@/services/support-groups/support-groups.service"
+import { useAuth } from "@/hooks/use-auth"
 
 const HelpGroups = () => {
+  const { user } = useAuth()
   const [searchQuery, setSearchQuery] = useState("")
   const [activeCategory, setActiveCategory] = useState("all")
   const [showFilters, setShowFilters] = useState(false)
@@ -68,6 +54,10 @@ const HelpGroups = () => {
   const [selectedAvailability, setSelectedAvailability] = useState<string[]>([])
   const [topicFilter, setTopicFilter] = useState("")
   const [showLeadershipDialog, setShowLeadershipDialog] = useState(false)
+  const [helpGroups, setHelpGroups] = useState<SupportGroup[]>([])
+  const [loading, setLoading] = useState(true)
+  const [selectedGroup, setSelectedGroup] = useState<SupportGroup | null>(null)
+  const [showGroupDetails, setShowGroupDetails] = useState(false)
   
   const fadeInUp = {
     hidden: { opacity: 0, y: 20 },
@@ -98,146 +88,77 @@ const HelpGroups = () => {
     { id: "youth", label: "Youth Support" }
   ]
   
-  const helpGroups: HelpGroup[] = [
-    {
-      id: "1",
-      name: "Anxiety Management Circle",
-      description: "A supportive group focused on practical strategies to manage anxiety and panic disorders through mindfulness and cognitive behavioral techniques.",
-      category: "anxiety",
-      meetingType: "hybrid",
-      schedule: "Every Tuesday, 6:00 PM - 7:30 PM",
-      location: "Community Center, Kigali",
-      facilitator: {
-        name: "Dr. Marie Uwase",
-        role: "Clinical Psychologist",
-        avatar: "https://randomuser.me/api/portraits/women/32.jpg"
-      },
-      memberCount: 18,
-      topics: ["Panic attacks", "Social anxiety", "Mindfulness", "Breathing techniques"],
-      nextMeeting: "Tuesday, May 3rd",
-      isOpen: true
-    },
-    {
-      id: "2",
-      name: "Healing Together",
-      description: "A compassionate space for those experiencing depression to connect, share experiences, and learn effective coping mechanisms.",
-      category: "depression",
-      meetingType: "online",
-      schedule: "Every Saturday, 10:00 AM - 11:30 AM",
-      facilitator: {
-        name: "Jean-Paul Mugabo",
-        role: "Mental Health Counselor",
-        avatar: "https://randomuser.me/api/portraits/men/45.jpg"
-      },
-      memberCount: 24,
-      topics: ["Depression management", "Self-care", "Mood tracking", "Cognitive restructuring"],
-      nextMeeting: "Saturday, May 7th",
-      isOpen: true
-    },
-    {
-      id: "3",
-      name: "Grief Companions",
-      description: "A gentle group for those navigating the complex journey of grief and loss, offering understanding and healing through shared experiences.",
-      category: "grief",
-      meetingType: "in-person",
-      schedule: "Every other Thursday, 5:30 PM - 7:00 PM",
-      location: "Healing Center, Musanze",
-      facilitator: {
-        name: "Claire Mukamana",
-        role: "Grief Counselor",
-        avatar: "https://randomuser.me/api/portraits/women/65.jpg"
-      },
-      memberCount: 15,
-      topics: ["Bereavement", "Complex grief", "Coping skills", "Memorial activities"],
-      nextMeeting: "Thursday, May 5th",
-      isOpen: true
-    },
-    {
-      id: "4",
-      name: "Youth Resilience Network",
-      description: "A vibrant community for young people 15-24 to build emotional resilience, discuss challenges, and develop positive mental health habits.",
-      category: "youth",
-      meetingType: "hybrid",
-      schedule: "Every Monday, 4:00 PM - 5:30 PM",
-      location: "Youth Center, Rubavu",
-      facilitator: {
-        name: "Eric Mugisha",
-        role: "Youth Counselor",
-        avatar: "https://randomuser.me/api/portraits/men/22.jpg"
-      },
-      memberCount: 32,
-      topics: ["Teen stress", "Academic pressure", "Peer relationships", "Identity"],
-      nextMeeting: "Monday, May 2nd",
-      isOpen: true
-    },
-    {
-      id: "5",
-      name: "Trauma Recovery Path",
-      description: "A structured, trauma-informed group providing education, coping skills, and peer support for those healing from traumatic experiences.",
-      category: "trauma",
-      meetingType: "in-person",
-      schedule: "Every Wednesday, 6:00 PM - 7:30 PM",
-      location: "Wellness Institute, Kigali",
-      facilitator: {
-        name: "Dr. Samuel Nkusi",
-        role: "Trauma Specialist",
-        avatar: "https://randomuser.me/api/portraits/men/36.jpg"
-      },
-      memberCount: 12,
-      topics: ["PTSD", "Safety skills", "Emotional regulation", "Trauma narratives"],
-      nextMeeting: "Wednesday, May 4th",
-      isOpen: false
-    },
-    {
-      id: "6",
-      name: "Recovery Together",
-      description: "A compassionate and confidential community for individuals on their addiction recovery journey. We focus on holistic healing approaches, practical coping strategies, and building a supportive network for sustainable recovery.",
-      category: "addiction",
-      meetingType: "hybrid",
-      schedule: "Every Thursday, 5:00 PM - 6:30 PM",
-      location: "Wellness Center, Kigali",
-      facilitator: {
-        name: "Agnes Uwineza",
-        role: "Addiction Recovery Specialist",
-        avatar: "https://randomuser.me/api/portraits/women/75.jpg"
-      },
-      memberCount: 26,
-      topics: ["Substance abuse", "Relapse prevention", "Building support systems", "Mindfulness for recovery"],
-      nextMeeting: "Thursday, May 12th",
-      isOpen: true
+  useEffect(() => {
+    loadGroups()
+  }, [])
+
+  const loadGroups = async () => {
+    try {
+      setLoading(true)
+      const groups = await supportGroupsService.getActiveGroups()
+      setHelpGroups(groups)
+    } catch (error) {
+      console.error('Error loading groups:', error)
+      toast.error('Failed to load support groups')
+    } finally {
+      setLoading(false)
     }
-  ]
+  }
+
+  const handleJoinGroup = async (groupId: string) => {
+    if (!user) {
+      toast.error('Please log in to join a group')
+      return
+    }
+
+    try {
+      await supportGroupsService.joinGroup(groupId, user.id)
+      toast.success('Successfully joined the group!')
+      loadGroups() // Refresh the groups
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to join group')
+    }
+  }
+
+  const handleViewDetails = (group: SupportGroup) => {
+    setSelectedGroup(group)
+    setShowGroupDetails(true)
+  }
+
+  // Check if current user is a mentor
+  const isMentor = user?.user_metadata?.role === 'mood_mentor' || user?.user_metadata?.user_type === 'mentor'
+
+  // Check if current user owns this group
+  const isGroupOwner = (group: SupportGroup) => {
+    return isMentor && user && group.mood_mentor_id === user.id
+  }
   
   const filteredGroups = helpGroups.filter(group => {
-    if (activeCategory !== "all" && group.category !== activeCategory) {
+    if (activeCategory !== "all" && group.group_type !== activeCategory) {
       return false;
     }
     if (searchQuery && !group.name.toLowerCase().includes(searchQuery.toLowerCase()) && 
         !group.description.toLowerCase().includes(searchQuery.toLowerCase())) {
       return false;
     }
-    if (selectedMeetingTypes.length > 0 && !selectedMeetingTypes.includes(group.meetingType)) {
+    if (selectedMeetingTypes.length > 0 && !selectedMeetingTypes.includes(group.meeting_type)) {
       return false;
     }
     if (selectedAvailability.length > 0) {
-      if (selectedAvailability.includes("open") && !group.isOpen) {
+      if (selectedAvailability.includes("open") && group.current_participants >= group.max_participants) {
         return false;
       }
-      if (selectedAvailability.includes("closed") && group.isOpen) {
+      if (selectedAvailability.includes("closed") && group.current_participants < group.max_participants) {
         return false;
       }
-    }
-    if (topicFilter && !group.topics.some(topic => 
-      topic.toLowerCase().includes(topicFilter.toLowerCase()))) {
-      return false;
     }
     return true;
   });
   
   const getMeetingTypeIcon = (type: string) => {
     switch(type) {
-      case "in-person": return <MapPin className="w-4 h-4" />;
-      case "online": return <MessageCircle className="w-4 h-4" />;
+      case "in-person": return <MapPinIcon className="w-4 h-4" />;
+      case "online": return <Video className="w-4 h-4" />;
       case "hybrid": return <Users className="w-4 h-4" />;
       default: return <Users className="w-4 h-4" />;
     }
@@ -282,6 +203,19 @@ const HelpGroups = () => {
     setSelectedAvailability([]);
     setTopicFilter("");
     setShowFilters(false);
+  };
+
+  const formatSchedule = (schedule: { day: string; time: string; frequency?: string }[]) => {
+    if (!schedule || schedule.length === 0) return "Schedule TBD";
+    
+    const firstSchedule = schedule[0];
+    const time = new Date(`2000-01-01T${firstSchedule.time}`).toLocaleTimeString([], { 
+      hour: 'numeric', 
+      minute: '2-digit', 
+      hour12: true 
+    });
+    
+    return `Every ${firstSchedule.day}, ${time}`;
   };
 
   // Define schema for the leadership application form
@@ -516,17 +450,17 @@ const HelpGroups = () => {
                       <div className="ml-2">
                         <CardTitle className="text-2xl font-bold text-gray-800 text-left">{group.name}</CardTitle>
                         <div className="flex flex-wrap gap-2 my-2">
-                          <Badge className={`${getMeetingTypeColor(group.meetingType)} border-0`}>
-                            {getMeetingTypeIcon(group.meetingType)}
-                            <span className="ml-1">{getMeetingTypeLabel(group.meetingType)}</span>
+                          <Badge className={`${getMeetingTypeColor(group.meeting_type)} border-0`}>
+                            {getMeetingTypeIcon(group.meeting_type)}
+                            <span className="ml-1">{getMeetingTypeLabel(group.meeting_type)}</span>
                           </Badge>
                           <Badge className="bg-blue-100 text-blue-700 border-0">
-                            <Users className="w-3 h-3 mr-1" /> {group.memberCount} members
+                            <Users className="w-3 h-3 mr-1" /> {group.current_participants} members
                           </Badge>
-                          {group.isOpen ? (
+                          {group.current_participants < group.max_participants ? (
                             <Badge className="bg-green-100 text-green-700 border-0">Open</Badge>
                           ) : (
-                            <Badge className="bg-amber-100 text-amber-700 border-0">Closed</Badge>
+                            <Badge className="bg-amber-100 text-amber-700 border-0">Full</Badge>
                           )}
                         </div>
                       </div>
@@ -543,10 +477,7 @@ const HelpGroups = () => {
                             <CalendarDays className="h-4 w-4 text-[#20c0f3]" />
                           </div>
                           <div className="text-left">
-                            <p className="font-medium text-gray-700 text-left">{group.schedule}</p>
-                            {group.nextMeeting && (
-                              <p className="text-sm text-[#20c0f3] text-left">Next meeting: {group.nextMeeting}</p>
-                            )}
+                            <p className="font-medium text-gray-700 text-left">{formatSchedule(group.meeting_schedule)}</p>
                           </div>
                         </div>
                         
@@ -561,11 +492,9 @@ const HelpGroups = () => {
                       </div>
                       
                       <div className="flex flex-wrap gap-1.5 mb-2">
-                        {group.topics.map((topic, index) => (
-                          <Badge key={index} variant="outline" className="bg-gray-50 text-gray-700 border-0 text-xs">
-                            {topic}
+                        <Badge variant="outline" className="bg-gray-50 text-gray-700 border-0 text-xs">
+                          {group.group_type}
                           </Badge>
-                        ))}
                       </div>
                     </CardContent>
                   </div>
@@ -576,11 +505,11 @@ const HelpGroups = () => {
                       <h4 className="text-sm uppercase text-gray-500 font-medium mb-3 text-center font-jakarta">Facilitator</h4>
                       <div className="flex flex-col items-center text-center mb-6">
                         <Avatar className="h-16 w-16 mb-2 border-2 border-white shadow-md">
-                          <AvatarImage src={group.facilitator.avatar} alt={group.facilitator.name} />
-                          <AvatarFallback>{group.facilitator.name.charAt(0)}</AvatarFallback>
+                          <AvatarImage src={group.facilitator?.avatar} alt={group.facilitator?.name} />
+                          <AvatarFallback>{group.facilitator?.name?.charAt(0) || 'M'}</AvatarFallback>
                         </Avatar>
-                        <p className="font-medium text-gray-800">{group.facilitator.name}</p>
-                        <p className="text-xs text-gray-500">{group.facilitator.role}</p>
+                        <p className="font-medium text-gray-800">{group.facilitator?.name || 'Mental Health Professional'}</p>
+                        <p className="text-xs text-gray-500">{group.facilitator?.role || 'Facilitator'}</p>
                         
                         <div className="flex items-center mt-2">
                           <Star className="h-3 w-3 fill-amber-400 text-amber-400" />
@@ -593,12 +522,42 @@ const HelpGroups = () => {
                     </div>
                     
                     <div className="space-y-2 mt-auto">
-                      <Button variant="outline" className="w-full border-gray-200 text-gray-700 hover:text-[#20c0f3] hover:border-[#20c0f3]">
+                      <Button 
+                        variant="outline" 
+                        className="w-full border-gray-200 text-gray-700 hover:text-[#20c0f3] hover:border-[#20c0f3]"
+                        onClick={() => handleViewDetails(group)}
+                      >
                         <Info className="mr-2 h-4 w-4" /> Details
                       </Button>
-                      <Button className="w-full bg-[#20c0f3] hover:bg-[#0bb2e8] text-white">
+                      {isGroupOwner(group) ? (
+                        <Button 
+                          className="w-full bg-green-600 hover:bg-green-700 text-white"
+                          onClick={() => window.open('/mood-mentors/groups', '_blank')}
+                        >
+                          Manage Group
+                        </Button>
+                      ) : isMentor ? (
+                        <Button 
+                          className="w-full bg-gray-400 text-white cursor-not-allowed"
+                          disabled
+                        >
+                          Mentor View Only
+                        </Button>
+                      ) : group.current_participants >= group.max_participants ? (
+                        <Button 
+                          className="w-full bg-gray-400 text-white cursor-not-allowed"
+                          disabled
+                        >
+                          Group Full
+                        </Button>
+                      ) : (
+                        <Button 
+                          className="w-full bg-[#20c0f3] hover:bg-[#0bb2e8] text-white"
+                          onClick={() => handleJoinGroup(group.id)}
+                        >
                         Join Group
                       </Button>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -682,7 +641,118 @@ const HelpGroups = () => {
         </div>
       </div>
 
-      {/* Add the dialog component at the end of the component (before the last closing tag) */}
+      {/* Group Details Dialog */}
+      <Dialog open={showGroupDetails} onOpenChange={setShowGroupDetails}>
+        <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-2xl font-bold text-[#001A41] text-left font-jakarta">
+              {selectedGroup?.name}
+            </DialogTitle>
+            <DialogDescription className="text-gray-600 text-left">
+              {selectedGroup?.description}
+            </DialogDescription>
+          </DialogHeader>
+          
+          {selectedGroup && (
+            <div className="space-y-6">
+              {/* Meeting Information */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-3">
+                  <h3 className="font-semibold text-gray-900">Meeting Details</h3>
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      <Badge className={`${getMeetingTypeColor(selectedGroup.meeting_type)} border-0`}>
+                        {getMeetingTypeIcon(selectedGroup.meeting_type)}
+                        <span className="ml-1">{getMeetingTypeLabel(selectedGroup.meeting_type)}</span>
+                      </Badge>
+                    </div>
+                    <p className="text-sm text-gray-600">
+                      <CalendarDays className="inline w-4 h-4 mr-1" />
+                      {formatSchedule(selectedGroup.meeting_schedule)}
+                    </p>
+                    {selectedGroup.location && (
+                      <p className="text-sm text-gray-600">
+                        <MapPin className="inline w-4 h-4 mr-1" />
+                        {selectedGroup.location}
+                      </p>
+                    )}
+                  </div>
+                </div>
+                
+                <div className="space-y-3">
+                  <h3 className="font-semibold text-gray-900">Group Information</h3>
+                  <div className="space-y-2">
+                    <p className="text-sm text-gray-600">
+                      <Users className="inline w-4 h-4 mr-1" />
+                      {selectedGroup.current_participants} / {selectedGroup.max_participants} members
+                    </p>
+                    <p className="text-sm text-gray-600">
+                      <Tag className="inline w-4 h-4 mr-1" />
+                      Focus: {selectedGroup.group_type}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Facilitator Information */}
+              {selectedGroup.facilitator && (
+                <div>
+                  <h3 className="font-semibold text-gray-900 mb-3">Facilitator</h3>
+                  <div className="flex items-center gap-4 p-4 bg-gray-50 rounded-lg">
+                    <Avatar className="h-12 w-12">
+                      <AvatarImage src={selectedGroup.facilitator.avatar} alt={selectedGroup.facilitator.name} />
+                      <AvatarFallback>{selectedGroup.facilitator.name.charAt(0)}</AvatarFallback>
+                    </Avatar>
+                    <div>
+                      <p className="font-medium text-gray-900">{selectedGroup.facilitator.name}</p>
+                      <p className="text-sm text-gray-600">{selectedGroup.facilitator.role}</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Action Buttons */}
+              <div className="flex gap-3 pt-4">
+                {isGroupOwner(selectedGroup) ? (
+                  <Button 
+                    className="flex-1 bg-green-600 hover:bg-green-700 text-white"
+                    onClick={() => {
+                      window.open('/mood-mentors/groups', '_blank');
+                      setShowGroupDetails(false);
+                    }}
+                  >
+                    Manage Group
+                  </Button>
+                ) : isMentor ? (
+                  <Button className="flex-1 bg-gray-400 text-white cursor-not-allowed" disabled>
+                    Mentor View Only
+                  </Button>
+                ) : selectedGroup.current_participants >= selectedGroup.max_participants ? (
+                  <Button className="flex-1 bg-gray-400 text-white cursor-not-allowed" disabled>
+                    Group Full
+                  </Button>
+                ) : (
+                  <Button 
+                    className="flex-1 bg-[#20c0f3] hover:bg-[#0bb2e8] text-white"
+                    onClick={() => {
+                      handleJoinGroup(selectedGroup.id);
+                      setShowGroupDetails(false);
+                    }}
+                  >
+                    <Heart className="w-4 h-4 mr-2" />
+                    Join This Group
+                  </Button>
+                )}
+                <Button variant="outline" onClick={() => setShowGroupDetails(false)}>
+                  Close
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Leadership Application Dialog */}
       <Dialog open={showLeadershipDialog} onOpenChange={setShowLeadershipDialog}>
         <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
           <DialogHeader>

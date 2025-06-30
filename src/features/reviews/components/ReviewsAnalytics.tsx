@@ -22,12 +22,24 @@ export function ReviewsAnalytics({ stats, isLoading }: ReviewsAnalyticsProps) {
     name: status.charAt(0).toUpperCase() + status.slice(1),
   }));
 
-  const trendData = [...stats.reviewsOverTime]
+  const trendData = [...(stats.reviewsOverTime || [])]
     .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
-    .map(item => ({
+    .map(item => {
+      try {
+        const date = new Date(item.date);
+        return {
+          ...item,
+          date: format(date, 'MMM yyyy'),
+        };
+      } catch (error) {
+        console.warn('Invalid date in trend data:', item.date);
+        return {
       ...item,
-      date: format(parseISO(item.date), 'MMM d'),
-    }));
+          date: 'Invalid Date',
+        };
+      }
+    })
+    .filter(item => item.date !== 'Invalid Date');
 
   // Colors for the charts
   const ratingColors = ["#ff7d7d", "#ff9b7d", "#ffd57d", "#b2e490", "#7dd87d"];

@@ -33,6 +33,15 @@ export interface ReviewNote {
   updatedAt: string;
 }
 
+export interface AppointmentDetails {
+  id: string;
+  scheduled_at: string;
+  duration: number;
+  notes: string | null;
+  status: string;
+  type: string;
+}
+
 export interface Review {
   id: string;
   appointmentId: string;
@@ -51,6 +60,7 @@ export interface Review {
   displayOrder: number;
   keywords?: string[];
   tags?: string[];
+  appointmentDetails?: AppointmentDetails | null;
 }
 
 export interface ReviewFilter {

@@ -24,6 +24,7 @@ import MoodMentorPatientsPage from "@/features/mood_mentors/pages/PatientsPage";
 import MoodMentorGroupsPage from "@/features/mood_mentors/pages/GroupsPage";
 import MoodMentorResourcesPage from "@/features/mood_mentors/pages/ResourcesPage";
 import DashboardResourcesPage from "@/features/dashboard/pages/ResourcesPage";
+import SupportGroupsPage from "@/features/dashboard/pages/SupportGroupsPage";
 import BookingPage from "@/features/booking/pages/BookingPage";
 import PatientDashboard from "@/features/dashboard/pages/PatientDashboard";
 import PatientAppointmentsPage from "@/features/dashboard/pages/AppointmentsPage";
@@ -331,6 +332,11 @@ const AppContent = () => {
                   <DashboardResourcesPage />
                 </ProtectedErrorBoundary>
               } />
+              <Route path="/patient-dashboard/support-groups" element={
+                <ProtectedErrorBoundary dashboardPath="/patient-dashboard">
+                  <SupportGroupsPage />
+                </ProtectedErrorBoundary>
+              } />
               <Route path="/patient-dashboard/favorites" element={
                 <ProtectedErrorBoundary dashboardPath="/patient-dashboard">
                   <FavoritesPage />
@@ -524,7 +530,7 @@ const App = () => {
     const initDb = async () => {
       try {
         console.log('Initializing database functions...');
-        await setupDatabaseFunctions();
+        // await setupDatabaseFunctions(); // Disabled - causing errors and not needed for reviews system
       } catch (error) {
         console.error('Error initializing database functions:', error);
       }

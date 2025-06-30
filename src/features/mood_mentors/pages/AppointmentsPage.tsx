@@ -228,7 +228,6 @@ export default function AppointmentsPage() {
         start_time: appointment.start_time,
         end_time: appointment.end_time,
         meeting_type: appointment.meeting_type as 'video' | 'audio' | 'chat',
-        meeting_type: appointment.meeting_type,
         created_at: appointment.created_at,
         updated_at: appointment.updated_at
       } as AppointmentDisplay));

@@ -23,7 +23,8 @@ export interface MoodMentor {
   therapy_types: string[];
   specialties: string[];
   session_duration: '30 Min' | '45 Min' | '60 Min' | '90 Min';
-  rating?: number;
+  rating?: number | null;
+  reviewCount?: number;
   gender: 'Male' | 'Female' | 'Non-binary' | 'Prefer not to say';
   location: string;
   name_slug: string;
@@ -53,7 +54,8 @@ export interface MoodMentorUI {
   therapyTypes: string[];
   specialties: string[];
   sessionDuration: '30 Min' | '45 Min' | '60 Min' | '90 Min';
-  rating?: number;
+  rating?: number | null;
+  reviewCount?: number;
   gender: 'Male' | 'Female' | 'Non-binary' | 'Prefer not to say';
   location: string;
   nameSlug: string;

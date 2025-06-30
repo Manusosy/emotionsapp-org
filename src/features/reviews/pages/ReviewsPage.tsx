@@ -31,7 +31,8 @@ import {
 } from '@/components/ui/dialog';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
-import { Star, Download, Upload, BarChart2, Mail } from 'lucide-react';
+import { Star, Download, Upload, BarChart2, Mail, AlertTriangle } from 'lucide-react';
+import { Link } from 'react-router-dom';
 
 export default function ReviewsPage() {
   const { user } = useAuth();
@@ -42,6 +43,7 @@ export default function ReviewsPage() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isExportDialogOpen, setIsExportDialogOpen] = useState(false);
   const [isRequestDialogOpen, setIsRequestDialogOpen] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<ReviewFilter>({
     status: 'all',
     rating: 'all',
@@ -68,15 +70,7 @@ export default function ReviewsPage() {
   });
   const [isStatsLoading, setIsStatsLoading] = useState(true);
 
-  // Load reviews on component mount and when filters change
-  useEffect(() => {
-    if (user) {
-      fetchReviews();
-      fetchStats();
-    }
-  }, [user, filter]);
-
-  // Fetch reviews with filters
+  // Define fetchReviews and fetchStats before using them
   const fetchReviews = async () => {
     try {
       setIsLoading(true);
@@ -107,7 +101,6 @@ export default function ReviewsPage() {
     }
   };
 
-  // Fetch review stats
   const fetchStats = async () => {
     try {
       setIsStatsLoading(true);
@@ -130,6 +123,62 @@ export default function ReviewsPage() {
       setIsStatsLoading(false);
     }
   };
+
+  // Load reviews on component mount and when filters change
+  useEffect(() => {
+    const checkUserAndFetchData = async () => {
+      try {
+        setIsLoading(true);
+        setError(null);
+
+        if (!user) {
+          setError('Please sign in to view reviews');
+          return;
+        }
+
+        const userRole = user.user_metadata?.role;
+        if (userRole !== 'mood_mentor') {
+          setError('Only mentors can access the reviews dashboard');
+          return;
+        }
+
+        await Promise.all([
+          fetchReviews(),
+          fetchStats()
+        ]);
+      } catch (error: any) {
+        console.error('Error in reviews page:', error);
+        setError(error.message || 'An error occurred while loading the reviews dashboard');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    checkUserAndFetchData();
+  }, [user, filter, activeTab]);
+
+  // If there's an error, show error state
+  if (error) {
+    return (
+      <DashboardLayout>
+        <div className="flex flex-col items-center justify-center min-h-[60vh] p-8 text-center">
+          <div className="rounded-full bg-red-100 p-3">
+            <AlertTriangle className="h-6 w-6 text-red-600" />
+          </div>
+          <h3 className="mt-4 text-lg font-medium text-gray-900">{error}</h3>
+          <p className="mt-2 text-sm text-gray-500">
+            {error === 'Please sign in to view reviews' ? (
+              <>
+                Please <Link to="/mentor-signin" className="text-blue-600 hover:underline">sign in</Link> to access the reviews dashboard.
+              </>
+            ) : (
+              'If you believe this is an error, please contact support.'
+            )}
+          </p>
+        </div>
+      </DashboardLayout>
+    );
+  }
 
   // Handle tab change
   const handleTabChange = (value: string) => {
@@ -377,17 +426,28 @@ export default function ReviewsPage() {
         format
       );
 
-      if (!success || !data) {
+      if (!success) {
         throw new Error(error || `Failed to export reviews as ${format.toUpperCase()}`);
+      }
+
+      if (!data) {
+        toast.error('No reviews available to export');
+        setIsExportDialogOpen(false);
+        return;
       }
 
       // Create a download link
       const link = document.createElement('a');
       link.href = data;
-      link.download = `reviews-export-${format}.${format}`;
+      link.download = `reviews-export-${new Date().toISOString().split('T')[0]}.${format}`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
+
+      // Clean up the blob URL
+      setTimeout(() => {
+        URL.revokeObjectURL(data);
+      }, 1000);
 
       toast.success(`Reviews exported as ${format.toUpperCase()}`);
       setIsExportDialogOpen(false);
