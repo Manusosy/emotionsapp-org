@@ -159,6 +159,8 @@ const SupportGroupsPage = () => {
     if (!user) return;
     
     try {
+      console.log('Frontend: Attempting to join group', { groupId, userId: user.id, userEmail: user.email });
+      
       await supportGroupsService.joinGroup(groupId, user.id);
       toast.success('Successfully joined the support group!');
       
@@ -168,8 +170,9 @@ const SupportGroupsPage = () => {
       
       fetchGroups();
     } catch (error) {
-      console.error('Error joining group:', error);
-      toast.error('Failed to join support group');
+      console.error('Frontend: Error joining group:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to join support group';
+      toast.error(errorMessage);
     }
   };
 

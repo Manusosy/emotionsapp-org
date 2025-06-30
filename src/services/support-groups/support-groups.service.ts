@@ -192,46 +192,69 @@ class SupportGroupsService {
    */
   async getGroupById(groupId: string): Promise<SupportGroup | null> {
     try {
-      const { data, error } = await supabase
+      // First get the group data
+      const { data: groupData, error: groupError } = await supabase
         .from('support_groups')
-        .select(`
-          *,
-          mood_mentor_profiles (
-            full_name,
-            specializations,
-            avatar_url
-          ),
-          group_members (
-            id,
-            user_id,
-            status,
-            joined_at,
-            notes,
-            patient_profiles (
-              full_name,
-              email,
-              avatar_url
-            )
-          )
-        `)
+        .select('*')
         .eq('id', groupId)
         .single();
 
-      if (error) throw error;
+      if (groupError) throw groupError;
+      if (!groupData) return null;
 
-      if (!data) return null;
+      // Get mentor profile
+      let mentorProfile = null;
+      if (groupData.mentor_id) {
+        const { data: mentor } = await supabase
+          .from('mood_mentor_profiles')
+          .select('full_name, specializations, avatar_url')
+          .eq('user_id', groupData.mentor_id)
+          .single();
+        
+        mentorProfile = mentor;
+      }
+
+      // Get group members
+      const { data: members } = await supabase
+        .from('group_members')
+        .select('id, user_id, status, joined_at, notes')
+        .eq('group_id', groupId);
+
+      // Get patient profiles for members
+      let memberProfiles: any[] = [];
+      if (members && members.length > 0) {
+        const memberUserIds = members.map(m => m.user_id);
+        const { data: profiles } = await supabase
+          .from('patient_profiles')
+          .select('user_id, full_name, email, avatar_url')
+          .in('user_id', memberUserIds);
+        
+        memberProfiles = profiles || [];
+      }
+
+      // Map member data with profiles
+      const memberData = members?.map(member => {
+        const profile = memberProfiles.find(p => p.user_id === member.user_id);
+        return {
+          ...member,
+          user: profile ? {
+            full_name: profile.full_name,
+            email: profile.email,
+            avatar_url: profile.avatar_url
+          } : undefined
+        };
+      }) || [];
 
       return {
-        ...data,
-        facilitator: data.mood_mentor_profiles ? {
-          name: data.mood_mentor_profiles.full_name,
+        ...groupData,
+        status: groupData.is_active ? 'active' as const : 'inactive' as const,
+        mood_mentor_id: groupData.mentor_id,
+        facilitator: mentorProfile ? {
+          name: mentorProfile.full_name,
           role: 'Mental Health Professional',
-          avatar: data.mood_mentor_profiles.avatar_url || ''
+          avatar: mentorProfile.avatar_url || ''
         } : undefined,
-        members: data.group_members?.map((member: any) => ({
-          ...member,
-          user: member.patient_profiles
-        })) || []
+        members: memberData
       };
     } catch (error) {
       console.error('Error fetching group by ID:', error);
@@ -315,8 +338,14 @@ class SupportGroupsService {
    */
   async deleteGroup(groupId: string): Promise<void> {
     try {
-      // Get the group to check if it has a Daily.co room and member count
-      const group = await this.getGroupById(groupId);
+      // Get the group basic info to check if it exists and has a Daily.co room
+      const { data: group, error: fetchError } = await supabase
+        .from('support_groups')
+        .select('name, room_name')
+        .eq('id', groupId)
+        .single();
+      
+      if (fetchError) throw fetchError;
       
       if (!group) {
         throw new Error('Group not found');
@@ -358,7 +387,8 @@ class SupportGroupsService {
    */
   async addMember(groupId: string, userId: string, notes?: string): Promise<GroupMember> {
     try {
-      const { data, error } = await supabase
+      // First insert the member
+      const { data: memberData, error: insertError } = await supabase
         .from('group_members')
         .insert([{
           group_id: groupId,
@@ -366,21 +396,28 @@ class SupportGroupsService {
           status: 'active',
           notes
         }])
-        .select(`
-          *,
-          patient_profiles (
-            full_name,
-            email,
-            avatar_url
-          )
-        `)
+        .select('*')
         .single();
 
-      if (error) throw error;
+      if (insertError) throw insertError;
+
+      // Get the patient profile
+      const { data: profile } = await supabase
+        .from('patient_profiles')
+        .select('full_name, email, avatar_url')
+        .eq('user_id', userId)
+        .single();
+
+      // Update the group participant count
+      await this.updateParticipantCount(groupId);
 
       return {
-        ...data,
-        user: data.patient_profiles
+        ...memberData,
+        user: profile ? {
+          full_name: profile.full_name,
+          email: profile.email,
+          avatar_url: profile.avatar_url
+        } : undefined
       };
     } catch (error) {
       console.error('Error adding group member:', error);
@@ -546,28 +583,45 @@ class SupportGroupsService {
    */
   async joinGroup(groupId: string, userId: string): Promise<void> {
     try {
+      console.log('joinGroup called with:', { groupId, userId });
+      
       // Check if user is already a member
-      const { data: existingMember } = await supabase
+      const { data: existingMember, error: memberCheckError } = await supabase
         .from('group_members')
         .select('id')
         .eq('group_id', groupId)
         .eq('user_id', userId)
         .single();
 
+      if (memberCheckError && memberCheckError.code !== 'PGRST116') {
+        // PGRST116 is "not found" which is expected if user is not a member
+        console.error('Error checking existing membership:', memberCheckError);
+        throw memberCheckError;
+      }
+
       if (existingMember) {
         throw new Error('You are already a member of this group');
       }
 
+      console.log('User is not already a member, checking group capacity...');
+
       // Check if group has space
-      const { data: group } = await supabase
+      const { data: group, error: groupError } = await supabase
         .from('support_groups')
         .select('max_participants, current_participants')
         .eq('id', groupId)
         .single();
 
+      if (groupError) {
+        console.error('Error fetching group:', groupError);
+        throw groupError;
+      }
+
       if (group && group.current_participants >= group.max_participants) {
         throw new Error('This group is full');
       }
+
+      console.log('Group has space, adding user as member...');
 
       // Add user to group
       const { error: insertError } = await supabase
@@ -578,13 +632,22 @@ class SupportGroupsService {
           status: 'active'
         }]);
 
-      if (insertError) throw insertError;
+      if (insertError) {
+        console.error('Error inserting group member:', insertError);
+        throw insertError;
+      }
+
+      console.log('User successfully added to group, updating participant count...');
 
       // Update participant count
       await this.updateParticipantCount(groupId);
 
+      console.log('Sending notification to mentor...');
+
       // Send notification to mentor
       await this.sendGroupNotification(groupId, userId, 'joined');
+      
+      console.log('Successfully joined group');
     } catch (error) {
       console.error('Error joining group:', error);
       throw error;
@@ -640,20 +703,28 @@ class SupportGroupsService {
    */
   private async sendGroupNotification(groupId: string, userId: string, action: 'joined' | 'left'): Promise<void> {
     try {
-      // Get group and user details
-      const [group, userProfile] = await Promise.all([
-        this.getGroupById(groupId),
-        supabase.from('patient_profiles').select('full_name').eq('user_id', userId).single()
-      ]);
+      // Get group details directly without using the potentially problematic getGroupById
+      const { data: group } = await supabase
+        .from('support_groups')
+        .select('name, mentor_id')
+        .eq('id', groupId)
+        .single();
 
-      if (!group || !userProfile.data) return;
+      if (!group) return;
 
-      const userName = userProfile.data.full_name || 'A member';
+      // Get user details
+      const { data: userProfile } = await supabase
+        .from('patient_profiles')
+        .select('full_name')
+        .eq('user_id', userId)
+        .single();
+
+      const userName = userProfile?.full_name || 'A member';
       const message = `${userName} ${action} your support group "${group.name}"`;
 
       // Insert notification
       await supabase.from('notifications').insert([{
-        user_id: group.mood_mentor_id,
+        user_id: group.mentor_id,
         title: `Group Update - ${group.name}`,
         message: message,
         type: 'group',
