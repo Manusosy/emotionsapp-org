@@ -207,16 +207,7 @@ CREATE POLICY "Mentors can manage attendance for their sessions" ON group_sessio
     )
   );
 
--- Insert some sample data for testing
-INSERT INTO support_groups (name, description, group_type, meeting_type, max_participants, location, meeting_schedule, mentor_id, room_url) VALUES
-('Anxiety Support Circle', 'A safe space to discuss anxiety management techniques and share experiences.', 'anxiety', 'online', 15, NULL, '[{"day": "Monday", "time": "18:00", "frequency": "weekly"}]', (SELECT id FROM auth.users WHERE email LIKE '%mentor%' LIMIT 1), 'https://daily.co/anxiety-support-circle'),
-('Depression Recovery Group', 'Supporting each other through depression recovery with evidence-based strategies.', 'depression', 'hybrid', 12, 'Community Center Room A', '[{"day": "Wednesday", "time": "19:00", "frequency": "weekly"}]', (SELECT id FROM auth.users WHERE email LIKE '%mentor%' LIMIT 1), 'https://daily.co/depression-recovery'),
-('Stress Management Workshop', 'Learn practical stress management techniques in a supportive environment.', 'stress', 'in-person', 20, 'Wellness Center', '[{"day": "Friday", "time": "17:30", "frequency": "weekly"}]', (SELECT id FROM auth.users WHERE email LIKE '%mentor%' LIMIT 1), NULL),
-('Relationship Harmony', 'Improving communication and building healthier relationships.', 'relationships', 'online', 10, NULL, '[{"day": "Tuesday", "time": "20:00", "frequency": "weekly"}]', (SELECT id FROM auth.users WHERE email LIKE '%mentor%' LIMIT 1), 'https://daily.co/relationship-harmony'),
-('Grief & Loss Support', 'A compassionate space for those dealing with loss and grief.', 'grief', 'online', 8, NULL, '[{"day": "Thursday", "time": "18:30", "frequency": "weekly"}]', (SELECT id FROM auth.users WHERE email LIKE '%mentor%' LIMIT 1), 'https://daily.co/grief-support');
-
--- Note: The sample data insertion will only work if there are users with mentor roles in your auth.users table
--- If the insertion fails, that's okay - the tables and structure are ready for use
+-- No sample data inserted - all data should be created through the application
 
 -- Success message
 SELECT 'Support Groups system has been successfully created!' as message; 

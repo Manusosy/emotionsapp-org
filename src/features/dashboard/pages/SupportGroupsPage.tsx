@@ -20,6 +20,7 @@ import {
 } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
+import { supabase } from "@/lib/supabase";
 
 interface GroupMember {
   id: string;
@@ -36,6 +37,7 @@ interface GroupMember {
 interface GroupWithDetails extends SupportGroup {
   next_session?: GroupSession;
   recent_sessions?: GroupSession[];
+  total_sessions?: number;
   my_attendance_rate?: number;
   upcoming_meetings?: GroupSession[];
 }
@@ -117,8 +119,29 @@ const SupportGroupsPage = () => {
               .sort((a, b) => b.fullDateTime.getTime() - a.fullDateTime.getTime())
               .slice(0, 5);
             
-            // Calculate attendance rate (mock for now - you can implement real tracking)
-            const attendanceRate = Math.floor(Math.random() * 40) + 60; // 60-100%
+            const totalSessions = sessionsWithDateTime.length;
+            
+            // Calculate real attendance rate based on session attendance
+            let attendanceRate = 0;
+            try {
+              // Get user's attendance records for this group
+              const { data: attendanceRecords } = await supabase
+                .from('group_session_attendance')
+                .select('attended, session_id, group_sessions!inner(group_id)')
+                .eq('user_id', user.id)
+                .eq('group_sessions.group_id', group.id);
+              
+              if (attendanceRecords && attendanceRecords.length > 0) {
+                const attendedCount = attendanceRecords.filter(record => record.attended === true).length;
+                attendanceRate = Math.round((attendedCount / attendanceRecords.length) * 100);
+              } else {
+                // If no attendance records, show 0% instead of random number
+                attendanceRate = 0;
+              }
+            } catch (error) {
+              console.error('Error calculating attendance rate:', error);
+              attendanceRate = 0;
+            }
             
             const upcomingMeetings = sessionsWithDateTime
               .filter(s => s.fullDateTime > new Date())
@@ -129,6 +152,7 @@ const SupportGroupsPage = () => {
               ...group,
               next_session: nextSession,
               recent_sessions: recentSessions,
+              total_sessions: totalSessions,
               my_attendance_rate: attendanceRate,
               upcoming_meetings: upcomingMeetings
             } as GroupWithDetails;
@@ -136,7 +160,8 @@ const SupportGroupsPage = () => {
             console.error(`Error fetching sessions for group ${group.name}:`, sessionError);
             return {
               ...group,
-              my_attendance_rate: 75
+              total_sessions: 0,
+              my_attendance_rate: 0
             } as GroupWithDetails;
           }
         })
@@ -159,13 +184,32 @@ const SupportGroupsPage = () => {
     if (!user) return;
     
     try {
+      // Add comprehensive debugging
+      console.log('=== FRONTEND JOIN GROUP DEBUG ===');
+      console.log('User object:', user);
+      console.log('User ID:', user.id);
+      console.log('User email:', user.email);
+      console.log('User metadata:', user.user_metadata);
+      console.log('Group ID:', groupId);
+      console.log('Supabase client auth status:');
+      
+      // Check auth status
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      console.log('Current session:', session);
+      console.log('Session error:', sessionError);
+      
+      if (session) {
+        console.log('Session user ID:', session.user.id);
+        console.log('Session user email:', session.user.email);
+      }
+      
       console.log('Frontend: Attempting to join group', { groupId, userId: user.id, userEmail: user.email });
       
       await supportGroupsService.joinGroup(groupId, user.id);
       toast.success('Successfully joined the support group!');
       
       // Send notification to mentor about new member
-      const userName = user.user_metadata?.full_name || user.email?.split('@')[0] || 'A member';
+      const userName = user.user_metadata?.name || user.email?.split('@')[0] || 'A member';
       await sendNotificationToMentor(groupId, `${userName} joined your support group`);
       
       fetchGroups();
@@ -184,7 +228,7 @@ const SupportGroupsPage = () => {
       toast.success('You have left the support group');
       
       // Send notification to mentor about member leaving
-      const userName = user.user_metadata?.full_name || user.email?.split('@')[0] || 'A member';
+      const userName = user.user_metadata?.name || user.email?.split('@')[0] || 'A member';
       await sendNotificationToMentor(groupId, `${userName} left your support group`);
       
       setShowLeaveDialog(false);
@@ -332,7 +376,7 @@ const SupportGroupsPage = () => {
                   <div className="text-sm text-gray-500">Attendance</div>
                 </div>
                 <div className="text-center">
-                  <div className="text-2xl font-bold text-purple-600">{group.recent_sessions?.length || 0}</div>
+                  <div className="text-2xl font-bold text-purple-600">{group.total_sessions || 0}</div>
                   <div className="text-sm text-gray-500">Sessions</div>
                 </div>
               </div>

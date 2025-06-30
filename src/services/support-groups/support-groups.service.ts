@@ -18,7 +18,6 @@ export interface SupportGroup {
   status: 'active' | 'inactive' | 'paused';
   mood_mentor_id: string;
   room_url?: string;
-  room_name?: string;
   created_at: string;
   updated_at: string;
   facilitator?: {
@@ -341,7 +340,7 @@ class SupportGroupsService {
       // Get the group basic info to check if it exists and has a Daily.co room
       const { data: group, error: fetchError } = await supabase
         .from('support_groups')
-        .select('name, room_name')
+        .select('name, room_url')
         .eq('id', groupId)
         .single();
       
@@ -353,11 +352,15 @@ class SupportGroupsService {
 
       console.log(`Deleting group: ${group.name} (${groupId})`);
       
-      // Delete Daily.co room if it exists
-      if (group.room_name) {
+      // Delete Daily.co room if it exists (extract room name from URL)
+      if (group.room_url) {
         try {
-          await dailyService.deleteRoom(group.room_name);
-          console.log(`Deleted Daily.co room: ${group.room_name}`);
+          // Extract room name from Daily.co URL format: https://domain.daily.co/room-name
+          const roomName = group.room_url.split('/').pop();
+          if (roomName) {
+            await dailyService.deleteRoom(roomName);
+            console.log(`Deleted Daily.co room: ${roomName}`);
+          }
         } catch (error) {
           console.warn('Failed to delete Daily.co room:', error);
         }
@@ -583,9 +586,16 @@ class SupportGroupsService {
    */
   async joinGroup(groupId: string, userId: string): Promise<void> {
     try {
+      console.log('=== STARTING JOIN GROUP PROCESS ===');
       console.log('joinGroup called with:', { groupId, userId });
       
+      // Validate inputs
+      if (!groupId || !userId) {
+        throw new Error('Missing required parameters: groupId and userId are required');
+      }
+
       // Check if user is already a member
+      console.log('Step 1: Checking if user is already a member...');
       const { data: existingMember, error: memberCheckError } = await supabase
         .from('group_members')
         .select('id')
@@ -593,62 +603,75 @@ class SupportGroupsService {
         .eq('user_id', userId)
         .single();
 
+      console.log('Member check result:', { existingMember, memberCheckError });
+
       if (memberCheckError && memberCheckError.code !== 'PGRST116') {
         // PGRST116 is "not found" which is expected if user is not a member
         console.error('Error checking existing membership:', memberCheckError);
-        throw memberCheckError;
+        throw new Error(`Database error while checking membership: ${memberCheckError.message}`);
       }
 
       if (existingMember) {
+        console.log('User is already a member, throwing error');
         throw new Error('You are already a member of this group');
       }
 
-      console.log('User is not already a member, checking group capacity...');
+      console.log('Step 2: User is not already a member, checking group capacity...');
 
       // Check if group has space
       const { data: group, error: groupError } = await supabase
         .from('support_groups')
-        .select('max_participants, current_participants')
+        .select('max_participants, current_participants, name')
         .eq('id', groupId)
         .single();
 
+      console.log('Group check result:', { group, groupError });
+
       if (groupError) {
         console.error('Error fetching group:', groupError);
-        throw groupError;
+        throw new Error(`Database error while fetching group: ${groupError.message}`);
       }
 
-      if (group && group.current_participants >= group.max_participants) {
+      if (!group) {
+        throw new Error('Group not found');
+      }
+
+      if (group.current_participants >= group.max_participants) {
         throw new Error('This group is full');
       }
 
-      console.log('Group has space, adding user as member...');
+      console.log(`Step 3: Group "${group.name}" has space (${group.current_participants}/${group.max_participants}), adding user as member...`);
 
       // Add user to group
-      const { error: insertError } = await supabase
+      const { data: insertData, error: insertError } = await supabase
         .from('group_members')
         .insert([{
           group_id: groupId,
           user_id: userId,
           status: 'active'
-        }]);
+        }])
+        .select('*');
+
+      console.log('Insert result:', { insertData, insertError });
 
       if (insertError) {
         console.error('Error inserting group member:', insertError);
-        throw insertError;
+        throw new Error(`Database error while adding member: ${insertError.message}`);
       }
 
-      console.log('User successfully added to group, updating participant count...');
+      console.log('Step 4: User successfully added to group, updating participant count...');
 
       // Update participant count
       await this.updateParticipantCount(groupId);
 
-      console.log('Sending notification to mentor...');
+      console.log('Step 5: Sending notification to mentor...');
 
       // Send notification to mentor
       await this.sendGroupNotification(groupId, userId, 'joined');
       
-      console.log('Successfully joined group');
+      console.log('=== JOIN GROUP PROCESS COMPLETED SUCCESSFULLY ===');
     } catch (error) {
+      console.error('=== JOIN GROUP PROCESS FAILED ===');
       console.error('Error joining group:', error);
       throw error;
     }

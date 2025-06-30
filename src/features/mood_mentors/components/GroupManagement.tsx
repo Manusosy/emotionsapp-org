@@ -18,7 +18,13 @@ import {
   DialogTitle,
   DialogFooter,
 } from '@/components/ui/dialog';
-import { Calendar, Clock, Users, TrendingUp, UserCheck, UserX, CalendarClock, BarChart2, Target, Award } from 'lucide-react';
+import {
+  Tooltip as UITooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { Calendar, Clock, Users, TrendingUp, UserCheck, UserX, CalendarClock, BarChart2, Target, Award, Info } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Cell, PieChart, Pie } from 'recharts';
 import { format, parseISO, startOfMonth, endOfMonth, eachDayOfInterval, isAfter, isBefore } from 'date-fns';
 import { supabase } from '@/lib/supabase';
@@ -33,8 +39,15 @@ interface GroupMember {
   patient_profile: {
     full_name: string;
     email: string;
-  };
+    avatar_url?: string;
+  } | null;
   attendance_records?: AttendanceRecord[];
+  // Assessment data for status calculation
+  latest_mood_score?: number;
+  latest_stress_level?: number;
+  has_recent_assessments?: boolean;
+  mood_assessment_date?: string;
+  stress_assessment_date?: string;
 }
 
 interface GroupSession {
@@ -103,17 +116,40 @@ export default function GroupManagement({ group, onClose }: GroupManagementProps
   };
 
   const fetchMembers = async () => {
-    const { data, error } = await supabase
-      .from('group_members')
-      .select(`
-        *,
-        patient_profiles (
-          full_name,
-          email
-        ),
-        group_session_attendance (
+    try {
+      // First get the group members
+      const { data: memberData, error: memberError } = await supabase
+        .from('group_members')
+        .select('*')
+        .eq('group_id', group.id)
+        .eq('status', 'active');
+
+      if (memberError) throw memberError;
+
+      if (!memberData || memberData.length === 0) {
+        setMembers([]);
+        return;
+      }
+
+      // Get patient profiles for these members
+      const userIds = memberData.map(member => member.user_id);
+      const { data: profileData, error: profileError } = await supabase
+        .from('patient_profiles')
+        .select('user_id, full_name, email, avatar_url')
+        .in('user_id', userIds);
+
+      if (profileError) {
+        console.error('Error fetching patient profiles:', profileError);
+        // Continue without profiles rather than failing completely
+      }
+
+      // Get attendance records for these members
+      const { data: attendanceData, error: attendanceError } = await supabase
+        .from('group_session_attendance')
+        .select(`
           id,
           session_id,
+          user_id,
           attended,
           joined_at,
           left_at,
@@ -123,20 +159,70 @@ export default function GroupManagement({ group, onClose }: GroupManagementProps
             start_time,
             end_time
           )
-        )
-      `)
-      .eq('group_id', group.id)
-      .eq('status', 'active');
+        `)
+        .in('user_id', userIds);
 
-    if (error) throw error;
-    
-    const transformedMembers = data?.map(member => ({
-      ...member,
-      patient_profile: member.patient_profiles,
-      attendance_records: member.group_session_attendance
-    })) || [];
-    
-    setMembers(transformedMembers);
+      if (attendanceError) {
+        console.error('Error fetching attendance records:', attendanceError);
+        // Continue without attendance data
+      }
+
+      // Get recent mood assessments for status calculation (last 30 days)
+      const { data: moodData, error: moodError } = await supabase
+        .from('mood_entries')
+        .select('user_id, mood, created_at')
+        .in('user_id', userIds)
+        .gte('created_at', new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString())
+        .order('created_at', { ascending: false });
+
+      if (moodError) {
+        console.warn('Could not fetch mood data for status calculation:', moodError);
+      }
+
+      // Get recent stress assessments for status calculation (last 30 days)
+      const { data: stressData, error: stressError } = await supabase
+        .from('stress_assessments')
+        .select('user_id, normalized_score, created_at')
+        .in('user_id', userIds)
+        .gte('created_at', new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString())
+        .order('created_at', { ascending: false });
+
+      if (stressError) {
+        console.warn('Could not fetch stress data for status calculation:', stressError);
+      }
+
+      // Combine the data
+      const transformedMembers = memberData.map(member => {
+        const profile = profileData?.find(p => p.user_id === member.user_id);
+        const attendanceRecords = attendanceData?.filter(a => a.user_id === member.user_id) || [];
+        
+        // Get most recent assessments for this member
+        const recentMood = moodData?.find(m => m.user_id === member.user_id);
+        const recentStress = stressData?.find(s => s.user_id === member.user_id);
+        
+        return {
+          ...member,
+          patient_profile: profile ? {
+            full_name: profile.full_name,
+            email: profile.email,
+            avatar_url: profile.avatar_url
+          } : null,
+          attendance_records: attendanceRecords,
+          // Add assessment data for status calculation - keep undefined for proper null checking
+          latest_mood_score: recentMood?.mood,
+          latest_stress_level: recentStress?.normalized_score,
+          has_recent_assessments: !!(recentMood || recentStress),
+          mood_assessment_date: recentMood?.created_at,
+          stress_assessment_date: recentStress?.created_at
+        };
+      });
+      
+      console.log('Fetched members:', transformedMembers);
+      setMembers(transformedMembers);
+    } catch (error) {
+      console.error('Error in fetchMembers:', error);
+      throw error;
+    }
   };
 
   const fetchSessions = async () => {
@@ -286,6 +372,70 @@ export default function GroupManagement({ group, onClose }: GroupManagementProps
     };
   };
 
+  // Calculate member status based on multiple factors (mood mentors only)
+  const calculateMemberStatus = (member: GroupMember): { status: string; color: string; bgColor: string } => {
+    // Simple status based on average of mood + stress assessments only
+    const hasMoodData = member.latest_mood_score !== undefined && member.latest_mood_score !== null;
+    const hasStressData = member.latest_stress_level !== undefined && member.latest_stress_level !== null;
+    
+    // If no assessment data, show N/A
+    if (!hasMoodData && !hasStressData) {
+      return { status: "N/A", color: "text-slate-600", bgColor: "bg-slate-100" };
+    }
+    
+    // Calculate average of available assessments
+    let totalScore = 0;
+    let scoreCount = 0;
+    
+    // Add mood score (1-10 scale)
+    if (hasMoodData) {
+      totalScore += member.latest_mood_score!;
+      scoreCount++;
+    }
+    
+    // Add stress health score (convert 0-10 stress to 10-0 health)
+    if (hasStressData) {
+      const stressHealthScore = Math.max(0, 10 - member.latest_stress_level!);
+      totalScore += stressHealthScore;
+      scoreCount++;
+    }
+    
+    const averageScore = totalScore / scoreCount;
+    
+    // Simple color-coded status based on average score
+    if (averageScore >= 8) {
+      return { status: "Excellent", color: "text-green-800", bgColor: "bg-green-100" };
+    } else if (averageScore >= 6) {
+      return { status: "Good", color: "text-blue-800", bgColor: "bg-blue-100" };
+    } else if (averageScore >= 4) {
+      return { status: "Fair", color: "text-yellow-800", bgColor: "bg-yellow-100" };
+    } else {
+      return { status: "Poor", color: "text-red-800", bgColor: "bg-red-100" };
+    }
+  };
+
+  const getAttendanceStatus = (member: GroupMember): { status: string; color: string; bgColor: string } => {
+    const totalSessions = sessions.length;
+    
+    // If no sessions yet, show N/A
+    if (totalSessions === 0) {
+      return { status: "N/A", color: "text-slate-600", bgColor: "bg-slate-100" };
+    }
+    
+    const attendedSessions = member.attendance_records?.filter(record => record.attended === true).length || 0;
+    const attendanceRate = (attendedSessions / totalSessions) * 100;
+    
+    if (attendanceRate >= 80) {
+      return { status: "Excellent", color: "text-green-800", bgColor: "bg-green-100" };
+    } else if (attendanceRate >= 60) {
+      return { status: "Good", color: "text-blue-800", bgColor: "bg-blue-100" };
+    } else if (attendanceRate >= 40) {
+      return { status: "Fair", color: "text-yellow-800", bgColor: "bg-yellow-100" };
+    } else {
+      return { status: "Poor", color: "text-red-800", bgColor: "bg-red-100" };
+    }
+  };
+
   const stats = getAttendanceStats();
 
   const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042'];
@@ -379,6 +529,8 @@ export default function GroupManagement({ group, onClose }: GroupManagementProps
         </TabsList>
 
         <TabsContent value="members" className="space-y-4">
+
+          
           <Card>
             <CardHeader>
               <CardTitle>Group Members</CardTitle>
@@ -390,13 +542,24 @@ export default function GroupManagement({ group, onClose }: GroupManagementProps
                     <TableHead>Member</TableHead>
                     <TableHead>Join Date</TableHead>
                     <TableHead>Sessions Attended</TableHead>
-                    <TableHead>Attendance Rate</TableHead>
+                    <TableHead>Assessment Status</TableHead>
+                    <TableHead>Attendance Status</TableHead>
                     <TableHead>Last Attendance</TableHead>
-                    <TableHead>Status</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {members.map((member) => {
+                  {members.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={6} className="text-center py-8">
+                        <div className="flex flex-col items-center gap-2">
+                          <Users className="h-8 w-8 text-gray-400" />
+                          <p className="text-gray-500">No members have joined this group yet</p>
+                          <p className="text-sm text-gray-400">Members will appear here when they join the group</p>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    members.map((member) => {
                     const attendanceRecords = member.attendance_records || [];
                     const presentCount = attendanceRecords.filter(r => r.attended === true).length;
                     const totalSessions = attendanceRecords.length;
@@ -412,8 +575,8 @@ export default function GroupManagement({ group, onClose }: GroupManagementProps
                       <TableRow key={member.id}>
                         <TableCell>
                           <div>
-                            <div className="font-medium">{member.patient_profile?.full_name}</div>
-                            <div className="text-sm text-gray-500">{member.patient_profile?.email}</div>
+                            <div className="font-medium">{member.patient_profile?.full_name || 'Unknown User'}</div>
+                            <div className="text-sm text-gray-500">{member.patient_profile?.email || member.user_id}</div>
                           </div>
                         </TableCell>
                         <TableCell>
@@ -426,15 +589,34 @@ export default function GroupManagement({ group, onClose }: GroupManagementProps
                           </div>
                         </TableCell>
                         <TableCell>
-                          <div className="flex items-center gap-2">
-                            <div className="w-16 bg-gray-200 rounded-full h-2">
+                          {(() => {
+                            const memberStatus = calculateMemberStatus(member);
+                            return (
                               <div 
-                                className="bg-green-500 h-2 rounded-full" 
-                                style={{ width: `${Math.min(attendanceRate, 100)}%` }}
-                              />
-                            </div>
-                            <span className="text-sm font-medium">{attendanceRate.toFixed(0)}%</span>
-                          </div>
+                                className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${memberStatus.color} ${memberStatus.bgColor}`}
+                                title={
+                                  member.has_recent_assessments 
+                                    ? `Based on mood (${member.latest_mood_score?.toFixed(1) || 'N/A'}/10) and stress (${member.latest_stress_level?.toFixed(1) || 'N/A'}/10) assessments`
+                                    : 'No recent assessments available'
+                                }
+                              >
+                                {memberStatus.status}
+                              </div>
+                            );
+                          })()}
+                        </TableCell>
+                        <TableCell>
+                          {(() => {
+                            const memberStatus = getAttendanceStatus(member);
+                            return (
+                              <div 
+                                className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${memberStatus.color} ${memberStatus.bgColor}`}
+                                title={`Based on attendance rate (${attendanceRate.toFixed(0)}%)`}
+                              >
+                                {memberStatus.status}
+                              </div>
+                            );
+                          })()}
                         </TableCell>
                         <TableCell>
                           {lastAttendance && lastAttendance.joined_at ? (
@@ -445,16 +627,9 @@ export default function GroupManagement({ group, onClose }: GroupManagementProps
                             <span className="text-gray-500">Never</span>
                           )}
                         </TableCell>
-                        <TableCell>
-                          <Badge 
-                            variant={attendanceRate >= 75 ? "default" : attendanceRate >= 50 ? "secondary" : "destructive"}
-                          >
-                            {attendanceRate >= 75 ? "Active" : attendanceRate >= 50 ? "Moderate" : "At Risk"}
-                          </Badge>
-                        </TableCell>
                       </TableRow>
                     );
-                  })}
+                  }))}
                 </TableBody>
               </Table>
             </CardContent>
@@ -478,7 +653,18 @@ export default function GroupManagement({ group, onClose }: GroupManagementProps
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {sessions.map((session) => (
+                  {sessions.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={5} className="text-center py-8">
+                        <div className="flex flex-col items-center gap-2">
+                          <Calendar className="h-8 w-8 text-gray-400" />
+                          <p className="text-gray-500">No sessions scheduled yet</p>
+                          <p className="text-sm text-gray-400">Create sessions to start group meetings</p>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    sessions.map((session) => (
                     <TableRow key={session.id}>
                       <TableCell>
                         {format(parseISO(session.session_date), 'MMM dd, yyyy')}
@@ -510,7 +696,7 @@ export default function GroupManagement({ group, onClose }: GroupManagementProps
                         </Button>
                       </TableCell>
                     </TableRow>
-                  ))}
+                  )))}
                 </TableBody>
               </Table>
             </CardContent>
