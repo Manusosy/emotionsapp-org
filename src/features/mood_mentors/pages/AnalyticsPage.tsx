@@ -83,7 +83,8 @@ interface ReviewData {
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d'];
 
 export default function AnalyticsPage() {
-  const { user } = useContext(AuthContext);
+  const authContext = useContext(AuthContext);
+  const { user } = authContext || {};
   const navigate = useNavigate();
   const [timeRange, setTimeRange] = useState<'week' | 'month' | 'year'>('month');
   const [activeTab, setActiveTab] = useState('overview');
@@ -140,7 +141,7 @@ export default function AnalyticsPage() {
       const { data: dashboardStats, error: statsError } = await supabase
         .from('mentor_dashboard_stats')
         .select('*')
-        .eq('user_id', user.id)
+        .eq('mentor_id', user.id)
         .single();
 
       if (statsError && statsError.code !== 'PGRST116') {
@@ -148,14 +149,14 @@ export default function AnalyticsPage() {
         toast.error('Failed to load analytics data');
       } else if (dashboardStats) {
         setStats({
-          totalPatients: dashboardStats.total_patients || 0,
-          activePatients: dashboardStats.active_patients || 0,
+          totalPatients: dashboardStats.total_clients || 0,
+          activePatients: dashboardStats.total_clients || 0, // Use total_clients as active patients for now
           totalAppointments: dashboardStats.total_appointments || 0,
           upcomingAppointments: dashboardStats.upcoming_appointments || 0,
           completedAppointments: dashboardStats.completed_appointments || 0,
           cancelledAppointments: dashboardStats.cancelled_appointments || 0,
           averageRating: dashboardStats.average_rating || 0,
-          reviewCount: dashboardStats.review_count || 0
+          reviewCount: 0 // Will be calculated from reviews data
         });
       }
 
@@ -186,7 +187,7 @@ export default function AnalyticsPage() {
 
       // Fetch reviews
       const { data: reviewsData, error: reviewsError } = await supabase
-        .from('mentor_reviews')
+        .from('mentor_reviews_view')
         .select('*')
         .eq('mentor_id', user.id)
         .order('created_at', { ascending: false });
@@ -194,13 +195,21 @@ export default function AnalyticsPage() {
       if (reviewsError) {
         console.error('Error fetching reviews:', reviewsError);
       } else if (reviewsData) {
-        setReviews(reviewsData.map(review => ({
+        const processedReviews = reviewsData.map(review => ({
           id: review.id,
           rating: review.rating,
-          comment: review.comment || '',
+          comment: review.review_text || '',
           created_at: review.created_at,
           patient_name: review.patient_name || 'Anonymous Patient'
-        })));
+        }));
+        
+        setReviews(processedReviews);
+        
+        // Update review count in stats
+        setStats(prevStats => ({
+          ...prevStats,
+          reviewCount: processedReviews.length
+        }));
       }
     } catch (error) {
       console.error('Error fetching analytics data:', error);

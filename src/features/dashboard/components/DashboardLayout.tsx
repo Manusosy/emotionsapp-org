@@ -628,10 +628,10 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         <div
           className={`${
             sidebarOpen ? 'translate-x-0' : '-translate-x-full'
-          } fixed inset-y-0 left-0 z-50 w-64 bg-white border-r border-gray-200 transition-transform duration-200 ease-in-out md:translate-x-0 md:relative`}
+          } fixed inset-y-0 left-0 z-50 w-64 bg-white border-r border-gray-200 transition-transform duration-200 ease-in-out md:translate-x-0 md:relative flex flex-col`}
         >
           {/* Sidebar Header */}
-          <div className="flex items-center justify-between p-4 border-b h-16">
+          <div className="flex items-center justify-between p-4 border-b h-16 flex-shrink-0">
             <div className="flex items-center gap-2">
               <img
                 src="/assets/emotions-logo-black.png"
@@ -651,7 +651,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
 
           {/* Daily Check-in Button for Patients */}
           {isPatient && (
-            <div className="p-4 border-b">
+            <div className="p-4 border-b flex-shrink-0">
               <Button
                 onClick={() => navigate('/patient-dashboard/mood-tracker')}
                 className="w-full bg-gradient-to-r from-[#20C0F3] to-[#1AB0E3] hover:from-[#1AB0E3] hover:to-[#20C0F3] text-white rounded-xl p-4 h-auto flex items-center justify-between shadow-lg hover:shadow-xl transition-all duration-200"
@@ -671,50 +671,54 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
             </div>
           )}
 
-          {/* Sidebar Navigation */}
-          <div className="flex-1 p-4 space-y-6 overflow-y-auto flex flex-col">
-            {userNavigation.map((section) => (
-              <div key={section.section}>
-                <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
-                  {section.section}
-                </h3>
-                <ul className="space-y-1">
-                  {section.items.map((item) => {
-                    const ItemIcon = item.icon;
-                    return (
-                      <li key={item.name}>
-                        <Link
-                          to={item.href}
-                          className={`${
-                            isActive(item.href)
-                              ? 'bg-blue-50 text-blue-600'
-                              : 'text-gray-600 hover:bg-gray-100'
-                          } group flex items-center px-2 py-2 text-sm font-medium rounded-md transition-all`}
-                        >
-                          {ItemIcon && (
-                            <ItemIcon className={`mr-3 h-5 w-5 ${
-                              isActive(item.href) ? 'text-blue-500' : 'text-gray-500 group-hover:text-gray-600'
-                            }`} />
-                          )}
-                          {item.name}
-                          
-                          {/* Show unread indicators */}
-                          {item.name === 'Notifications' && unreadNotifications > 0 && (
-                            <Badge className="ml-auto bg-red-500">{unreadNotifications}</Badge>
-                          )}
-                          {item.name === 'Messages' && unreadMessages > 0 && (
-                            <Badge className="ml-auto bg-red-500">{unreadMessages}</Badge>
-                          )}
-                        </Link>
-                      </li>
-                    );
-                  })}
-                </ul>
+          {/* Sidebar Navigation - Scrollable container */}
+          <div className="flex flex-col flex-1 min-h-0">
+            <div className="flex-1 min-h-0 overflow-hidden">
+              <div className="h-full overflow-y-auto overscroll-contain p-4 space-y-6">
+                {userNavigation.map((section) => (
+                  <div key={section.section}>
+                    <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
+                      {section.section}
+                    </h3>
+                    <ul className="space-y-1">
+                      {section.items.map((item) => {
+                        const ItemIcon = item.icon;
+                        return (
+                          <li key={item.name}>
+                            <Link
+                              to={item.href}
+                              className={`${
+                                isActive(item.href)
+                                  ? 'bg-blue-50 text-blue-600'
+                                  : 'text-gray-600 hover:bg-gray-100'
+                              } group flex items-center px-2 py-2 text-sm font-medium rounded-md transition-all`}
+                            >
+                              {ItemIcon && (
+                                <ItemIcon className={`mr-3 h-5 w-5 ${
+                                  isActive(item.href) ? 'text-blue-500' : 'text-gray-500 group-hover:text-gray-600'
+                                }`} />
+                              )}
+                              {item.name}
+                              
+                              {/* Show unread indicators */}
+                              {item.name === 'Notifications' && unreadNotifications > 0 && (
+                                <Badge className="ml-auto bg-red-500">{unreadNotifications}</Badge>
+                              )}
+                              {item.name === 'Messages' && unreadMessages > 0 && (
+                                <Badge className="ml-auto bg-red-500">{unreadMessages}</Badge>
+                              )}
+                            </Link>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </div>
+                ))}
               </div>
-            ))}
+            </div>
             
-            {/* Return to Home button */}
-            <div className="mt-auto pt-6 border-t border-gray-200 flex-shrink-0">
+            {/* Return to Home button - Fixed at bottom */}
+            <div className="p-4 pt-6 border-t border-gray-200 flex-shrink-0">
               <Link
                 to="/"
                 className="flex items-center px-2 py-2 text-sm font-medium text-gray-600 hover:bg-gray-100 rounded-md transition-all"
