@@ -49,23 +49,9 @@ export async function uploadImage(file: File, userId: string): Promise<{
       };
     }
     
-    // If first attempt failed, try fixing storage buckets
-    console.log('First upload attempt failed, trying to fix storage buckets...');
-    const fixResult = await ensureStorageBucketsExist();
-    
-    if (fixResult.success) {
-      // Try uploading again
-      const secondResult = await patientService.uploadProfileImage(userId, file);
-      
-      if (secondResult.success && secondResult.url) {
-        return {
-          ...secondResult,
-          source: 'supabase'
-        };
-      }
-    }
-    
-    // If Supabase still fails, try external services
+    // If Supabase fails, try external services immediately
+    // Don't try to fix storage buckets as it causes RLS errors
+    console.log('Supabase upload failed, trying external services...');
     return await uploadToExternalService(file);
     
   } catch (error: any) {

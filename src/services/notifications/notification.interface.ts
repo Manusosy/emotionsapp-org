@@ -3,7 +3,21 @@ import { UserRole } from '@/types/auth';
 /**
  * Notification type enum for consistent typing
  */
-export type NotificationType = 'appointment' | 'message' | 'patient' | 'group' | 'document' | 'system' | 'alert' | 'journal';
+export type NotificationType = 
+  | 'appointment' 
+  | 'message' 
+  | 'patient' 
+  | 'group' 
+  | 'document' 
+  | 'system' 
+  | 'alert' 
+  | 'journal'
+  | 'mood_tracking'
+  | 'resource'
+  | 'session'
+  | 'review'
+  | 'reminder'
+  | 'welcome';
 
 /**
  * Notification interface used across the application
@@ -46,12 +60,18 @@ export interface NotificationPreferences {
   
   // Only relevant for patients
   moodTrackingReminders?: boolean;
+  journalReminders?: boolean;
+  resourceUpdates?: boolean;
   
   // Only relevant for mood mentors
   patientUpdates?: boolean;
   groupNotifications?: boolean;
+  sessionNotifications?: boolean;
+  reviewNotifications?: boolean;
   
   // Shared preferences
+  messageNotifications: boolean;
+  systemNotifications: boolean;
   marketingCommunications: boolean;
 }
 

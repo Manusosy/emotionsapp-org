@@ -1,6 +1,7 @@
 import { IMoodAssessmentService } from './mood-assessment.interface';
 import { MoodAssessment, MoodEntry, MoodType } from '@/types/mood';
 import { supabase } from '@/lib/supabase';
+import { notificationService } from '../notifications/notification.service';
 
 export class MoodAssessmentService implements IMoodAssessmentService {
   async getMoodAssessments(userId: string): Promise<MoodAssessment[]> {
@@ -84,7 +85,7 @@ export class MoodAssessmentService implements IMoodAssessmentService {
         return null;
       }
 
-      return {
+      const savedAssessment = {
         id: data.id,
         userId: data.user_id,
         mood: data.mood,
@@ -95,9 +96,98 @@ export class MoodAssessmentService implements IMoodAssessmentService {
         recommendations: data.recommendations || [],
         activities: data.activities || []
       };
+
+      // Create notifications for concerning mood patterns
+      try {
+        await this.checkForMoodAlerts(savedAssessment);
+      } catch (notifyError) {
+        console.warn('Failed to check for mood alerts:', notifyError);
+      }
+
+      return savedAssessment;
     } catch (error) {
       console.error('Error in saveMoodAssessment:', error);
       return null;
+    }
+  }
+
+  // Helper method to check for concerning mood patterns and notify mentors
+  private async checkForMoodAlerts(assessment: MoodAssessment): Promise<void> {
+    try {
+      // Alert for very low mood scores
+      const isLowMood = assessment.score <= 3;
+      
+      // Alert for negative mood types
+      const isConcerningMood = assessment.moodType === 'negative';
+
+      if (isLowMood || isConcerningMood) {
+        // Find the patient's assigned mood mentors
+        const { data: appointments } = await supabase
+          .from('appointments')
+          .select('mentor_id')
+          .eq('patient_id', assessment.userId)
+          .eq('status', 'confirmed')
+          .order('date', { ascending: false })
+          .limit(1);
+
+        if (appointments && appointments.length > 0) {
+          const mentorId = appointments[0].mentor_id;
+
+          // Get patient name for notification
+          const { data: patientProfile } = await supabase
+            .from('user_profiles')
+            .select('full_name')
+            .eq('user_id', assessment.userId)
+            .single();
+
+          const patientName = patientProfile?.full_name || 'A patient';
+
+          // Create notification for mood mentor
+          await notificationService.createNotification({
+            userId: mentorId,
+            title: 'Patient Mood Alert',
+            message: `${patientName} has logged a ${assessment.moodType} mood with score ${assessment.score}/10. Consider checking in with them.`,
+            type: 'alert',
+            actionUrl: `/mood-mentor-dashboard/patients`,
+            metadata: {
+              patientId: assessment.userId,
+              patientName,
+              moodScore: assessment.score,
+              moodType: assessment.moodType,
+              assessmentId: assessment.id,
+              action: 'mood_alert'
+            }
+          });
+
+          console.log(`Mood alert sent to mentor ${mentorId} for patient ${assessment.userId}`);
+        }
+      }
+
+      // Check for positive mood milestone (encourage continued engagement)
+      if (assessment.score >= 8 && assessment.moodType === 'positive') {
+        // Get recent mood entries to check for improvement streak
+        const recentEntries = await this.getMoodEntries(assessment.userId);
+        const lastWeekEntries = recentEntries.slice(0, 7);
+        const averageScore = lastWeekEntries.reduce((sum, entry) => sum + entry.score, 0) / lastWeekEntries.length;
+
+        if (averageScore >= 7 && lastWeekEntries.length >= 5) {
+          // Notify patient about their positive streak
+          await notificationService.createNotification({
+            userId: assessment.userId,
+            title: 'Great Progress!',
+            message: `You've maintained positive moods this week! Your average mood score is ${averageScore.toFixed(1)}/10. Keep up the excellent work!`,
+            type: 'mood_tracking',
+            actionUrl: `/patient-dashboard/mood-tracker`,
+            metadata: {
+              averageScore: averageScore,
+              streakLength: lastWeekEntries.length,
+              action: 'positive_streak'
+            }
+          });
+        }
+      }
+    } catch (error) {
+      console.error('Error checking for mood alerts:', error);
     }
   }
 

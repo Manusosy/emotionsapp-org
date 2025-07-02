@@ -366,6 +366,8 @@ export class NotificationService implements INotificationService {
     const common = {
       emailNotifications: true,
       appointmentReminders: true,
+      messageNotifications: true,
+      systemNotifications: true,
       marketingCommunications: false
     };
 
@@ -373,13 +375,17 @@ export class NotificationService implements INotificationService {
     if (userRole === 'patient') {
       return {
         ...common,
-        moodTrackingReminders: true
+        moodTrackingReminders: true,
+        journalReminders: true,
+        resourceUpdates: true
       };
     } else { // mood_mentor
       return {
         ...common,
         patientUpdates: true,
-        groupNotifications: true
+        groupNotifications: true,
+        sessionNotifications: true,
+        reviewNotifications: true
       };
     }
   }
@@ -398,15 +404,21 @@ export class NotificationService implements INotificationService {
     const validated: NotificationPreferences = {
       emailNotifications: preferences.emailNotifications ?? defaultPrefs.emailNotifications,
       appointmentReminders: preferences.appointmentReminders ?? defaultPrefs.appointmentReminders,
+      messageNotifications: preferences.messageNotifications ?? defaultPrefs.messageNotifications,
+      systemNotifications: preferences.systemNotifications ?? defaultPrefs.systemNotifications,
       marketingCommunications: preferences.marketingCommunications ?? defaultPrefs.marketingCommunications
     };
     
     // Add role-specific fields
     if (userRole === 'patient') {
       validated.moodTrackingReminders = preferences.moodTrackingReminders ?? defaultPrefs.moodTrackingReminders;
+      validated.journalReminders = preferences.journalReminders ?? defaultPrefs.journalReminders;
+      validated.resourceUpdates = preferences.resourceUpdates ?? defaultPrefs.resourceUpdates;
     } else { // mood_mentor
       validated.patientUpdates = preferences.patientUpdates ?? defaultPrefs.patientUpdates;
       validated.groupNotifications = preferences.groupNotifications ?? defaultPrefs.groupNotifications;
+      validated.sessionNotifications = preferences.sessionNotifications ?? defaultPrefs.sessionNotifications;
+      validated.reviewNotifications = preferences.reviewNotifications ?? defaultPrefs.reviewNotifications;
     }
     
     return validated;

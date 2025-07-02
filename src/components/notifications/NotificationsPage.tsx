@@ -13,7 +13,11 @@ import {
   Settings, 
   Users, 
   FileText,
-  AlertCircle
+  AlertCircle,
+  Calendar,
+  Heart,
+  BookOpen,
+  Star
 } from 'lucide-react';
 import {
   Dialog,
@@ -48,6 +52,8 @@ export default function NotificationsPage({ userRole, dashboardLayout: Dashboard
   const [preferences, setPreferences] = useState<NotificationPreferences>({
     emailNotifications: true,
     appointmentReminders: true,
+    messageNotifications: true,
+    systemNotifications: true,
     marketingCommunications: false,
   });
   
@@ -130,8 +136,20 @@ export default function NotificationsPage({ userRole, dashboardLayout: Dashboard
         return <Users className="h-8 w-8 text-amber-500" />;
       case 'group':
         return <Users className="h-8 w-8 text-purple-500" />;
+      case 'session':
+        return <Calendar className="h-8 w-8 text-indigo-500" />;
       case 'journal':
         return <FileText className="h-8 w-8 text-indigo-500" />;
+      case 'mood_tracking':
+        return <Heart className="h-8 w-8 text-pink-500" />;
+      case 'resource':
+        return <BookOpen className="h-8 w-8 text-orange-500" />;
+      case 'review':
+        return <Star className="h-8 w-8 text-yellow-500" />;
+      case 'reminder':
+        return <Clock className="h-8 w-8 text-blue-400" />;
+      case 'welcome':
+        return <Heart className="h-8 w-8 text-emerald-500" />;
       case 'document':
         return <FileText className="h-8 w-8 text-gray-500" />;
       case 'alert':
@@ -196,22 +214,84 @@ export default function NotificationsPage({ userRole, dashboardLayout: Dashboard
                     />
                   </div>
                   
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-0.5">
+                      <h4 className="font-medium">Message Notifications</h4>
+                      <p className="text-sm text-muted-foreground">
+                        Alerts for new messages
+                      </p>
+                    </div>
+                    <Switch
+                      checked={preferences.messageNotifications}
+                      onCheckedChange={(checked) => 
+                        setPreferences(prev => ({ ...prev, messageNotifications: checked }))
+                      }
+                    />
+                  </div>
+                  
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-0.5">
+                      <h4 className="font-medium">System Notifications</h4>
+                      <p className="text-sm text-muted-foreground">
+                        Important system updates and alerts
+                      </p>
+                    </div>
+                    <Switch
+                      checked={preferences.systemNotifications}
+                      onCheckedChange={(checked) => 
+                        setPreferences(prev => ({ ...prev, systemNotifications: checked }))
+                      }
+                    />
+                  </div>
+                  
                   {/* Patient-specific preferences */}
                   {userRole === 'patient' && (
-                    <div className="flex items-center justify-between">
-                      <div className="space-y-0.5">
-                        <h4 className="font-medium">Mood Tracking Reminders</h4>
-                        <p className="text-sm text-muted-foreground">
-                          Receive reminders to track your mood
-                        </p>
+                    <>
+                      <div className="flex items-center justify-between">
+                        <div className="space-y-0.5">
+                          <h4 className="font-medium">Mood Tracking Reminders</h4>
+                          <p className="text-sm text-muted-foreground">
+                            Receive reminders to track your mood
+                          </p>
+                        </div>
+                        <Switch
+                          checked={preferences.moodTrackingReminders || false}
+                          onCheckedChange={(checked) => 
+                            setPreferences(prev => ({ ...prev, moodTrackingReminders: checked }))
+                          }
+                        />
                       </div>
-                      <Switch
-                        checked={preferences.moodTrackingReminders || false}
-                        onCheckedChange={(checked) => 
-                          setPreferences(prev => ({ ...prev, moodTrackingReminders: checked }))
-                        }
-                      />
-                    </div>
+                      
+                      <div className="flex items-center justify-between">
+                        <div className="space-y-0.5">
+                          <h4 className="font-medium">Journal Reminders</h4>
+                          <p className="text-sm text-muted-foreground">
+                            Gentle reminders to update your journal
+                          </p>
+                        </div>
+                        <Switch
+                          checked={preferences.journalReminders || false}
+                          onCheckedChange={(checked) => 
+                            setPreferences(prev => ({ ...prev, journalReminders: checked }))
+                          }
+                        />
+                      </div>
+                      
+                      <div className="flex items-center justify-between">
+                        <div className="space-y-0.5">
+                          <h4 className="font-medium">Resource Updates</h4>
+                          <p className="text-sm text-muted-foreground">
+                            Notifications about new resources and materials
+                          </p>
+                        </div>
+                        <Switch
+                          checked={preferences.resourceUpdates || false}
+                          onCheckedChange={(checked) => 
+                            setPreferences(prev => ({ ...prev, resourceUpdates: checked }))
+                          }
+                        />
+                      </div>
+                    </>
                   )}
                   
                   {/* Mood mentor-specific preferences */}
@@ -246,6 +326,36 @@ export default function NotificationsPage({ userRole, dashboardLayout: Dashboard
                           }
                         />
                       </div>
+                      
+                      <div className="flex items-center justify-between">
+                        <div className="space-y-0.5">
+                          <h4 className="font-medium">Session Notifications</h4>
+                          <p className="text-sm text-muted-foreground">
+                            Alerts about group sessions and activities
+                          </p>
+                        </div>
+                        <Switch
+                          checked={preferences.sessionNotifications || false}
+                          onCheckedChange={(checked) => 
+                            setPreferences(prev => ({ ...prev, sessionNotifications: checked }))
+                          }
+                        />
+                      </div>
+                      
+                      <div className="flex items-center justify-between">
+                        <div className="space-y-0.5">
+                          <h4 className="font-medium">Review Notifications</h4>
+                          <p className="text-sm text-muted-foreground">
+                            Notifications about patient reviews and feedback
+                          </p>
+                        </div>
+                        <Switch
+                          checked={preferences.reviewNotifications || false}
+                          onCheckedChange={(checked) => 
+                            setPreferences(prev => ({ ...prev, reviewNotifications: checked }))
+                          }
+                        />
+                      </div>
                     </>
                   )}
                   
@@ -254,7 +364,7 @@ export default function NotificationsPage({ userRole, dashboardLayout: Dashboard
                     <div className="space-y-0.5">
                       <h4 className="font-medium">Marketing Communications</h4>
                       <p className="text-sm text-muted-foreground">
-                        Receive updates about new features and services
+                        Promotional emails and product updates
                       </p>
                     </div>
                     <Switch

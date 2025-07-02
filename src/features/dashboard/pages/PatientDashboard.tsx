@@ -47,7 +47,7 @@ import { AuthContext } from "@/contexts/authContext";
 import MoodAnalytics from "../components/MoodAnalytics";
 import MoodSummaryCard from "../components/MoodSummaryCard";
 import EmotionalHealthWheel from "../components/EmotionalHealthWheel";
-import { Appointment as DbAppointment, Message, UserProfile } from "../../../types/database.types";
+import { Appointment as DatabaseAppointment, Message, UserProfile as DatabaseUserProfile } from "../../../types/database.types";
 import { format, parseISO } from "date-fns";
 import { jsPDF } from "jspdf";
 import 'jspdf-autotable';
@@ -57,6 +57,7 @@ import StressAssessmentModal from "../components/StressAssessmentModal";
 import { PostgrestSingleResponse } from '@supabase/supabase-js';
 import { dataService } from '@/services';
 import BookingButton from "@/features/booking/components/BookingButton";
+import ActiveGroupSessions from "../components/ActiveGroupSessions";
 
 // Add this interface before the MoodMentor interface
 interface UserProfile {
@@ -87,7 +88,7 @@ interface MoodMentor {
   };
 }
 
-interface DbAppointment {
+interface AppointmentData {
   id: string;
   patient_id: string;
   mentor_id: string;
@@ -102,13 +103,15 @@ interface DbAppointment {
   updated_at: string;
 }
 
-interface AppointmentWithMentor extends DbAppointment {
+interface AppointmentWithMentor extends AppointmentData {
   mood_mentor?: MoodMentor;
 }
 
 export default function PatientDashboard() {
   const navigate = useNavigate();
-  const { user, signOut } = useContext(AuthContext);
+  const authContext = useContext(AuthContext);
+  const user = authContext?.user;
+  const signOut = authContext?.signOut;
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [appointments, setAppointments] = useState<AppointmentWithMentor[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -797,7 +800,7 @@ export default function PatientDashboard() {
 
       <StressAssessmentModal open={isStressModalOpen} onOpenChange={setIsStressModalOpen} />
 
-      <div className="space-y-6">
+      <div className="p-6 space-y-6">
         {/* Title and User Welcome */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
           <div className="flex flex-col gap-1">
@@ -1280,7 +1283,15 @@ export default function PatientDashboard() {
             )}
           </div>
         </div>
-      </div>
+
+                  {/* Active Group Sessions Card */}
+          <ActiveGroupSessions />
+
+                    {/* Quick Stats Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {/* Stats will be here */}
+          </div>
+        </div>
     </DashboardLayout>
   );
 }

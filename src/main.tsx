@@ -4,7 +4,7 @@ import './styles/index.css';
 import './styles/App.css';
 import 'tailwindcss/tailwind.css';
 import App from './App';
-import ensureStorageBucketsExist from './utils/storage-setup';
+// Removed storage setup import to prevent RLS errors
 
 // Check for environment variables
 const checkEnvironment = () => {
@@ -65,35 +65,11 @@ const checkEnvironment = () => {
   }
 };
 
-// Initialize storage buckets
-const setupStorage = async () => {
-  try {
-    console.log('Checking storage buckets...');
-    const result = await ensureStorageBucketsExist();
-    
-    if (result.success) {
-      console.log('✅ Storage buckets ready!');
-      if (result.createdBuckets.length > 0) {
-        console.log(`Created buckets: ${result.createdBuckets.join(', ')}`);
-      }
-    } else {
-      console.warn('⚠️ Some storage buckets could not be set up:');
-      console.warn('Errors:', result.errors);
-      console.log('You may experience issues with file uploads.');
-    }
-  } catch (error) {
-    console.error('Failed to set up storage buckets:', error);
-  }
-};
+// Storage setup removed to prevent RLS errors on app startup
 
 // Start application with environment checks
 const startApp = async () => {
   checkEnvironment();
-  
-  // Setup storage in the background
-  setupStorage().catch(err => {
-    console.error('Storage setup error:', err);
-  });
   
   // Simple root rendering
   const rootElement = document.getElementById('root');

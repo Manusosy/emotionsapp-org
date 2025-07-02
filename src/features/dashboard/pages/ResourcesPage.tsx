@@ -22,10 +22,14 @@ import {
   Download,
   ChevronRight,
   Clock3,
-  Loader2
+  Loader2,
+  Filter,
+  Grid3x3,
+  List
 } from "lucide-react";
 import { useAuth } from "@/contexts/authContext";
 import { dataService } from "@/services";
+import { resourceService } from "@/services/resource/resource.service";
 import { toast } from "sonner";
 import { supabase } from "@/lib/supabase";
 
@@ -64,6 +68,7 @@ export default function ResourcesPage() {
   const [activeTab, setActiveTab] = useState("all");
   const [savedResources, setSavedResources] = useState<string[]>([]);
   const [hoveredResourceId, setHoveredResourceId] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
 
   useEffect(() => {
     loadResources();
@@ -203,33 +208,99 @@ export default function ResourcesPage() {
     }
   }, [savedResources, user]);
 
-  const handleShareResource = useCallback((resource: Resource, e?: React.MouseEvent) => {
+  const handleShareResource = useCallback(async (resource: Resource, e?: React.MouseEvent) => {
     if (e) {
       e.stopPropagation(); // Prevent triggering parent click events
     }
     
-    // In a real app, this would open a share dialog
     try {
-      navigator.clipboard.writeText(`Check out this resource: ${resource.title} - ${window.location.origin}${resource.url}`);
-      toast("Resource link copied to clipboard");
-    } catch (error) {
-      console.error("Failed to copy", error);
-      toast.error("Failed to copy link to clipboard");
-    }
-  }, []);
+      // Track share analytics
+      await resourceService.trackShare(
+        resource.id,
+        'link',
+        user?.id,
+        window.location.hostname
+      );
 
-  const handleDownloadResource = useCallback((resource: Resource, e?: React.MouseEvent) => {
+      const shareUrl = resource.file_url || resource.url;
+      
+      // Try to use the native share API if available
+      if (navigator.share) {
+        await navigator.share({
+          title: resource.title,
+          text: resource.description,
+          url: shareUrl
+        });
+      } else {
+        // Fallback to copying to clipboard
+        await navigator.clipboard.writeText(`Check out this resource: ${resource.title} - ${shareUrl}`);
+        toast("Resource link copied to clipboard");
+      }
+    } catch (error) {
+      console.error("Failed to share resource", error);
+      toast.error("Failed to share resource");
+    }
+  }, [user]);
+
+  const handleDownloadResource = useCallback(async (resource: Resource, e?: React.MouseEvent) => {
     if (e) {
       e.stopPropagation(); // Prevent triggering parent click events
     }
     
-    // In a real app, this would trigger a download
-    toast(`Downloading ${resource.title}`);
-  }, []);
+    try {
+      const downloadUrl = resource.file_url || resource.url;
+      
+      if (!downloadUrl) {
+        toast.error("No download URL available for this resource");
+        return;
+      }
 
-  const handleResourceClick = useCallback((url: string) => {
-    navigate(url);
-  }, [navigate]);
+      // Track download analytics
+      await resourceService.trackDownload(
+        resource.id,
+        user?.id,
+        window.location.hostname,
+        navigator.userAgent
+      );
+
+      // Open the download URL
+      window.open(downloadUrl, "_blank");
+      toast(`Downloading ${resource.title}`);
+    } catch (error) {
+      console.error("Failed to download resource", error);
+      toast.error("Failed to download resource");
+    }
+  }, [user]);
+
+  const handleResourceClick = useCallback(async (resource: Resource) => {
+    try {
+      const accessUrl = resource.file_url || resource.url;
+      
+      if (!accessUrl) {
+        toast.error("No access URL available for this resource");
+        return;
+      }
+
+      // Track view analytics
+      await resourceService.trackView(
+        resource.id,
+        user?.id,
+        window.location.hostname,
+        navigator.userAgent,
+        0
+      );
+
+      // Navigate to the resource
+      if (accessUrl.startsWith('http')) {
+        window.open(accessUrl, "_blank");
+      } else {
+        navigate(accessUrl);
+      }
+    } catch (error) {
+      console.error("Failed to access resource", error);
+      toast.error("Failed to access resource");
+    }
+  }, [navigate, user]);
 
   // Get the icon for the resource type
   const getResourceIcon = (type: string) => {
@@ -270,290 +341,275 @@ export default function ResourcesPage() {
     }
   };
 
-  // Resource list component
-  const ResourceList = () => {
-    if (isLoading) {
-      return (
-        <div className="flex justify-center items-center py-12">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        </div>
-      );
-    }
-    
-    if (filteredResources.length === 0) {
-      return (
-        <Card className="p-6 text-center">
-          <BookOpen className="h-12 w-12 text-slate-300 mx-auto mb-3" />
-          <h3 className="text-lg font-medium mb-1">No resources found</h3>
-          <p className="text-slate-500 mb-4">
-            {searchQuery 
-              ? "Try a different search term or category" 
-              : activeTab === "saved"
-                ? "You haven't saved any resources yet"
-                : "Resources will be added by Mood Mentors soon"}
-          </p>
-        </Card>
-      );
-    }
-
-    return (
-      <div className="space-y-4">
-        {filteredResources.map(resource => (
-          <Card 
-            key={resource.id} 
-            className="hover:shadow-md transition overflow-hidden cursor-pointer"
-            onClick={() => handleResourceClick(resource.url)}
-          >
-            <div className="flex flex-col md:flex-row">
-              <div className="md:w-1/4 h-48 md:h-auto relative">
-                <img
-                  src={resource.thumbnail_url || "https://placehold.co/400x300?text=Resource+Image"}
-                  alt={resource.title}
-                  className="object-cover h-full w-full"
-                  onError={(e) => {
-                    const target = e.target as HTMLImageElement;
-                    target.src = "https://placehold.co/400x300?text=Resource+Image";
-                  }}
-                  loading="lazy"
-                />
-                <div className="absolute top-3 left-3">
-                  <Badge className={getCategoryColor(resource.type)}>
-                    <div className="flex items-center gap-1">
-                      {getResourceIcon(resource.type)}
-                      <span>{resource.type.charAt(0).toUpperCase() + resource.type.slice(1)}</span>
-                    </div>
-                  </Badge>
-                </div>
-              </div>
-              <div className="p-5 md:w-3/4">
-                <div className="flex justify-between items-start">
-                  <div>
-                    <h3 className="text-lg font-medium mb-1">{resource.title}</h3>
-                    <p className="text-sm text-slate-500 mb-2">
-                      {resource.type === 'article' || resource.type === 'document' ? `${resource.read_time} • ` : 
-                      resource.type === 'video' || resource.type === 'podcast' || resource.type === 'workshop' ? `${resource.duration} • ` : 
-                      ''}
-                      {resource.date}
-                    </p>
-                  </div>
-                  <div className="flex gap-1">
-                    <Button 
-                      variant="ghost" 
-                      size="icon" 
-                      className="h-8 w-8"
-                      onClick={(e) => handleSaveResource(resource.id, e)}
-                      type="button"
-                    >
-                      {resource.is_favorite ? (
-                        <Bookmark className="h-4 w-4 fill-current" />
-                      ) : (
-                        <BookmarkPlus className="h-4 w-4" />
-                      )}
-                    </Button>
-                    <Button 
-                      variant="ghost" 
-                      size="icon" 
-                      className="h-8 w-8"
-                      onClick={(e) => handleShareResource(resource, e)}
-                      type="button"
-                    >
-                      <Share2 className="h-4 w-4" />
-                    </Button>
-                    {(resource.type === 'document' || resource.type === 'video' || resource.type === 'podcast') && (
-                      <Button 
-                        variant="ghost" 
-                        size="icon" 
-                        className="h-8 w-8"
-                        onClick={(e) => handleDownloadResource(resource, e)}
-                        type="button"
-                      >
-                        <Download className="h-4 w-4" />
-                      </Button>
-                    )}
-                  </div>
-                </div>
-                
-                <p className="text-slate-600 mb-3">{resource.description}</p>
-                
-                <div className="flex flex-wrap gap-1 mb-3">
-                  {resource.tags?.map(tag => (
-                    <Badge key={tag} variant="outline" className="text-xs">
-                      {tag}
-                    </Badge>
-                  ))}
-                </div>
-                
-                <div className="flex justify-between items-center">
-                  <div className="flex items-center">
-                    {resource.author_avatar ? (
-                      <Avatar className="h-6 w-6 mr-2">
-                        <AvatarImage 
-                          src={resource.author_avatar} 
-                          alt={resource.author}
-                          onError={(e) => {
-                            e.currentTarget.style.display = 'none';
-                          }}
-                        />
-                        <AvatarFallback>{resource.author.charAt(0)}</AvatarFallback>
-                      </Avatar>
-                    ) : (
-                      <Avatar className="h-6 w-6 mr-2">
-                        <AvatarFallback>{resource.author.charAt(0)}</AvatarFallback>
-                      </Avatar>
-                    )}
-                    <div>
-                      <span className="text-sm font-medium">{resource.author}</span>
-                      <span className="text-xs text-slate-500 block">{resource.author_role}</span>
-                    </div>
-                  </div>
-                  <Button 
-                    size="sm"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      navigate(resource.url);
-                    }}
-                    type="button"
-                  >
-                    View Resource
-                    <ExternalLink className="h-4 w-4 ml-1" />
-                  </Button>
-                </div>
-              </div>
-            </div>
-          </Card>
-        ))}
+  // Empty state component
+  const EmptyState = () => (
+    <div className="text-center py-12">
+      <div className="mx-auto w-24 h-24 bg-gray-100 rounded-full flex items-center justify-center mb-4">
+        <BookOpen className="h-12 w-12 text-gray-400" />
       </div>
-    );
-  };
+      <h3 className="text-lg font-medium text-gray-900 mb-2">No resources available</h3>
+      <p className="text-gray-500 max-w-sm mx-auto">
+        {activeTab === "saved" 
+          ? "You haven't saved any resources yet. Browse available resources and save the ones you find helpful."
+          : searchQuery 
+            ? "No resources match your search criteria. Try adjusting your search terms or browse different categories."
+            : "Mood mentors haven't added any resources yet. Check back later for helpful content and tools."
+        }
+      </p>
+    </div>
+  );
 
-  const FeaturedResourceCard = ({ resource }: { resource: Resource }) => (
-    <Card 
-      key={resource.id} 
-      className="overflow-hidden hover:shadow-md transition cursor-pointer"
-      onClick={() => handleResourceClick(resource.url)}
-    >
-      <div className="aspect-video w-full relative">
-        <img
-          src={resource.thumbnail_url || "https://placehold.co/400x300?text=Resource+Image"}
-          alt={resource.title}
-          className="object-cover w-full h-full"
-          onError={(e) => {
-            const target = e.target as HTMLImageElement;
-            target.src = "https://placehold.co/400x300?text=Resource+Image";
-          }}
-          loading="lazy"
-        />
-        <div className="absolute top-3 right-3">
-          <Badge className={getCategoryColor(resource.type)}>
-            <div className="flex items-center gap-1">
-              {getResourceIcon(resource.type)}
-              <span>{resource.type.charAt(0).toUpperCase() + resource.type.slice(1)}</span>
-            </div>
-          </Badge>
-        </div>
-        <Button 
-          variant="ghost" 
-          size="icon" 
-          className="absolute top-3 left-3 h-8 w-8 bg-white/80 hover:bg-white"
-          onClick={(e) => handleSaveResource(resource.id, e)}
-          type="button"
+  // Resource grid component
+  const ResourceGrid = () => (
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      {filteredResources.map(resource => (
+        <Card 
+          key={resource.id} 
+          className="overflow-hidden hover:shadow-md transition-shadow cursor-pointer"
+          onClick={() => handleResourceClick(resource)}
         >
-          {resource.is_favorite ? (
-            <Bookmark className="h-4 w-4 fill-current" />
-          ) : (
-            <BookmarkPlus className="h-4 w-4" />
-          )}
-        </Button>
-      </div>
-      <CardHeader className="pb-2">
-        <CardTitle className="text-lg">{resource.title}</CardTitle>
-        <CardDescription>
-          {resource.type === 'article' || resource.type === 'document' ? `${resource.read_time} • ` : 
-          resource.type === 'video' || resource.type === 'podcast' || resource.type === 'workshop' ? `${resource.duration} • ` : 
-          ''}
-          {resource.date}
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        <p className="text-sm text-slate-600 line-clamp-2">{resource.description}</p>
-        <div className="flex flex-wrap gap-1 mt-3">
-          {resource.tags?.map(tag => (
-            <Badge key={tag} variant="outline" className="text-xs">
-              {tag}
-            </Badge>
-          ))}
-        </div>
-      </CardContent>
-      <CardFooter className="border-t pt-3 flex justify-between">
-        <div className="flex items-center text-sm text-slate-500">
-          {resource.author_avatar ? (
-            <Avatar className="h-6 w-6 mr-2">
-              <AvatarImage 
-                src={resource.author_avatar} 
-                alt={resource.author}
+          <div className="relative h-48">
+            <img
+              src={resource.thumbnail_url || "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400&h=300&fit=crop"}
+              alt={resource.title}
+              className="object-cover h-full w-full"
+              onError={(e) => {
+                const target = e.target as HTMLImageElement;
+                target.src = "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400&h=300&fit=crop";
+              }}
+            />
+            <div className="absolute top-3 left-3">
+              <Badge className={getCategoryColor(resource.type)}>
+                <div className="flex items-center gap-1">
+                  {getResourceIcon(resource.type)}
+                  <span className="text-xs">{resource.type.charAt(0).toUpperCase() + resource.type.slice(1)}</span>
+                </div>
+              </Badge>
+            </div>
+            {resource.featured && (
+              <div className="absolute top-3 right-3">
+                <Badge className="bg-yellow-500 text-white">Featured</Badge>
+              </div>
+            )}
+          </div>
+          
+          <CardHeader className="pb-2">
+            <CardTitle className="text-lg line-clamp-2">{resource.title}</CardTitle>
+            <CardDescription className="text-sm">
+              {resource.read_time || resource.duration} • {resource.date || 'Recently added'}
+            </CardDescription>
+          </CardHeader>
+          
+          <CardContent className="pb-2">
+            <p className="text-gray-600 text-sm line-clamp-3 mb-3">{resource.description}</p>
+            
+            {resource.tags && resource.tags.length > 0 && (
+              <div className="flex flex-wrap gap-1 mb-3">
+                {resource.tags.slice(0, 3).map(tag => (
+                  <Badge key={tag} variant="outline" className="text-xs">
+                    {tag}
+                  </Badge>
+                ))}
+                {resource.tags.length > 3 && (
+                  <Badge variant="outline" className="text-xs">
+                    +{resource.tags.length - 3} more
+                  </Badge>
+                )}
+              </div>
+            )}
+          </CardContent>
+          
+          <CardFooter className="border-t pt-3 flex justify-between items-center">
+            <div className="flex items-center text-sm text-gray-500">
+              {resource.author_avatar ? (
+                <Avatar className="h-6 w-6 mr-2">
+                  <AvatarImage src={resource.author_avatar} alt={resource.author} />
+                  <AvatarFallback>{resource.author.charAt(0)}</AvatarFallback>
+                </Avatar>
+              ) : (
+                <Avatar className="h-6 w-6 mr-2">
+                  <AvatarFallback>{resource.author.charAt(0)}</AvatarFallback>
+                </Avatar>
+              )}
+              <span className="truncate">{resource.author}</span>
+            </div>
+            
+            <div className="flex gap-1">
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                className="h-8 w-8"
+                onClick={(e) => handleSaveResource(resource.id, e)}
+              >
+                {resource.is_favorite ? (
+                  <Bookmark className="h-4 w-4 fill-current text-blue-600" />
+                ) : (
+                  <BookmarkPlus className="h-4 w-4" />
+                )}
+              </Button>
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                className="h-8 w-8"
+                onClick={(e) => handleShareResource(resource, e)}
+              >
+                <Share2 className="h-4 w-4" />
+              </Button>
+              {resource.file_url && (
+                <Button 
+                  variant="ghost" 
+                  size="icon" 
+                  className="h-8 w-8"
+                  onClick={(e) => handleDownloadResource(resource, e)}
+                >
+                  <Download className="h-4 w-4" />
+                </Button>
+              )}
+            </div>
+          </CardFooter>
+        </Card>
+      ))}
+    </div>
+  );
+
+  // Resource list component
+  const ResourceList = () => (
+    <div className="space-y-4">
+      {filteredResources.map(resource => (
+        <Card 
+          key={resource.id} 
+          className="hover:shadow-md transition-shadow cursor-pointer"
+          onClick={() => handleResourceClick(resource)}
+        >
+          <div className="flex">
+            <div className="w-32 h-24 flex-shrink-0">
+              <img
+                src={resource.thumbnail_url || "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&h=150&fit=crop"}
+                alt={resource.title}
+                className="object-cover h-full w-full rounded-l-lg"
                 onError={(e) => {
-                  e.currentTarget.style.display = 'none';
+                  const target = e.target as HTMLImageElement;
+                  target.src = "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&h=150&fit=crop";
                 }}
               />
-              <AvatarFallback>{resource.author.charAt(0)}</AvatarFallback>
-            </Avatar>
-          ) : (
-            <Avatar className="h-6 w-6 mr-2">
-              <AvatarFallback>{resource.author.charAt(0)}</AvatarFallback>
-            </Avatar>
-          )}
-          <span className="line-clamp-1">{resource.author}</span>
-        </div>
-        <Button 
-          variant="ghost" 
-          size="sm"
-          onClick={(e) => {
-            e.stopPropagation();
-            navigate(resource.url);
-          }}
-          type="button"
-        >
-          <ExternalLink className="h-4 w-4" />
-        </Button>
-      </CardFooter>
-    </Card>
+            </div>
+            
+            <div className="flex-1 p-4">
+              <div className="flex justify-between items-start">
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 mb-1">
+                    <Badge className={getCategoryColor(resource.type)}>
+                      <div className="flex items-center gap-1">
+                        {getResourceIcon(resource.type)}
+                        <span className="text-xs">{resource.type.charAt(0).toUpperCase() + resource.type.slice(1)}</span>
+                      </div>
+                    </Badge>
+                    {resource.featured && (
+                      <Badge className="bg-yellow-500 text-white text-xs">Featured</Badge>
+                    )}
+                  </div>
+                  
+                  <h3 className="font-medium text-lg mb-1 line-clamp-1">{resource.title}</h3>
+                  <p className="text-gray-600 text-sm line-clamp-2 mb-2">{resource.description}</p>
+                  
+                  <div className="flex items-center text-xs text-gray-500 gap-4">
+                    <div className="flex items-center">
+                      <Avatar className="h-4 w-4 mr-1">
+                        <AvatarImage src={resource.author_avatar} alt={resource.author} />
+                        <AvatarFallback className="text-xs">{resource.author.charAt(0)}</AvatarFallback>
+                      </Avatar>
+                      <span>{resource.author}</span>
+                    </div>
+                    <span>{resource.read_time || resource.duration}</span>
+                    <span>{resource.date || 'Recently added'}</span>
+                  </div>
+                </div>
+                
+                <div className="flex gap-1 ml-4">
+                  <Button 
+                    variant="ghost" 
+                    size="icon" 
+                    className="h-8 w-8"
+                    onClick={(e) => handleSaveResource(resource.id, e)}
+                  >
+                    {resource.is_favorite ? (
+                      <Bookmark className="h-4 w-4 fill-current text-blue-600" />
+                    ) : (
+                      <BookmarkPlus className="h-4 w-4" />
+                    )}
+                  </Button>
+                  <Button 
+                    variant="ghost" 
+                    size="icon" 
+                    className="h-8 w-8"
+                    onClick={(e) => handleShareResource(resource, e)}
+                  >
+                    <Share2 className="h-4 w-4" />
+                  </Button>
+                  {resource.file_url && (
+                    <Button 
+                      variant="ghost" 
+                      size="icon" 
+                      className="h-8 w-8"
+                      onClick={(e) => handleDownloadResource(resource, e)}
+                    >
+                      <Download className="h-4 w-4" />
+                    </Button>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        </Card>
+      ))}
+    </div>
   );
 
   return (
     <DashboardLayout>
-      {/* Hero Section */}
-      <div className="bg-gradient-to-r from-[#0078FF] via-[#20c0f3] to-[#00D2FF] text-white pt-20 pb-24 relative overflow-hidden">
-        <div className="absolute inset-0 opacity-10">
-          <div className="absolute -left-20 -top-20 w-96 h-96 rounded-full bg-white"></div>
-          <div className="absolute right-0 bottom-0 w-80 h-80 rounded-full bg-white"></div>
-          <div className="absolute left-1/3 top-1/3 w-64 h-64 rounded-full bg-white"></div>
-        </div>
-        <div className="container mx-auto px-4 relative z-10">
-          <div className="text-center max-w-3xl mx-auto">
-            <h1 className="text-4xl md:text-5xl font-bold mb-6 text-white">Resources</h1>
-            <p className="text-lg md:text-xl max-w-2xl mx-auto text-blue-50 mb-8">
-              Access educational content and tools to support your mental health journey
-            </p>
-            <div className="relative max-w-xl mx-auto">
-              <Input 
-                type="search"
-                placeholder="Search resources..."
-                className="pl-10 pr-14 py-3 w-full rounded-full border-0 text-gray-800 shadow-lg"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
-              <Search className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
+      <div className="p-6">
+        {/* Header */}
+        <div className="mb-6">
+          <div className="flex justify-between items-start mb-4">
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900 mb-2">Resources</h1>
+              <p className="text-gray-600">
+                Access educational content and tools to support your mental health journey
+              </p>
+            </div>
+            
+            <div className="flex items-center gap-2">
+              <Button
+                variant={viewMode === 'grid' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setViewMode('grid')}
+              >
+                <Grid3x3 className="h-4 w-4" />
+              </Button>
+              <Button
+                variant={viewMode === 'list' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setViewMode('list')}
+              >
+                <List className="h-4 w-4" />
+              </Button>
             </div>
           </div>
+          
+          {/* Search */}
+          <div className="relative max-w-md">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+            <Input
+              type="search"
+              placeholder="Search resources..."
+              className="pl-10"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+          </div>
         </div>
-        
-        {/* Curved bottom edge */}
-        <div className="absolute bottom-0 left-0 right-0 h-16 bg-white" style={{ 
-          clipPath: "ellipse(75% 100% at 50% 100%)" 
-        }}></div>
-      </div>
 
-      <div className="py-8 container mx-auto px-4">
+        {/* Content */}
         <Tabs defaultValue={activeTab} value={activeTab} onValueChange={setActiveTab}>
           <TabsList className="mb-6">
             <TabsTrigger value="all">All Resources</TabsTrigger>
@@ -566,63 +622,62 @@ export default function ResourcesPage() {
             <TabsTrigger value="saved">Saved</TabsTrigger>
           </TabsList>
           
-          <TabsContent value="all" className="space-y-8">
-            {featuredResources.length > 0 && (
-              <div className="mb-8">
-                <h2 className="text-xl font-medium mb-4">Featured Resources</h2>
-                <div className="grid grid-cols-1 lg:grid-cols-3 md:grid-cols-2 gap-6">
-                  {featuredResources.map(resource => (
-                    <FeaturedResourceCard key={resource.id} resource={resource} />
-                  ))}
-                </div>
-              </div>
-            )}
-
-            <div>
-              <h2 className="text-xl font-medium mb-4">
-                All Resources
-              </h2>
-              <ResourceList />
+          {isLoading ? (
+            <div className="flex justify-center items-center py-12">
+              <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
             </div>
-          </TabsContent>
-          
-          <TabsContent value="articles" className="space-y-8">
-            <ResourceList />
-          </TabsContent>
-          
-          <TabsContent value="videos" className="space-y-8">
-            <ResourceList />
-          </TabsContent>
-          
-          <TabsContent value="podcasts" className="space-y-8">
-            <ResourceList />
-          </TabsContent>
-          
-          <TabsContent value="documents" className="space-y-8">
-            <ResourceList />
-          </TabsContent>
-          
-          <TabsContent value="groups" className="space-y-8">
-            <ResourceList />
-          </TabsContent>
-          
-          <TabsContent value="workshops" className="space-y-8">
-            <ResourceList />
-          </TabsContent>
-          
-          <TabsContent value="saved" className="space-y-8">
-            {savedResources.length === 0 ? (
-              <Card className="p-6 text-center">
-                <Bookmark className="h-12 w-12 text-slate-300 mx-auto mb-3" />
-                <h3 className="text-lg font-medium mb-1">No saved resources</h3>
-                <p className="text-slate-500 mb-4">
-                  Save resources to access them later
-                </p>
-              </Card>
-            ) : (
-              <ResourceList />
-            )}
-          </TabsContent>
+          ) : filteredResources.length === 0 ? (
+            <EmptyState />
+          ) : (
+            <>
+              {/* Featured Resources */}
+              {activeTab === "all" && featuredResources.length > 0 && (
+                <div className="mb-8">
+                  <h2 className="text-lg font-semibold mb-4">Featured Resources</h2>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {featuredResources.slice(0, 3).map(resource => (
+                      <Card 
+                        key={resource.id} 
+                        className="overflow-hidden border-blue-200 bg-blue-50/50 hover:shadow-md transition-shadow cursor-pointer"
+                        onClick={() => handleResourceClick(resource)}
+                      >
+                        <div className="relative h-32">
+                          <img
+                            src={resource.thumbnail_url || "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400&h=200&fit=crop"}
+                            alt={resource.title}
+                            className="object-cover h-full w-full"
+                          />
+                          <Badge className="absolute top-2 left-2 bg-yellow-500 text-white">
+                            Featured
+                          </Badge>
+                        </div>
+                        <CardContent className="p-4">
+                          <h3 className="font-medium mb-1 line-clamp-1">{resource.title}</h3>
+                          <p className="text-sm text-gray-600 line-clamp-2">{resource.description}</p>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                </div>
+              )}
+              
+              {/* All Resources */}
+              <div>
+                <div className="flex justify-between items-center mb-4">
+                  <h2 className="text-lg font-semibold">
+                    {activeTab === "all" ? "All Resources" : 
+                     activeTab === "saved" ? "Saved Resources" :
+                     activeTab.charAt(0).toUpperCase() + activeTab.slice(1)}
+                  </h2>
+                  <span className="text-sm text-gray-500">
+                    {filteredResources.length} resource{filteredResources.length !== 1 ? 's' : ''}
+                  </span>
+                </div>
+                
+                {viewMode === 'grid' ? <ResourceGrid /> : <ResourceList />}
+              </div>
+            </>
+          )}
         </Tabs>
       </div>
     </DashboardLayout>

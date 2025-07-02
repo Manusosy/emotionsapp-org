@@ -8,6 +8,7 @@ import {
   MessagingService 
 } from '@/features/messaging/types';
 import { patientService, moodMentorService } from '@/services';
+import { notificationService } from '@/services/notifications/notification.service';
 
 export default class SupabaseMessagingService implements MessagingService {
   async getOrCreateConversation(
@@ -38,130 +39,32 @@ export default class SupabaseMessagingService implements MessagingService {
       
       console.log("Current authenticated user:", session.session.user.id);
       
-      // Try to find an existing conversation first - direct approach
-      try {
-        console.log("Checking for existing conversation between users");
-        
-        // First check if there's a direct conversation between these users
-        const { data: existingConversation, error: existingError } = await supabase
-          .from('conversation_participants')
-          .select('conversation_id')
-          .eq('user_id', user1Id)
-          .limit(1000);  // Get all conversations for user1
-          
-        if (existingError) {
-          console.warn("Error checking for existing conversations:", existingError);
-        } else if (existingConversation && existingConversation.length > 0) {
-          console.log(`Found ${existingConversation.length} conversations for user1`);
-          
-          // Get all conversation IDs for user1
-          const user1ConversationIds = existingConversation.map(c => c.conversation_id);
-          
-          // Check if user2 is in any of these conversations
-          const { data: sharedConversations, error: sharedError } = await supabase
-            .from('conversation_participants')
-            .select('conversation_id')
-            .eq('user_id', user2Id)
-            .in('conversation_id', user1ConversationIds);
-            
-          if (sharedError) {
-            console.warn("Error checking for shared conversations:", sharedError);
-          } else if (sharedConversations && sharedConversations.length > 0) {
-            // Found an existing conversation between these users
-            const existingConversationId = sharedConversations[0].conversation_id;
-            console.log("Found existing conversation:", existingConversationId);
-            
-            // Update the conversation's timestamp
-            await supabase
-              .from('conversations')
-              .update({ updated_at: new Date().toISOString() })
-              .eq('id', existingConversationId);
-              
-            return { data: existingConversationId };
-          }
-        }
-      } catch (findError) {
-        console.warn("Error finding existing conversation:", findError);
-      }
+      // Use our new database function to get or create conversation
+      const { data: conversationId, error } = await supabase.rpc('get_or_create_conversation', {
+        p_user1_id: user1Id,
+        p_user2_id: user2Id
+      });
       
-      // If we get here, we need to create a new conversation
-      console.log("No existing conversation found, creating new conversation");
-      
-      // Create the new conversation
-      const { data: newConversation, error: createError } = await supabase
-        .from('conversations')
-        .insert({
-          appointment_id: appointmentId || null,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-          last_message_at: new Date().toISOString()
-        })
-        .select('id')
-        .single();
-      
-      if (createError) {
-        console.error("Error creating conversation:", createError);
+      if (error) {
+        console.error("Error getting or creating conversation:", error);
         return { error: 'Could not create conversation. Please ensure the messaging system is set up correctly.' };
       }
       
-      if (!newConversation || !newConversation.id) {
-        console.error("No conversation ID returned after creation");
-        return { error: 'Failed to create conversation' };
-      }
+      console.log("Conversation ID:", conversationId);
       
-      console.log("New conversation created with ID:", newConversation.id);
-      
-      // Add both users as participants
-      console.log("Adding users as participants");
-      const { error: addParticipantsError } = await supabase
-        .from('conversation_participants')
-        .insert([
-          {
-            conversation_id: newConversation.id,
-            user_id: user1Id,
-            joined_at: new Date().toISOString()
-          },
-          {
-            conversation_id: newConversation.id,
-            user_id: user2Id,
-            joined_at: new Date().toISOString()
-          }
-        ]);
-      
-      if (addParticipantsError) {
-        console.error("Error adding participants:", addParticipantsError);
-        
-        // Try to clean up the conversation
-        const { error: deleteError } = await supabase
+      // If appointment ID is provided, update the conversation
+      if (appointmentId && conversationId) {
+        const { error: updateError } = await supabase
           .from('conversations')
-          .delete()
-          .eq('id', newConversation.id);
+          .update({ appointment_id: appointmentId })
+          .eq('id', conversationId);
           
-        if (deleteError) {
-          console.error("Error cleaning up conversation after participant error:", deleteError);
+        if (updateError) {
+          console.warn("Could not link conversation to appointment:", updateError);
         }
-          
-        return { error: 'Could not add participants to conversation' };
       }
       
-      // Add a system message to initialize the conversation
-      console.log("Adding initial system message");
-      const { error: messageError } = await supabase
-        .from('messages')
-        .insert({
-          conversation_id: newConversation.id,
-          sender_id: user1Id,
-          content: 'Conversation started',
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        });
-        
-      if (messageError) {
-        console.error("Error adding initial message:", messageError);
-      }
-      
-      console.log("Conversation successfully created with ID:", newConversation.id);
-      return { data: newConversation.id };
+      return { data: conversationId };
     } catch (error) {
       console.error("Unexpected error in getOrCreateConversation:", error);
       return { error: 'Failed to create conversation due to an unexpected error' };
@@ -170,103 +73,39 @@ export default class SupabaseMessagingService implements MessagingService {
 
   async getUserConversations(userId: string): Promise<ServiceResponse<ConversationWithLastMessage[]>> {
     try {
-      // Get all conversations for the user
-      const { data: conversationsData, error: conversationsError } = await supabase
-        .from('user_conversations_view')
-        .select('*')
-        .eq('user_id', userId)
-        .order('last_message_time', { ascending: false });
+      // Use our database function to get user conversations
+      const { data: conversationsData, error: conversationsError } = await supabase.rpc('get_user_conversations', {
+        p_user_id: userId
+      });
 
       if (conversationsError) {
         console.error('Error fetching user conversations:', conversationsError);
         return { error: 'Could not fetch conversations. Please ensure the messaging system is set up correctly.' };
       }
 
-      // For each conversation, get the other participant's details
-      const enhancedConversations = await Promise.all(
-        (conversationsData || []).map(async (conv) => {
-          try {
-            // Get the other participant's user ID
-            const otherUserId = conv.other_user_id;
-            
-            if (!otherUserId) {
-              return {
-                ...conv,
-                other_participant: { 
-                  id: "unknown", 
-                  fullName: "Unknown User", 
-                  email: "",
-                  avatarUrl: null
-                }
-              };
-            }
-            
-            // Try to get user profile using existing services
-            let userData = null;
+      // The database function already returns enhanced conversation data with participant details
+      // So we can directly map it to our expected format
+      const conversations = (conversationsData || []).map((conv: any) => ({
+        conversation_id: conv.conversation_id,
+        other_user_id: conv.other_user_id,
+        other_user_name: conv.other_user_name || conv.other_user_email,
+        other_user_email: conv.other_user_email,
+        other_user_avatar: conv.other_user_avatar,
+        last_message_content: conv.last_message_content,
+        last_message_time: conv.last_message_time,
+        unread_count: conv.unread_count || 0,
+        has_unread: conv.has_unread || false,
+        // Add participant info in the expected format
+        other_participant: {
+          id: conv.other_user_id,
+          fullName: conv.other_user_name || conv.other_user_email || 'Unknown User',
+          email: conv.other_user_email || '',
+          avatarUrl: conv.other_user_avatar
+        }
+      }));
 
-            // Check if the other user is a patient
-            const patientProfile = await patientService.getPatientById(otherUserId);
-            if (patientProfile.data) {
-              userData = {
-                id: patientProfile.data.userId,
-                fullName: patientProfile.data.fullName,
-                email: patientProfile.data.email,
-                avatarUrl: patientProfile.data.avatarUrl
-              };
-            } else {
-              // If not a patient, check if it's a mood mentor
-              const mentorProfile = await moodMentorService.getMoodMentorById(otherUserId);
-              if (mentorProfile.data) {
-                userData = {
-                  id: mentorProfile.data.userId,
-                  fullName: mentorProfile.data.fullName,
-                  email: mentorProfile.data.email,
-                  avatarUrl: mentorProfile.data.avatarUrl
-                };
-              } else {
-                // Fallback to auth.users if not found in specific profiles
-                const { data: authUser } = await supabase.auth.getUser(otherUserId);
-                if (authUser && authUser.user) {
-                  userData = {
-                    id: authUser.user.id,
-                    fullName: authUser.user.user_metadata?.full_name || authUser.user.email?.split('@')[0] || 'Unknown User',
-                    email: authUser.user.email || '',
-                    avatarUrl: authUser.user.user_metadata?.avatar_url || null
-                  };
-                }
-              }
-            }
-
-            // If we still don't have user data, use a placeholder
-            if (!userData) {
-              userData = { 
-                id: otherUserId, 
-                fullName: "Unknown User", 
-                email: "",
-                avatarUrl: null
-              };
-            }
-              
-            return {
-              ...conv,
-              other_participant: userData
-            };
-          } catch (err) {
-            console.error('Error processing conversation:', err);
-            return {
-              ...conv,
-              other_participant: { 
-                id: "unknown", 
-                fullName: "Unknown User", 
-                email: "",
-                avatarUrl: null
-              }
-            };
-          }
-        })
-      );
-
-      return { data: enhancedConversations };
+      console.log(`Found ${conversations.length} conversations for user ${userId}`);
+      return { data: conversations };
     } catch (error) {
       console.error('Error in getUserConversations:', error);
       return { error: 'Failed to fetch conversations' };
@@ -279,13 +118,12 @@ export default class SupabaseMessagingService implements MessagingService {
     offset: number = 0
   ): Promise<ServiceResponse<Message[]>> {
     try {
-      const { data, error } = await supabase
-        .from('messages')
-        .select('*')
-        .eq('conversation_id', conversationId)
-        .is('deleted_at', null)
-        .order('created_at', { ascending: true })
-        .range(offset, offset + limit - 1);
+      // Use our new database function
+      const { data, error } = await supabase.rpc('get_conversation_messages', {
+        p_conversation_id: conversationId,
+        p_limit: limit,
+        p_offset: offset
+      });
 
       if (error) {
         console.error('Error fetching messages:', error);
@@ -306,15 +144,27 @@ export default class SupabaseMessagingService implements MessagingService {
     attachmentUrl?: string,
     attachmentType?: string
   ): Promise<ServiceResponse<Message>> {
+    console.log("==== SEND MESSAGE START ====");
+    console.log({ conversationId, senderId, content, attachmentUrl, attachmentType });
+
     try {
-      console.log("==== SEND MESSAGE DEBUG ====");
-      console.log("Attempting to send message with params:", {
-        conversationId,
-        senderId,
-        content: content.substring(0, 20) + (content.length > 20 ? '...' : ''),
-        hasAttachment: !!attachmentUrl
-      });
-      
+      // Get conversation details to find recipient
+      const { data: conversation, error: convError } = await supabase
+        .from('conversations')
+        .select('user1_id, user2_id')
+        .eq('id', conversationId)
+        .single();
+
+      if (convError || !conversation) {
+        console.error('Error fetching conversation:', convError);
+        return { error: 'Could not find conversation' };
+      }
+
+      // Determine recipient
+      const recipientId = conversation.user1_id === senderId 
+        ? conversation.user2_id 
+        : conversation.user1_id;
+
       // Verify the conversation exists first
       console.log("Checking if conversation exists");
       const { data: conversationCheck, error: conversationError } = await supabase
@@ -354,48 +204,68 @@ export default class SupabaseMessagingService implements MessagingService {
         return { error: 'Sender is not a participant in this conversation' };
       }
       
-      // Insert the new message
-      console.log("Inserting new message");
-      const messageData = {
-        conversation_id: conversationId,
-        sender_id: senderId,
-        content,
-        attachment_url: attachmentUrl || null,
-        attachment_type: attachmentType || null,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      };
-      console.log("Message data:", messageData);
-      
-      const { data, error } = await supabase
-        .from('messages')
-        .insert(messageData)
-        .select('*')
-        .single();
+      // Send message using our database function
+      console.log("Sending message using database function");
+      const { data: messageId, error } = await supabase.rpc('send_message', {
+        p_conversation_id: conversationId,
+        p_sender_id: senderId,
+        p_content: content,
+        p_attachment_url: attachmentUrl || null,
+        p_attachment_type: attachmentType || null
+      });
 
       if (error) {
         console.error('Error sending message:', error);
         return { error: 'Could not send message. Please ensure the messaging system is set up correctly.' };
       }
 
-      console.log("Message inserted successfully:", data);
+      console.log("Message sent successfully with ID:", messageId);
 
-      // Update the conversation's last_message_at timestamp
-      console.log("Updating conversation timestamp");
-      const { error: updateError } = await supabase
-        .from('conversations')
-        .update({ 
-          last_message_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', conversationId);
+      // Create notification for recipient using notification service
+      try {
+        // Get sender's name for the notification
+        const { data: senderProfile } = await supabase
+          .from('user_profiles')
+          .select('full_name, avatar_url')
+          .eq('user_id', senderId)
+          .single();
+
+        const senderName = senderProfile?.full_name || 'Someone';
         
-      if (updateError) {
-        console.warn('Error updating conversation timestamp:', updateError);
-        // Non-blocking, continue even if this fails
-      } else {
-        console.log("Conversation timestamp updated successfully");
+        await notificationService.createNotification({
+          userId: recipientId,
+          title: 'New Message',
+          message: `${senderName} sent you a message: ${content.substring(0, 50)}${content.length > 50 ? '...' : ''}`,
+          type: 'message',
+          senderName: senderName,
+          senderAvatar: senderProfile?.avatar_url || null,
+          actionUrl: `/messages/${conversationId}`,
+          metadata: {
+            conversationId,
+            senderId,
+            messageId
+          }
+        });
+      } catch (notifyError) {
+        console.warn('Failed to create message notification:', notifyError);
+        // Continue anyway as this is not critical
       }
+
+      // Create the message object to return
+      const data = {
+        id: messageId,
+        conversation_id: conversationId,
+        sender_id: senderId,
+        content,
+        attachment_url: attachmentUrl || null,
+        attachment_type: attachmentType || null,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        read_at: null,
+        deleted_at: null,
+        read: false,
+        recipient_id: null
+      };
 
       console.log("==== SEND MESSAGE COMPLETED ====");
       return { data };
@@ -407,26 +277,21 @@ export default class SupabaseMessagingService implements MessagingService {
 
   async markMessagesAsRead(conversationId: string, userId: string): Promise<ServiceResponse<void>> {
     try {
-      // Get current timestamp
-      const now = new Date().toISOString();
-      
-      // Update all unread messages sent by others to be read
-      const { error: messagesError } = await supabase
-        .from('messages')
-        .update({ read_at: now })
-        .eq('conversation_id', conversationId)
-        .neq('sender_id', userId)
-        .is('read_at', null);
+      // Use our database function to mark messages as read
+      const { error } = await supabase.rpc('mark_messages_as_read', {
+        p_conversation_id: conversationId,
+        p_user_id: userId
+      });
 
-      if (messagesError) {
-        console.error('Error marking messages as read:', messagesError);
+      if (error) {
+        console.error('Error marking messages as read:', error);
         return { error: 'Could not mark messages as read' };
       }
 
       // Update the user's last_read_at in the conversation
       const { error: participantError } = await supabase
         .from('conversation_participants')
-        .update({ last_read_at: now })
+        .update({ last_read_at: new Date().toISOString() })
         .eq('conversation_id', conversationId)
         .eq('user_id', userId);
 

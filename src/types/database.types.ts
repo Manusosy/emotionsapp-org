@@ -107,9 +107,13 @@ export interface Resource {
   featured?: boolean;
   downloads?: number;
   shares?: number;
+  views?: number;
   mood_mentor_id?: string;
+  is_public?: boolean;
+  is_active?: boolean;
   created_at: string;
   updated_at?: string;
+  is_favorite?: boolean;
 }
 
 export interface Notification {

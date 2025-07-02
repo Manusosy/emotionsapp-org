@@ -21,13 +21,13 @@ import ContactBanner from "@/components/layout/ContactBanner";
 import MoodMentors from "@/features/mood_mentors/pages/MoodMentors";
 import MoodMentorAppointmentsPage from "@/features/mood_mentors/pages/AppointmentsPage";
 import MoodMentorPatientsPage from "@/features/mood_mentors/pages/PatientsPage";
-import MoodMentorGroupsPage from "@/features/mood_mentors/pages/GroupsPage";
 import MoodMentorResourcesPage from "@/features/mood_mentors/pages/ResourcesPage";
+import GroupsPage from "@/features/mood_mentors/pages/GroupsPage";
 import DashboardResourcesPage from "@/features/dashboard/pages/ResourcesPage";
-import SupportGroupsPage from "@/features/dashboard/pages/SupportGroupsPage";
 import BookingPage from "@/features/booking/pages/BookingPage";
 import PatientDashboard from "@/features/dashboard/pages/PatientDashboard";
 import PatientAppointmentsPage from "@/features/dashboard/pages/AppointmentsPage";
+import SupportGroupsPage from "@/features/dashboard/pages/SupportGroupsPage";
 import FavoritesPage from "@/features/dashboard/pages/FavoritesPage";
 import Settings from "@/features/dashboard/pages/Settings";
 import Profile from "@/features/dashboard/pages/Profile";
@@ -67,6 +67,9 @@ import { setupDatabaseFunctions } from './lib/supabase';
 import PatientsPage from "./features/mood_mentors/pages/PatientsPage";
 import PatientProfilePage from "./features/mood_mentors/pages/PatientProfilePage";
 import { PatientDirectCallPage, MentorDirectCallPage } from './components/calls/DirectCallPage';
+import { syncSupportGroupCounts } from '@/utils/sync-support-groups';
+import { resetAllSessionData } from '@/utils/reset-session-data';
+import GroupSessionPage from "./features/dashboard/pages/GroupSessionPage";
 // Test files removed
 
 // Type definition for UserRole
@@ -332,7 +335,7 @@ const AppContent = () => {
                   <DashboardResourcesPage />
                 </ProtectedErrorBoundary>
               } />
-              <Route path="/patient-dashboard/support-groups" element={
+              <Route path="/patient-dashboard/groups" element={
                 <ProtectedErrorBoundary dashboardPath="/patient-dashboard">
                   <SupportGroupsPage />
                 </ProtectedErrorBoundary>
@@ -392,6 +395,11 @@ const AppContent = () => {
                   <JournalEntryPage />
                 </ProtectedErrorBoundary>
               } />
+              <Route path="/patient-dashboard/group-session/:sessionId" element={
+                <ProtectedErrorBoundary dashboardPath="/patient-dashboard">
+                  <GroupSessionPage />
+                </ProtectedErrorBoundary>
+              } />
               
               {/* Mood Mentor Dashboard Routes - Protected by ProtectedRoute component */}
               <Route path="/mood-mentor-dashboard" element={
@@ -416,7 +424,7 @@ const AppContent = () => {
               } />
               <Route path="/mood-mentor-dashboard/groups" element={
                 <ProtectedErrorBoundary dashboardPath="/mood-mentor-dashboard">
-                  <MoodMentorGroupsPage />
+                  <GroupsPage />
                 </ProtectedErrorBoundary>
               } />
               <Route path="/mood-mentor-dashboard/resources" element={
@@ -427,6 +435,11 @@ const AppContent = () => {
               <Route path="/mood-mentor-dashboard/settings" element={
                 <ProtectedErrorBoundary dashboardPath="/mood-mentor-dashboard">
                   <MoodMentorSettingsPage />
+                </ProtectedErrorBoundary>
+              } />
+              <Route path="/mood-mentor-dashboard/group-session/:sessionId" element={
+                <ProtectedErrorBoundary dashboardPath="/mood-mentor-dashboard">
+                  <GroupSessionPage />
                 </ProtectedErrorBoundary>
               } />
               <Route path="/mood-mentor-dashboard/profile" element={
@@ -506,38 +519,6 @@ const App = () => {
   useEffect(() => {
     console.log("App initialized with Supabase auth");
     
-    // Setup storage in the background
-    import('./utils/storage-setup').then(({ default: ensureStorageBucketsExist }) => {
-      ensureStorageBucketsExist()
-        .then(result => {
-          if (result.success) {
-            console.log('✅ Storage buckets ready!');
-            if (result.createdBuckets.length > 0) {
-              console.log(`Created buckets: ${result.createdBuckets.join(', ')}`);
-            }
-          } else {
-            console.warn('⚠️ Some storage buckets could not be set up:');
-            console.warn('Errors:', result.errors);
-            console.log('You may experience issues with file uploads.');
-          }
-        })
-        .catch(err => {
-          console.error('Storage setup error:', err);
-        });
-    });
-    
-    // Try to set up database functions on app start
-    const initDb = async () => {
-      try {
-        console.log('Initializing database functions...');
-        // await setupDatabaseFunctions(); // Disabled - causing errors and not needed for reviews system
-      } catch (error) {
-        console.error('Error initializing database functions:', error);
-      }
-    };
-    
-    initDb();
-    
     // Log all navigation events
     const unregister = window.addEventListener('popstate', () => {
       console.log('Navigation: URL changed to', window.location.pathname);
@@ -547,6 +528,12 @@ const App = () => {
       window.removeEventListener('popstate', unregister as any);
     };
   }, []);
+  
+  // Make sync and reset functions available globally for testing
+  if (typeof window !== 'undefined') {
+    (window as any).syncSupportGroupCounts = syncSupportGroupCounts;
+    (window as any).resetAllSessionData = resetAllSessionData;
+  }
   
   return (
     <BrowserRouter>

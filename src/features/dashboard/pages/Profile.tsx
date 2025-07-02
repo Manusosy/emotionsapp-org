@@ -111,7 +111,7 @@ export default function Profile() {
   if (isLoading) {
     return (
       <DashboardLayout>
-        <div className="container max-w-5xl py-8 space-y-8">
+        <div className="p-6 max-w-5xl mx-auto space-y-8">
           <Skeleton className="h-12 w-48" />
           <Skeleton className="h-[200px] w-full rounded-xl" />
           <Skeleton className="h-[300px] w-full rounded-xl" />
@@ -122,7 +122,7 @@ export default function Profile() {
 
   return (
     <DashboardLayout>
-      <div className="container max-w-5xl py-8 space-y-8">
+      <div className="p-6 max-w-5xl mx-auto space-y-8">
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold">Your Profile</h1>

@@ -12,21 +12,20 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 const messagingService = new SupabaseMessagingService();
 
 export default function MessagesPage() {
-  const { patientId } = useParams();
+  const { conversationId } = useParams();
   const { user } = useAuth();
   const navigate = useNavigate();
   const [showNewMessageModal, setShowNewMessageModal] = useState(false);
-  const [initialPatientId, setInitialPatientId] = useState<string | undefined>(undefined);
   const [isInitializing, setIsInitializing] = useState(false);
   const [patientProfile, setPatientProfile] = useState<any>(null);
   
-  // Fetch patient profile if we have a patient ID
+  // Fetch patient profile if we have a conversation ID (which is actually the patient ID)
   useEffect(() => {
-    if (!patientId) return;
+    if (!conversationId) return;
     
     const fetchPatientProfile = async () => {
       try {
-        const result = await patientService.getPatientById(patientId);
+        const result = await patientService.getPatientById(conversationId);
         if (result.success && result.data) {
           setPatientProfile(result.data);
         }
@@ -36,18 +35,17 @@ export default function MessagesPage() {
     };
     
     fetchPatientProfile();
-  }, [patientId]);
+  }, [conversationId]);
   
-  // Initialize conversation when component mounts with patient ID
+  // Initialize conversation when component mounts with conversation ID
   useEffect(() => {
-    if (patientId && user) {
-      setInitialPatientId(patientId);
+    if (conversationId && user) {
       setIsInitializing(true);
       
       const initializeConversation = async () => {
         try {
           // Verify that the patient exists
-          const patientResult = await patientService.getPatientById(patientId);
+          const patientResult = await patientService.getPatientById(conversationId);
           if (!patientResult.success || !patientResult.data) {
             toast.error("Could not find patient profile");
             setIsInitializing(false);
@@ -57,7 +55,7 @@ export default function MessagesPage() {
           // Create or get existing conversation between mentor and patient
           const result = await messagingService.getOrCreateConversation(
             user.id,
-            patientId
+            conversationId
           );
           
           if (result.data) {
@@ -77,10 +75,10 @@ export default function MessagesPage() {
       
       initializeConversation();
     } else {
-      // If we don't have a patient ID, just show the messages page
+      // If we don't have a conversation ID, just show the messages page
       setIsInitializing(false);
     }
-  }, [patientId, user]);
+  }, [conversationId, user]);
   
   const handleCreateNewMessage = () => {
     setShowNewMessageModal(true);
@@ -126,7 +124,7 @@ export default function MessagesPage() {
         <SharedMessagesPage 
           userRole="mood_mentor" 
           onCreateNewMessage={handleCreateNewMessage}
-          initialPatientId={initialPatientId}
+          initialPatientId={conversationId}
         />
       )}
       

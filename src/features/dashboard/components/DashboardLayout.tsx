@@ -139,7 +139,7 @@ const patientNavigation = [
     items: [
       { name: "Mood Tracker", href: "/patient-dashboard/mood-tracker", icon: Activity },
       { name: "Reports", href: "/patient-dashboard/reports", icon: FileText }, 
-      { name: "Support Groups", href: "/patient-dashboard/support-groups", icon: Users },
+      { name: "Support Groups", href: "/patient-dashboard/groups", icon: Users },
       { name: "Resources", href: "/patient-dashboard/resources", icon: BookOpen },
     ]
   },
@@ -615,7 +615,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
 
   return (
     <ErrorBoundary fallback={<DashboardErrorFallback dashboardType={isMentor ? 'mood_mentor' : 'patient'} />}>
-      <div className="flex h-screen bg-gray-50">
+      <div className="flex h-screen bg-gray-50 overflow-hidden">
         {/* Mobile sidebar overlay */}
         {isMobile && sidebarOpen && (
           <div
@@ -649,8 +649,30 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
             </Button>
           </div>
 
+          {/* Daily Check-in Button for Patients */}
+          {isPatient && (
+            <div className="p-4 border-b">
+              <Button
+                onClick={() => navigate('/patient-dashboard/mood-tracker')}
+                className="w-full bg-gradient-to-r from-[#20C0F3] to-[#1AB0E3] hover:from-[#1AB0E3] hover:to-[#20C0F3] text-white rounded-xl p-4 h-auto flex items-center justify-between shadow-lg hover:shadow-xl transition-all duration-200"
+              >
+                <div className="flex items-center">
+                  <div className="bg-white/20 rounded-full p-2 mr-3">
+                    <HeartPulse className="h-6 w-6" />
+                  </div>
+                  <div className="text-left">
+                    <div className="font-semibold text-sm">Emotional</div>
+                    <div className="font-semibold text-sm">Wellness</div>
+                    <div className="text-xs opacity-90">Start Daily Check-in</div>
+                  </div>
+                </div>
+                <ChevronRight className="h-5 w-5" />
+              </Button>
+            </div>
+          )}
+
           {/* Sidebar Navigation */}
-          <div className="p-4 space-y-6 overflow-y-auto h-[calc(100vh-64px)] flex flex-col">
+          <div className="flex-1 p-4 space-y-6 overflow-y-auto flex flex-col">
             {userNavigation.map((section) => (
               <div key={section.section}>
                 <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
@@ -692,7 +714,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
             ))}
             
             {/* Return to Home button */}
-            <div className="mt-auto pt-6 border-t border-gray-200">
+            <div className="mt-auto pt-6 border-t border-gray-200 flex-shrink-0">
               <Link
                 to="/"
                 className="flex items-center px-2 py-2 text-sm font-medium text-gray-600 hover:bg-gray-100 rounded-md transition-all"
@@ -705,9 +727,9 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         </div>
 
         {/* Main Content */}
-        <div className="flex-1 flex flex-col overflow-hidden">
+        <div className="flex-1 flex flex-col">
           {/* Header */}
-          <header className="bg-white border-b border-gray-200 h-16">
+          <header className="bg-white border-b border-gray-200 h-16 flex-shrink-0">
             <div className="flex items-center justify-between px-4 h-full">
               {/* Left side controls */}
               <div className="flex items-center space-x-2">
@@ -835,8 +857,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
           </header>
           
           {/* Page Content */}
-          <main className="flex-1 overflow-y-auto bg-gray-50 p-4">
-            {/* Dashboard Content */}
+          <main className="flex-1 bg-gray-50 overflow-y-auto">
             {children}
           </main>
         </div>

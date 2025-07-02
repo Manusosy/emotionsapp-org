@@ -13,31 +13,29 @@ import { Button } from "@/components/ui/button";
 const messagingService = new SupabaseMessagingService();
 
 export default function MessagesPage() {
-  const { mentorId } = useParams();
+  const { conversationId } = useParams();
   const { user } = useAuth();
   const navigate = useNavigate();
-  const [initialMentorId, setInitialMentorId] = useState<string | undefined>(undefined);
   const [isInitializing, setIsInitializing] = useState(false);
   const [initializationError, setInitializationError] = useState<string | null>(null);
   const [retryCount, setRetryCount] = useState(0);
   
   // Set the initial mentor ID when component mounts
   useEffect(() => {
-    if (mentorId && user) {
-      setInitialMentorId(mentorId);
+    if (conversationId && user) {
       
       // Try to initialize a conversation if we have a mentor ID
       const initializeConversation = async () => {
         try {
           setIsInitializing(true);
           setInitializationError(null);
-          console.log(`Initializing conversation with mentor ID: ${mentorId}`);
+          console.log(`Initializing conversation with mentor ID: ${conversationId}`);
           
           // Try to create a conversation with the messaging system
-          console.log(`Creating conversation between patient ${user.id} and mentor ${mentorId}`);
+          console.log(`Creating conversation between patient ${user.id} and mentor ${conversationId}`);
           const result = await messagingService.getOrCreateConversation(
             user.id,
-            mentorId
+            conversationId
           );
           
           if (result.error) {
@@ -50,7 +48,6 @@ export default function MessagesPage() {
           
           if (result.data) {
             console.log(`Conversation initialized with ID: ${result.data}`);
-            setInitialMentorId(mentorId);
             setInitializationError(null);
             
             // Add a small delay to ensure the database has registered the conversation
@@ -76,7 +73,7 @@ export default function MessagesPage() {
       // If we don't have a mentor ID, just show the messages page
       setIsInitializing(false);
     }
-  }, [mentorId, user, retryCount]);
+  }, [conversationId, user, retryCount]);
 
   const handleRetry = () => {
     setRetryCount(prev => prev + 1);
@@ -85,7 +82,7 @@ export default function MessagesPage() {
   return (
     <DashboardLayout>
       {isInitializing ? (
-        <div className="flex items-center justify-center h-[calc(100vh-134px)]">
+        <div className="flex items-center justify-center h-full">
           <div className="flex flex-col items-center text-center">
             {/* Modern loading spinner */}
             <div className="relative">
@@ -99,7 +96,7 @@ export default function MessagesPage() {
           </div>
         </div>
       ) : initializationError ? (
-        <div className="flex items-center justify-center h-[calc(100vh-134px)]">
+        <div className="flex items-center justify-center h-full">
           <div className="w-full max-w-md">
             <Alert variant="destructive" className="mb-4">
               <AlertCircle className="h-4 w-4 mr-2" />
@@ -133,7 +130,7 @@ export default function MessagesPage() {
       ) : (
         <SharedMessagesPage 
           userRole="patient" 
-          initialPatientId={initialMentorId}
+          initialPatientId={conversationId}
         />
       )}
     </DashboardLayout>

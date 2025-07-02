@@ -33,7 +33,14 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { toast } from "sonner";
-import { supportGroupsService, SupportGroup } from '@/services/support-groups/support-groups.service';
+// Support groups service removed - will be reimplemented
+
+// Define a temporary placeholder interface
+interface SupportGroup {
+  id: string;
+  name: string;
+  description: string;
+}
 
 // Interface matching the patient_profiles table
 interface PatientProfile {
@@ -198,38 +205,22 @@ export default function PatientsPage() {
     if (!user) return;
     
     try {
-      const groups = await supportGroupsService.getMentorGroups(user.id);
-      setSupportGroups(groups);
+      // Support groups functionality temporarily disabled
+      setSupportGroups([]);
     } catch (error) {
       console.error('Error fetching support groups:', error);
     }
   };
 
   const handleAddToGroup = async () => {
-    if (!selectedPatient || !selectedGroupId || !user) return;
-
-    try {
-      await supportGroupsService.addMember(selectedGroupId, selectedPatient.user_id);
-      toast.success(`${selectedPatient.full_name} added to group successfully`);
-      setIsAddToGroupOpen(false);
-      setSelectedPatient(null);
-      setSelectedGroupId("");
-      fetchPatients(); // Refresh the patient list
-    } catch (error: any) {
-      toast.error(error.message || 'Failed to add patient to group');
-    }
+    toast.info('Support groups functionality coming soon!');
+    setIsAddToGroupOpen(false);
+    setSelectedPatient(null);
+    setSelectedGroupId("");
   };
 
   const handleRemoveFromGroup = async (patientId: string, groupId: string, patientName: string) => {
-    if (!confirm(`Remove ${patientName} from this group?`)) return;
-
-    try {
-      await supportGroupsService.removeMember(groupId, patientId);
-      toast.success(`${patientName} removed from group`);
-      fetchPatients(); // Refresh the patient list
-    } catch (error: any) {
-      toast.error(error.message || 'Failed to remove patient from group');
-    }
+    toast.info('Support groups functionality coming soon!');
   };
 
   const openAddToGroupDialog = (patient: PatientProfile) => {

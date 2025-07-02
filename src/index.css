@@ -4,8 +4,11 @@
 
 /* Global styles */
 :root {
-  --brand-primary: #0078FF;
+  --brand-primary: #20C0F3;
   --brand-secondary: #FDA802;
+  --messaging-primary: #20C0F3;
+  --messaging-primary-light: #52D4F5;
+  --messaging-primary-dark: #1AABB8;
 }
 
 body {

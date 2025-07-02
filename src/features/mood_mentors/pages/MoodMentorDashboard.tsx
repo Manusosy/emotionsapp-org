@@ -1,4 +1,4 @@
-import { authService, userService, moodMentorService, appointmentService } from '../../../services'
+import { authService, userService, moodMentorService, appointmentService, supportGroupsService } from '../../../services'
 import { useEffect, useState, useRef, useContext } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
@@ -504,14 +504,17 @@ export default function MoodMentorDashboard() {
         
         console.log("Found appointments:", appointmentsData?.length, "with count:", upcomingCount);
 
-        // Get active support groups count
-        const { count: groupsCount, error: groupsError } = await supabase
-          .from('mentor_groups')
-          .select('*', { count: 'exact', head: true })
-          .eq('mentor_id', user.id)
-          .eq('is_active', true);
-          
-        if (groupsError) throw groupsError;
+            // Get active support groups count
+    let groupsCount = 0;
+    try {
+      const groups = await supportGroupsService.getSupportGroups({
+        mentor_id: user.id,
+        status: 'active'
+      });
+      groupsCount = groups.length;
+    } catch (error) {
+      console.error('Error fetching groups count:', error);
+    }
 
         // Get average rating
         const { data: ratings, error: ratingsError } = await supabase
@@ -1180,6 +1183,24 @@ export default function MoodMentorDashboard() {
               <div>
                 <h3 className="font-medium">Check Messages</h3>
                 <p className="text-sm text-gray-500">View your inbox</p>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+        
+        {/* Second row for support groups */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 mt-4">
+          <Card 
+            className="hover:shadow-md transition-all cursor-pointer" 
+            onClick={() => navigate('/mood-mentor-dashboard/groups')}
+          >
+            <CardContent className="p-4 flex items-center space-x-4">
+              <div className="bg-[#20C0F3]/10 p-3 rounded-full">
+                <Users className="h-5 w-5 text-[#20C0F3]" />
+              </div>
+              <div>
+                <h3 className="font-medium">Manage Groups</h3>
+                <p className="text-sm text-gray-500">Support group management</p>
               </div>
             </CardContent>
           </Card>

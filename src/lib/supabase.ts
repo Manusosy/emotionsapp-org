@@ -222,7 +222,6 @@ export const tables = {
   notifications: 'notifications',
   appointments: 'appointments',
   messages: 'messages',
-  help_groups: 'help_groups',
   favorites: 'favorites',
 };
 

@@ -49,6 +49,9 @@ import {
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { ResourceThumbnailUpload } from '../components/ResourceThumbnailUpload';
+import { UploadProgress } from '../components/UploadProgress';
+import { AnimatePresence } from 'framer-motion';
+import { formatFileSize } from '@/utils/formatters';
 import { resourceService } from '@/services/resource/resource.service';
 import { Resource } from '@/types/database.types';
 
@@ -100,6 +103,10 @@ const ResourcesPage = () => {
   const [selectedCategory, setSelectedCategory] = useState("all");
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [uploadComplete, setUploadComplete] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Form state
@@ -186,6 +193,10 @@ const ResourcesPage = () => {
       thumbnail_url: "",
       file: null,
     });
+    setUploadProgress(0);
+    setIsUploading(false);
+    setUploadError(null);
+    setUploadComplete(false);
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
     }
@@ -196,6 +207,11 @@ const ResourcesPage = () => {
     const file = e.target.files?.[0];
     if (file) {
       setFormData(prev => ({ ...prev, file }));
+      // Reset upload states when new file is selected
+      setUploadProgress(0);
+      setIsUploading(false);
+      setUploadError(null);
+      setUploadComplete(false);
     }
   };
 
@@ -268,17 +284,30 @@ const ResourcesPage = () => {
 
       let fileUrl = '';
       if (formData.file) {
+        setIsUploading(true);
+        setUploadError(null);
+        setUploadProgress(0);
+        
         const { success, url, error } = await resourceService.uploadFile(
           formData.file,
           user.id,
-          'resource'
+          'resource',
+          (progress) => {
+            setUploadProgress(progress);
+            if (progress === 100) {
+              setUploadComplete(true);
+            }
+          }
         );
 
         if (!success || !url) {
+          setUploadError(error || 'Failed to upload file');
+          setIsUploading(false);
           throw new Error(error || 'Failed to upload file');
         }
 
         fileUrl = url;
+        setIsUploading(false);
       }
 
       const { success, data, error } = await resourceService.addResource({
@@ -642,12 +671,35 @@ const ResourcesPage = () => {
                          formData.type === 'video' ? '.mp4,.mov' :
                          formData.type === 'podcast' ? '.mp3,.m4a' : undefined}
                 />
+                
+                {/* Upload Progress */}
+                <AnimatePresence>
+                  {isUploading && formData.file && (
+                    <div className="mb-4">
+                      <UploadProgress
+                        progress={uploadProgress}
+                        fileName={formData.file.name}
+                        fileSize={formatFileSize(formData.file.size)}
+                        isComplete={uploadComplete}
+                        hasError={!!uploadError}
+                        errorMessage={uploadError || undefined}
+                        onCancel={() => {
+                          setIsUploading(false);
+                          setUploadProgress(0);
+                          setUploadError(null);
+                          setUploadComplete(false);
+                        }}
+                      />
+                    </div>
+                  )}
+                </AnimatePresence>
+                
                 <div className="space-y-2">
-                  {formData.file && (
+                  {formData.file && !isUploading && (
                     <div className="text-sm">
                       <p className="font-medium">{formData.file.name}</p>
                       <p className="text-gray-500">
-                        {(formData.file.size / 1024 / 1024).toFixed(2)} MB
+                        {formatFileSize(formData.file.size)}
                       </p>
                     </div>
                   )}
@@ -656,7 +708,7 @@ const ResourcesPage = () => {
                     variant={formData.file ? "outline" : "secondary"}
                     onClick={() => fileInputRef.current?.click()}
                     className="mt-2 w-full"
-                    disabled={!['document', 'video', 'podcast'].includes(formData.type)}
+                    disabled={!['document', 'video', 'podcast'].includes(formData.type) || isUploading}
                   >
                     {formData.file ? "Change File" : "Select File"}
                   </Button>
@@ -685,12 +737,17 @@ const ResourcesPage = () => {
               </Button>
               <Button 
                 type="submit" 
-                disabled={isSubmitting || !formData.title || !formData.description || !formData.type || !formData.category}
+                disabled={isSubmitting || isUploading || !formData.title || !formData.description || !formData.type || !formData.category}
               >
                 {isSubmitting ? (
                   <div className="flex items-center">
                     <span className="animate-spin mr-2">⟳</span>
                     Saving...
+                  </div>
+                ) : isUploading ? (
+                  <div className="flex items-center">
+                    <span className="animate-spin mr-2">⟳</span>
+                    Uploading...
                   </div>
                 ) : 'Add Resource'}
               </Button>

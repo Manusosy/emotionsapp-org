@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { motion } from "framer-motion";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { dataService } from '@/services';
+import { resourceService } from '@/services/resource/resource.service';
 import { 
   BookOpen, 
   Wrench, 
@@ -180,13 +181,27 @@ const Resources = () => {
         return;
       }
       
-      // Update download count if we have a resource ID
+      // Track view/access with analytics
       if (resource.id) {
-        const currentDownloads = resource.downloads || 0;
-        await supabase
-          .from('resources')
-          .update({ downloads: currentDownloads + 1 })
-          .eq('id', resource.id);
+        const startTime = Date.now();
+        
+        // Track as download or view
+        if (resource.file_url) {
+          await resourceService.trackDownload(
+            resource.id,
+            user?.id,
+            window.location.hostname,
+            navigator.userAgent
+          );
+        } else {
+          await resourceService.trackView(
+            resource.id,
+            user?.id,
+            window.location.hostname,
+            navigator.userAgent,
+            0 // Will be updated when user returns
+          );
+        }
       }
       
       // Open the URL
@@ -207,13 +222,14 @@ const Resources = () => {
         return;
       }
       
-      // Update share count if we have a resource ID
+      // Track share analytics
       if (resource.id) {
-        const currentShares = resource.shares || 0;
-        await supabase
-          .from('resources')
-          .update({ shares: currentShares + 1 })
-          .eq('id', resource.id);
+        await resourceService.trackShare(
+          resource.id,
+          'link',
+          user?.id,
+          window.location.hostname
+        );
       }
       
       // Try to use the native share API if available
