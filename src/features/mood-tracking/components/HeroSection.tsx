@@ -1,14 +1,51 @@
-import { AnimatePresence, motion } from "framer-motion";
-import { ArrowRight, Download, MapPin, Search, Star } from "lucide-react";
+import { motion } from "framer-motion";
+import { ArrowRight, MapPin, Search, Star } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { RefObject } from "react";
+import { RefObject, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import BreathingExercise from "@/components/BreathingExercise";
 
 type HeroSectionProps = {
   scrollToEmotions: () => void;
   emotionsRef: RefObject<HTMLDivElement>;
+  moodMentorsRef?: RefObject<HTMLDivElement>;
 };
 
-const HeroSection = ({ scrollToEmotions, emotionsRef }: HeroSectionProps) => {
+const HeroSection = ({ scrollToEmotions, emotionsRef, moodMentorsRef }: HeroSectionProps) => {
+  const navigate = useNavigate();
+  const [searchQuery, setSearchQuery] = useState("");
+
+  const scrollToMoodMentors = () => {
+    moodMentorsRef?.current?.scrollIntoView({
+      behavior: 'smooth'
+    });
+  };
+
+  const handleSearch = () => {
+    if (!searchQuery.trim()) return;
+    
+    const query = searchQuery.trim().toLowerCase();
+    
+    // Intelligent routing based on search terms
+    if (query.includes('mentor') || query.includes('therapist') || query.includes('counselor') || query.includes('doctor')) {
+      navigate(`/mood-mentors?search=${encodeURIComponent(searchQuery)}`);
+    } else if (query.includes('group') || query.includes('support') || query.includes('community')) {
+      navigate(`/support-groups?search=${encodeURIComponent(searchQuery)}`);
+    } else if (query.includes('appointment') || query.includes('booking') || query.includes('schedule')) {
+      navigate(`/booking?search=${encodeURIComponent(searchQuery)}`);
+    } else if (query.includes('resource') || query.includes('article') || query.includes('help') || query.includes('guide')) {
+      navigate(`/resources?search=${encodeURIComponent(searchQuery)}`);
+    } else if (query.includes('review') || query.includes('rating') || query.includes('feedback')) {
+      navigate(`/reviews?search=${encodeURIComponent(searchQuery)}`);
+    } else if (query.includes('about') || query.includes('contact') || query.includes('team')) {
+      if (query.includes('about')) navigate('/about');
+      else if (query.includes('contact')) navigate('/contact');
+      else navigate(`/mood-mentors?search=${encodeURIComponent(searchQuery)}`);
+    } else {
+      // Default to comprehensive search on mood mentors page
+      navigate(`/mood-mentors?search=${encodeURIComponent(searchQuery)}`);
+    }
+  };
   return (
     <div className="pt-20 relative overflow-hidden">
       <div className="absolute inset-0 bg-gradient-to-bl from-[#d5e7fe] to-[#e3f0ff]" />
@@ -70,7 +107,11 @@ const HeroSection = ({ scrollToEmotions, emotionsRef }: HeroSectionProps) => {
                 You are worthy of happiness & peace of mind and we are here to support you reach the goal.
               </p>
               <div className="flex flex-wrap items-start gap-6">
-                <Button size="lg" className="bg-blue-500 hover:bg-blue-600 text-white font-jakarta text-lg px-8 shadow-lg shadow-blue-500/25 transform transition-all duration-200 hover:scale-105">
+                <Button 
+                  size="lg" 
+                  onClick={scrollToMoodMentors}
+                  className="bg-blue-500 hover:bg-blue-600 text-white font-jakarta text-lg px-8 shadow-lg shadow-blue-500/25 transform transition-all duration-200 hover:scale-105"
+                >
                   Start Consultation
                 </Button>
                 <button onClick={scrollToEmotions} className="group flex items-center gap-2 text-blue-500 hover:text-blue-600 transition-all duration-200 font-jakarta">
@@ -80,27 +121,49 @@ const HeroSection = ({ scrollToEmotions, emotionsRef }: HeroSectionProps) => {
               </div>
             </div>
 
-            <div className="mt-6 bg-white/80 backdrop-blur-lg shadow-lg p-4 border border-blue-100 rounded-2xl">
-              <div className="flex flex-col sm:flex-row gap-3">
-                <div className="flex-1 min-w-[200px] relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <div className="mt-6 bg-white/90 backdrop-blur-lg shadow-xl p-3 border border-blue-100 rounded-2xl">
+              <div className="flex items-center gap-3">
+                <div className="flex-1 relative">
+                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
                   <input 
                     type="text" 
-                    placeholder="Search mood mentors, groups, support..." 
-                    className="w-full pl-9 pr-3 py-2 text-sm rounded-xl border border-gray-200 bg-white focus:border-blue-500 focus:outline-none transition-colors font-jakarta"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
+                    placeholder="Search anything - mentors, groups, resources, pages..." 
+                    className="w-full pl-12 pr-4 py-4 text-base rounded-xl border-0 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all font-jakarta placeholder-gray-500"
                   />
                 </div>
-                <div className="flex-1 min-w-[160px] relative">
-                  <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                  <input 
-                    type="text" 
-                    placeholder="Location" 
-                    className="w-full pl-9 pr-3 py-2 text-sm rounded-xl border border-gray-200 bg-white focus:border-blue-500 focus:outline-none transition-colors font-jakarta"
-                  />
-                </div>
-                <Button className="min-w-[100px] bg-blue-500 hover:bg-blue-600 text-white px-6 rounded-xl shadow-lg shadow-blue-500/20 transform transition-all duration-200 hover:scale-105 font-jakarta text-sm">
+                <Button 
+                  onClick={handleSearch}
+                  disabled={!searchQuery.trim()}
+                  className="px-8 py-4 bg-blue-500 hover:bg-blue-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-white rounded-xl shadow-lg hover:shadow-xl transform transition-all duration-200 hover:scale-105 font-jakarta font-medium disabled:transform-none disabled:shadow-md"
+                >
                   Search
                 </Button>
+              </div>
+              <div className="flex flex-wrap gap-2 mt-3 px-1">
+                <span className="text-xs text-gray-500 font-jakarta">Popular searches:</span>
+                <button 
+                  onClick={() => {setSearchQuery("anxiety support"); handleSearch();}}
+                  className="text-xs text-blue-600 hover:text-blue-700 font-jakarta hover:underline"
+                >
+                  anxiety support
+                </button>
+                <span className="text-xs text-gray-300">•</span>
+                <button 
+                  onClick={() => {setSearchQuery("therapy groups"); handleSearch();}}
+                  className="text-xs text-blue-600 hover:text-blue-700 font-jakarta hover:underline"
+                >
+                  therapy groups
+                </button>
+                <span className="text-xs text-gray-300">•</span>
+                <button 
+                  onClick={() => {setSearchQuery("mental health resources"); handleSearch();}}
+                  className="text-xs text-blue-600 hover:text-blue-700 font-jakarta hover:underline"
+                >
+                  resources
+                </button>
               </div>
             </div>
           </div>
@@ -109,49 +172,15 @@ const HeroSection = ({ scrollToEmotions, emotionsRef }: HeroSectionProps) => {
             <div className="flex items-center justify-center">
               <motion.div
                 className="relative w-full max-w-[380px] mx-auto"
-                initial={{ opacity: 0.8 }}
-                animate={{ 
-                  opacity: 1,
-                  y: [0, -10, 0],
-                  scale: [1, 1.02, 1]
-                }}
-                transition={{ 
-                  duration: 5,
-                  repeat: Infinity,
-                  repeatType: "reverse",
-                  ease: "easeInOut"
-                }}
-              >
-                <img src="/lovable-uploads/7d02b0da-dd91-4635-8bc4-6df39dffd0f1.png" alt="Emotions App" className="w-full h-auto object-contain mx-auto drop-shadow-2xl relative z-10" />
-              </motion.div>
-              
-              <motion.div 
-                className="absolute top-1/4 right-[5%] sm:right-[15%] bg-transparent text-white backdrop-blur-md rounded-xl shadow-xl p-2 z-20"
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
                 transition={{ 
                   duration: 0.8,
-                  delay: 0.5,
-                  ease: "easeOut" 
-                }}
-                whileHover={{ 
-                  scale: 1.05,
-                  boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)",
-                  transition: { duration: 0.2 }
+                  delay: 0.3,
+                  ease: "easeOut"
                 }}
               >
-                <a 
-                  href="https://play.google.com/store/apps/details?id=com.moracha.moods" 
-                  target="_blank" 
-                  rel="noopener noreferrer"
-                  className="flex flex-col items-center"
-                >
-                  <img 
-                    src="/lovable-uploads/2cfcf00b-42c4-4eb2-a637-f0a074aeb1ac.png" 
-                    alt="Get it on Google Play" 
-                    className="h-10 w-auto"
-                  />
-                </a>
+                <BreathingExercise />
               </motion.div>
             </div>
           </div>

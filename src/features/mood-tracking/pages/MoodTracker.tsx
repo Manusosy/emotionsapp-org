@@ -9,6 +9,7 @@ import ScrollingInfoStrip from "@/features/mood_mentors/components/ScrollingInfo
 
 const MoodTracker = () => {
   const emotionsRef = useRef<HTMLDivElement>(null);
+  const moodMentorsRef = useRef<HTMLDivElement>(null);
 
   const scrollToEmotions = () => {
     emotionsRef.current?.scrollIntoView({
@@ -50,10 +51,16 @@ const MoodTracker = () => {
       </div>
       
       <div className="relative z-10">
-        <HeroSection scrollToEmotions={scrollToEmotions} emotionsRef={emotionsRef} />
+        <HeroSection 
+          scrollToEmotions={scrollToEmotions} 
+          emotionsRef={emotionsRef} 
+          moodMentorsRef={moodMentorsRef}
+        />
         <MoodAssessment emotionsRef={emotionsRef} />
         <SpecialtiesSection />
-        <HighlightedDoctors />
+        <div ref={moodMentorsRef}>
+          <HighlightedDoctors />
+        </div>
         
         <div className="w-full">
           <ScrollingInfoStrip items={infoStripItems} />
