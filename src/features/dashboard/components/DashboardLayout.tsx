@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useAuth } from "@/contexts/authContext";
 import ErrorBoundary from "@/components/ErrorBoundary";
+import EmailVerificationOverlay from "@/components/EmailVerificationOverlay";
 import { mentorSearchableItems, patientSearchableItems } from '../navigation';
 import {
   Dialog,
@@ -613,280 +614,289 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     return 'Good evening';
   };
 
+  // Check if email is confirmed
+  const isEmailConfirmed = user?.email_confirmed_at;
+
   return (
-    <ErrorBoundary fallback={<DashboardErrorFallback dashboardType={isMentor ? 'mood_mentor' : 'patient'} />}>
-      <div className="flex h-screen bg-gray-50 overflow-hidden">
-        {/* Mobile sidebar overlay */}
-        {isMobile && sidebarOpen && (
-          <div
-            className="fixed inset-0 bg-black bg-opacity-50 z-40"
-            onClick={() => setSidebarOpen(false)}
-          ></div>
-        )}
-
-        {/* Sidebar */}
-        <div
-          className={`${
-            sidebarOpen ? 'translate-x-0' : '-translate-x-full'
-          } fixed inset-y-0 left-0 z-50 w-64 bg-white border-r border-gray-200 transition-transform duration-200 ease-in-out md:translate-x-0 md:relative flex flex-col`}
-        >
-          {/* Sidebar Header */}
-          <div className="flex items-center justify-between p-4 border-b h-16 flex-shrink-0">
-            <div className="flex items-center gap-2">
-              <img
-                src="/assets/emotions-logo-black.png"
-                alt="Emotions App"
-                className="h-8 w-auto"
-              />
-            </div>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="md:hidden"
+    <>
+      {user && !isEmailConfirmed && (
+        <EmailVerificationOverlay email={user.email || ''} />
+      )}
+      
+      <ErrorBoundary fallback={<DashboardErrorFallback dashboardType={isMentor ? 'mood_mentor' : 'patient'} />}>
+        <div className="flex h-screen bg-gray-50 overflow-hidden">
+          {/* Mobile sidebar overlay */}
+          {isMobile && sidebarOpen && (
+            <div
+              className="fixed inset-0 bg-black bg-opacity-50 z-40"
               onClick={() => setSidebarOpen(false)}
-            >
-              <X className="h-5 w-5" />
-            </Button>
-          </div>
-
-          {/* Daily Check-in Button for Patients */}
-          {isPatient && (
-            <div className="p-4 border-b flex-shrink-0">
-              <Button
-                onClick={() => navigate('/patient-dashboard/mood-tracker')}
-                className="w-full bg-gradient-to-r from-[#20C0F3] to-[#1AB0E3] hover:from-[#1AB0E3] hover:to-[#20C0F3] text-white rounded-xl p-4 h-auto flex items-center justify-between shadow-lg hover:shadow-xl transition-all duration-200"
-              >
-                <div className="flex items-center">
-                  <div className="bg-white/20 rounded-full p-2 mr-3">
-                    <HeartPulse className="h-6 w-6" />
-                  </div>
-                  <div className="text-left">
-                    <div className="font-semibold text-sm">Emotional</div>
-                    <div className="font-semibold text-sm">Wellness</div>
-                    <div className="text-xs opacity-90">Start Daily Check-in</div>
-                  </div>
-                </div>
-                <ChevronRight className="h-5 w-5" />
-              </Button>
-            </div>
+            ></div>
           )}
 
-          {/* Sidebar Navigation - Scrollable container */}
-          <div className="flex flex-col flex-1 min-h-0">
-            <div className="flex-1 min-h-0 overflow-hidden">
-              <div className="h-full overflow-y-auto overscroll-contain p-4 space-y-6">
-                {userNavigation.map((section) => (
-                  <div key={section.section}>
-                    <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
-                      {section.section}
-                    </h3>
-                    <ul className="space-y-1">
-                      {section.items.map((item) => {
-                        const ItemIcon = item.icon;
-                        return (
-                          <li key={item.name}>
-                            <Link
-                              to={item.href}
-                              className={`${
-                                isActive(item.href)
-                                  ? 'bg-blue-50 text-blue-600'
-                                  : 'text-gray-600 hover:bg-gray-100'
-                              } group flex items-center px-2 py-2 text-sm font-medium rounded-md transition-all`}
-                            >
-                              {ItemIcon && (
-                                <ItemIcon className={`mr-3 h-5 w-5 ${
-                                  isActive(item.href) ? 'text-blue-500' : 'text-gray-500 group-hover:text-gray-600'
-                                }`} />
-                              )}
-                              {item.name}
-                              
-                              {/* Show unread indicators */}
-                              {item.name === 'Notifications' && unreadNotifications > 0 && (
-                                <Badge className="ml-auto bg-red-500">{unreadNotifications}</Badge>
-                              )}
-                              {item.name === 'Messages' && unreadMessages > 0 && (
-                                <Badge className="ml-auto bg-red-500">{unreadMessages}</Badge>
-                              )}
-                            </Link>
-                          </li>
-                        );
-                      })}
-                    </ul>
-                  </div>
-                ))}
+          {/* Sidebar */}
+          <div
+            className={`${
+              sidebarOpen ? 'translate-x-0' : '-translate-x-full'
+            } fixed inset-y-0 left-0 z-50 w-64 bg-white border-r border-gray-200 transition-transform duration-200 ease-in-out md:translate-x-0 md:relative flex flex-col`}
+          >
+            {/* Sidebar Header */}
+            <div className="flex items-center justify-between p-4 border-b h-16 flex-shrink-0">
+              <div className="flex items-center gap-2">
+                <img
+                  src="/assets/emotions-logo-black.png"
+                  alt="Emotions App"
+                  className="h-8 w-auto"
+                />
               </div>
-            </div>
-            
-            {/* Return to Home button - Fixed at bottom */}
-            <div className="p-4 pt-6 border-t border-gray-200 flex-shrink-0">
-              <Link
-                to="/"
-                className="flex items-center px-2 py-2 text-sm font-medium text-gray-600 hover:bg-gray-100 rounded-md transition-all"
+              <Button
+                variant="ghost"
+                size="icon"
+                className="md:hidden"
+                onClick={() => setSidebarOpen(false)}
               >
-                <ChevronLeft className="mr-3 h-5 w-5 text-gray-500" />
-                Return to Home
-              </Link>
+                <X className="h-5 w-5" />
+              </Button>
             </div>
-          </div>
-        </div>
 
-        {/* Main Content */}
-        <div className="flex-1 flex flex-col">
-          {/* Header */}
-          <header className="bg-white border-b border-gray-200 h-16 flex-shrink-0">
-            <div className="flex items-center justify-between px-4 h-full">
-              {/* Left side controls */}
-              <div className="flex items-center space-x-2">
+            {/* Daily Check-in Button for Patients */}
+            {isPatient && (
+              <div className="p-4 border-b flex-shrink-0">
                 <Button
-                  variant="ghost"
-                  size="icon"
-                  className="md:hidden"
-                  onClick={() => setSidebarOpen(true)}
+                  onClick={() => navigate('/patient-dashboard/mood-tracker')}
+                  className="w-full bg-gradient-to-r from-[#20C0F3] to-[#1AB0E3] hover:from-[#1AB0E3] hover:to-[#20C0F3] text-white rounded-xl p-4 h-auto flex items-center justify-between shadow-lg hover:shadow-xl transition-all duration-200"
                 >
-                  <Menu className="h-5 w-5" />
-                </Button>
-                
-                {/* Search Button */}
-                <div className="hidden sm:block relative" ref={searchRef}>
-                  <Button
-                    variant="outline"
-                    className="w-full sm:w-64 justify-start"
-                    onClick={() => setIsSearchOpen(true)}
-                  >
-                    <Search className="h-4 w-4 mr-2" />
-                    <span>Search...</span>
-                    <kbd className="ml-auto pointer-events-none inline-flex h-5 select-none items-center gap-1 rounded border bg-muted px-1.5 font-mono text-[10px] font-medium text-muted-foreground">
-                      <span className="text-xs">⌘</span>K
-                    </kbd>
-                  </Button>
-                  
-                  {isSearchOpen && (
-                    <div className="absolute top-full left-0 mt-1 w-96 bg-white shadow-lg rounded-md border z-50">
-                      <div className="p-2">
-                        <Input
-                          type="search"
-                          placeholder="Search..."
-                          className="w-full"
-                          value={searchQuery}
-                          onChange={(e) => handleSearchInput(e.target.value)}
-                          autoFocus
-                        />
-                      </div>
-                      <div className="max-h-[300px] overflow-y-auto">
-                        {searchResults.length > 0 ? (
-                          <div className="p-2">
-                            {searchResults.map((result, index) => {
-                              const ResultIcon = result.icon;
-                              return (
-                                <div
-                                  key={index}
-                                  className="p-2 hover:bg-gray-100 rounded-md cursor-pointer"
-                                  onClick={() => handleSearchResultClick(result.href)}
-                                >
-                                  <div className="flex items-center">
-                                    {ResultIcon && <ResultIcon className="h-4 w-4 mr-2 text-gray-500" />}
-                                    <div className="flex-1">
-                                      <p className="text-sm font-medium">{result.title}</p>
-                                      {result.description && (
-                                        <p className="text-xs text-gray-500">{result.description}</p>
-                                      )}
-                                    </div>
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        ) : searchQuery ? (
-                          <div className="p-4 text-center text-gray-500">
-                            No results found
-                          </div>
-                        ) : null}
-                      </div>
+                  <div className="flex items-center">
+                    <div className="bg-white/20 rounded-full p-2 mr-3">
+                      <HeartPulse className="h-6 w-6" />
                     </div>
-                  )}
+                    <div className="text-left">
+                      <div className="font-semibold text-sm">Emotional</div>
+                      <div className="font-semibold text-sm">Wellness</div>
+                      <div className="text-xs opacity-90">Start Daily Check-in</div>
+                    </div>
+                  </div>
+                  <ChevronRight className="h-5 w-5" />
+                </Button>
+              </div>
+            )}
+
+            {/* Sidebar Navigation - Scrollable container */}
+            <div className="flex flex-col flex-1 min-h-0">
+              <div className="flex-1 min-h-0 overflow-hidden">
+                <div className="h-full overflow-y-auto overscroll-contain p-4 space-y-6">
+                  {userNavigation.map((section) => (
+                    <div key={section.section}>
+                      <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
+                        {section.section}
+                      </h3>
+                      <ul className="space-y-1">
+                        {section.items.map((item) => {
+                          const ItemIcon = item.icon;
+                          return (
+                            <li key={item.name}>
+                              <Link
+                                to={item.href}
+                                className={`${
+                                  isActive(item.href)
+                                    ? 'bg-blue-50 text-blue-600'
+                                    : 'text-gray-600 hover:bg-gray-100'
+                                } group flex items-center px-2 py-2 text-sm font-medium rounded-md transition-all`}
+                              >
+                                {ItemIcon && (
+                                  <ItemIcon className={`mr-3 h-5 w-5 ${
+                                    isActive(item.href) ? 'text-blue-500' : 'text-gray-500 group-hover:text-gray-600'
+                                  }`} />
+                                )}
+                                {item.name}
+                                
+                                {/* Show unread indicators */}
+                                {item.name === 'Notifications' && unreadNotifications > 0 && (
+                                  <Badge className="ml-auto bg-red-500">{unreadNotifications}</Badge>
+                                )}
+                                {item.name === 'Messages' && unreadMessages > 0 && (
+                                  <Badge className="ml-auto bg-red-500">{unreadMessages}</Badge>
+                                )}
+                              </Link>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    </div>
+                  ))}
                 </div>
               </div>
               
-              {/* Right side controls */}
-              <div className="flex items-center space-x-2">
-                {/* Notification Bell - Replace the old notification button with our component */}
-                <NotificationBell />
-                
-                {/* User Menu */}
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" className="relative h-8 w-8 rounded-full">
-                      <Avatar>
-                        <AvatarImage 
-                          src={user?.user_metadata?.avatar_url || '/avatars/default-avatar.png'} 
-                          alt={user?.user_metadata?.name || 'User'} 
-                        />
-                        <AvatarFallback>
-                          {user?.user_metadata?.name ? user.user_metadata.name.charAt(0) : 'U'}
-                        </AvatarFallback>
-                      </Avatar>
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent className="w-56" align="end" forceMount>
-                    <DropdownMenuLabel className="font-normal">
-                      <div className="flex flex-col space-y-1">
-                        <p className="text-sm font-medium leading-none">{user?.user_metadata?.name || 'User'}</p>
-                        <p className="text-xs leading-none text-muted-foreground">
-                          {user?.email || ''}
-                        </p>
-                      </div>
-                    </DropdownMenuLabel>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem onClick={() => navigate(isMentor ? '/mood-mentor-dashboard/profile' : '/patient-dashboard/profile')}>
-                      <User className="mr-2 h-4 w-4" />
-                      <span>Profile</span>
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => navigate(isMentor ? '/mood-mentor-dashboard/settings' : '/patient-dashboard/settings')}>
-                      <Settings className="mr-2 h-4 w-4" />
-                      <span>Settings</span>
-                    </DropdownMenuItem>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem onClick={() => navigate('/')}>
-                      <ChevronLeft className="mr-2 h-4 w-4" />
-                      <span>Return to Home</span>
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={handleSignOut} disabled={signOutLoading}>
-                      <LogOut className="mr-2 h-4 w-4" />
-                      <span>{signOutLoading ? 'Signing out...' : 'Sign out'}</span>
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
+              {/* Return to Home button - Fixed at bottom */}
+              <div className="p-4 pt-6 border-t border-gray-200 flex-shrink-0">
+                <Link
+                  to="/"
+                  className="flex items-center px-2 py-2 text-sm font-medium text-gray-600 hover:bg-gray-100 rounded-md transition-all"
+                >
+                  <ChevronLeft className="mr-3 h-5 w-5 text-gray-500" />
+                  Return to Home
+                </Link>
               </div>
             </div>
-          </header>
-          
-          {/* Page Content */}
-          <main className="flex-1 bg-gray-50 overflow-y-auto">
-            {children}
-          </main>
+          </div>
+
+          {/* Main Content */}
+          <div className="flex-1 flex flex-col">
+            {/* Header */}
+            <header className="bg-white border-b border-gray-200 h-16 flex-shrink-0">
+              <div className="flex items-center justify-between px-4 h-full">
+                {/* Left side controls */}
+                <div className="flex items-center space-x-2">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="md:hidden"
+                    onClick={() => setSidebarOpen(true)}
+                  >
+                    <Menu className="h-5 w-5" />
+                  </Button>
+                  
+                  {/* Search Button */}
+                  <div className="hidden sm:block relative" ref={searchRef}>
+                    <Button
+                      variant="outline"
+                      className="w-full sm:w-64 justify-start"
+                      onClick={() => setIsSearchOpen(true)}
+                    >
+                      <Search className="h-4 w-4 mr-2" />
+                      <span>Search...</span>
+                      <kbd className="ml-auto pointer-events-none inline-flex h-5 select-none items-center gap-1 rounded border bg-muted px-1.5 font-mono text-[10px] font-medium text-muted-foreground">
+                        <span className="text-xs">⌘</span>K
+                      </kbd>
+                    </Button>
+                    
+                    {isSearchOpen && (
+                      <div className="absolute top-full left-0 mt-1 w-96 bg-white shadow-lg rounded-md border z-50">
+                        <div className="p-2">
+                          <Input
+                            type="search"
+                            placeholder="Search..."
+                            className="w-full"
+                            value={searchQuery}
+                            onChange={(e) => handleSearchInput(e.target.value)}
+                            autoFocus
+                          />
+                        </div>
+                        <div className="max-h-[300px] overflow-y-auto">
+                          {searchResults.length > 0 ? (
+                            <div className="p-2">
+                              {searchResults.map((result, index) => {
+                                const ResultIcon = result.icon;
+                                return (
+                                  <div
+                                    key={index}
+                                    className="p-2 hover:bg-gray-100 rounded-md cursor-pointer"
+                                    onClick={() => handleSearchResultClick(result.href)}
+                                  >
+                                    <div className="flex items-center">
+                                      {ResultIcon && <ResultIcon className="h-4 w-4 mr-2 text-gray-500" />}
+                                      <div className="flex-1">
+                                        <p className="text-sm font-medium">{result.title}</p>
+                                        {result.description && (
+                                          <p className="text-xs text-gray-500">{result.description}</p>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          ) : searchQuery ? (
+                            <div className="p-4 text-center text-gray-500">
+                              No results found
+                            </div>
+                          ) : null}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+                
+                {/* Right side controls */}
+                <div className="flex items-center space-x-2">
+                  {/* Notification Bell - Replace the old notification button with our component */}
+                  <NotificationBell />
+                  
+                  {/* User Menu */}
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" className="relative h-8 w-8 rounded-full">
+                        <Avatar>
+                          <AvatarImage 
+                            src={user?.user_metadata?.avatar_url || '/avatars/default-avatar.png'} 
+                            alt={user?.user_metadata?.name || 'User'} 
+                          />
+                          <AvatarFallback>
+                            {user?.user_metadata?.name ? user.user_metadata.name.charAt(0) : 'U'}
+                          </AvatarFallback>
+                        </Avatar>
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent className="w-56" align="end" forceMount>
+                      <DropdownMenuLabel className="font-normal">
+                        <div className="flex flex-col space-y-1">
+                          <p className="text-sm font-medium leading-none">{user?.user_metadata?.name || 'User'}</p>
+                          <p className="text-xs leading-none text-muted-foreground">
+                            {user?.email || ''}
+                          </p>
+                        </div>
+                      </DropdownMenuLabel>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem onClick={() => navigate(isMentor ? '/mood-mentor-dashboard/profile' : '/patient-dashboard/profile')}>
+                        <User className="mr-2 h-4 w-4" />
+                        <span>Profile</span>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => navigate(isMentor ? '/mood-mentor-dashboard/settings' : '/patient-dashboard/settings')}>
+                        <Settings className="mr-2 h-4 w-4" />
+                        <span>Settings</span>
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem onClick={() => navigate('/')}>
+                        <ChevronLeft className="mr-2 h-4 w-4" />
+                        <span>Return to Home</span>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={handleSignOut} disabled={signOutLoading}>
+                        <LogOut className="mr-2 h-4 w-4" />
+                        <span>{signOutLoading ? 'Signing out...' : 'Sign out'}</span>
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+              </div>
+            </header>
+            
+            {/* Page Content */}
+            <main className="flex-1 bg-gray-50 overflow-y-auto">
+              {children}
+            </main>
+          </div>
         </div>
-      </div>
-      
-      {/* Notification Dialog */}
-      {selectedNotification && (
-        <Dialog open={notificationDialogOpen} onOpenChange={setNotificationDialogOpen}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>{selectedNotification.title}</DialogTitle>
-            </DialogHeader>
-            <div className="py-4">
-              <p>{selectedNotification.content}</p>
-              <p className="text-sm text-gray-500 mt-4">
-                Received {new Date(selectedNotification.created_at).toLocaleString()}
-              </p>
-            </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={handleNotificationDialogClose}>Close</Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-      )}
-    </ErrorBoundary>
+        
+        {/* Notification Dialog */}
+        {selectedNotification && (
+          <Dialog open={notificationDialogOpen} onOpenChange={setNotificationDialogOpen}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>{selectedNotification.title}</DialogTitle>
+              </DialogHeader>
+              <div className="py-4">
+                <p>{selectedNotification.content}</p>
+                <p className="text-sm text-gray-500 mt-4">
+                  Received {new Date(selectedNotification.created_at).toLocaleString()}
+                </p>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={handleNotificationDialogClose}>Close</Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        )}
+      </ErrorBoundary>
+    </>
   );
 }
 
