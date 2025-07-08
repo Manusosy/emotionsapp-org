@@ -1,10 +1,13 @@
 import { AnimatePresence, motion } from "framer-motion";
-import { useState, RefObject } from "react";
+import { useState, RefObject, useContext } from "react";
 import EmotionButton from "./EmotionButton";
 import QuestionCard from "./QuestionCard";
 import { Button } from "@/components/ui/button";
 import { ArrowRight, Book, Heart, LifeBuoy, FileText, Users } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { AuthContext } from "@/contexts/authContext";
+import { MoodAssessmentService } from "@/services/mood/mood-assessment.service";
+import { toast } from "sonner";
 
 // Emotion data
 const emotions = [{
@@ -67,11 +70,14 @@ type MoodAssessmentProps = {
 };
 
 const MoodAssessment = ({ emotionsRef }: MoodAssessmentProps) => {
+  const { user } = useContext(AuthContext);
+  const moodAssessmentService = new MoodAssessmentService();
   const [selectedEmotion, setSelectedEmotion] = useState<string | null>(null);
   const [showQuestions, setShowQuestions] = useState(false);
   const [currentQuestion, setCurrentQuestion] = useState(0);
   const [score, setScore] = useState(0);
   const [showResults, setShowResults] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const navigate = useNavigate();
 
   // Function to map emotion and score to a mood_score on a scale of 1-10
@@ -151,12 +157,42 @@ const MoodAssessment = ({ emotionsRef }: MoodAssessmentProps) => {
     setSelectedEmotion(null);
   };
 
-  const handleAnswerSelect = (points: number) => {
+  const handleAnswerSelect = async (points: number) => {
     setScore(prev => prev + points);
     if (currentQuestion < questions.length - 1) {
       setCurrentQuestion(prev => prev + 1);
     } else {
       setShowResults(true);
+      
+      // Save the mood assessment
+      if (user) {
+        setIsSaving(true);
+        try {
+          const moodScore = getMoodScore(selectedEmotion, score + points);
+          const moodResult = getMoodResult(selectedEmotion);
+          
+          const assessment = await moodAssessmentService.saveMoodAssessment({
+            userId: user.id,
+            mood: moodResult,
+            moodType: moodScore >= 6 ? 'positive' : moodScore >= 4 ? 'neutral' : 'negative',
+            score: moodScore,
+            notes: '',
+            recommendations: [],
+            activities: []
+          });
+          
+          if (assessment) {
+            toast.success('Mood assessment saved successfully!');
+          } else {
+            toast.error('Failed to save mood assessment');
+          }
+        } catch (error) {
+          console.error('Error saving mood assessment:', error);
+          toast.error('Failed to save mood assessment');
+        } finally {
+          setIsSaving(false);
+        }
+      }
     }
   };
 

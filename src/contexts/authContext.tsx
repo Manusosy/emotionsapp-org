@@ -8,6 +8,7 @@ import { UserWithMetadata } from '@/services/auth/auth.service';
 interface AuthContextType {
   user: UserWithMetadata | null;
   isAuthenticated: boolean;
+  isEmailConfirmed: boolean;
   userRole: UserRole | null;
   isLoading: boolean;
   signIn: (credentials: { email: string; password: string }) => Promise<{ user: UserWithMetadata | null; error?: string }>;
@@ -34,9 +35,11 @@ export { AuthContext };
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [user, setUser] = useState<UserWithMetadata | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isEmailConfirmed, setIsEmailConfirmed] = useState(false);
 
   const updateAuthState = (newUser: User | null) => {
     setUser(newUser as UserWithMetadata | null);
+    setIsEmailConfirmed(!!newUser?.email_confirmed_at);
     setIsLoading(false);
   };
 
@@ -225,36 +228,52 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   };
 
   useEffect(() => {
-    const initializeAuth = async () => {
-      setIsLoading(true);
-      try {
-        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-        
-        if (sessionError) {
-          console.error('AuthContext: Error getting session:', sessionError.message);
-          updateAuthState(null);
-          return;
+    // Listen for auth state changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log('Auth state changed:', event);
+      if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+        if (session?.user) {
+          // Check if email is confirmed
+          const { data: { user: currentUser }, error: userError } = await supabase.auth.getUser();
+          if (userError) {
+            console.error('Error getting user:', userError);
+            updateAuthState(null);
+            return;
+          }
+          
+          // If email is not confirmed, sign out the user
+          if (!currentUser?.email_confirmed_at) {
+            console.log('Email not confirmed, signing out');
+            await supabase.auth.signOut();
+            updateAuthState(null);
+            return;
+          }
+          
+          updateAuthState(currentUser);
         }
-        
-        if (!session) {
-          console.log('AuthContext: No active session found');
-          updateAuthState(null);
-          return;
-        }
-        
-        updateAuthState(session.user);
-      } catch (error) {
-        console.error('AuthContext: Error initializing auth:', error);
+      } else if (event === 'SIGNED_OUT') {
         updateAuthState(null);
       }
-    };
+    });
 
-    initializeAuth();
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (event === 'SIGNED_IN' && session) {
+    // Initial session check
+    supabase.auth.getSession().then(({ data: { session }, error: sessionError }) => {
+      if (sessionError) {
+        console.error('Error getting session:', sessionError);
+        updateAuthState(null);
+        return;
+      }
+      
+      if (session?.user) {
+        // Check if email is confirmed
+        if (!session.user.email_confirmed_at) {
+          console.log('Email not confirmed, signing out');
+          supabase.auth.signOut().then(() => updateAuthState(null));
+          return;
+        }
+        
         updateAuthState(session.user);
-      } else if (event === 'SIGNED_OUT') {
+      } else {
         updateAuthState(null);
       }
     });
@@ -264,24 +283,27 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     };
   }, []);
 
-  const value = {
-    user,
-    isAuthenticated: !!user,
-    userRole: user?.user_metadata?.role || null,
-    isLoading,
-    signIn,
-    signUp,
-    signOut,
-    resetPassword,
-    getDashboardUrlForRole,
-    getFullName,
-    refreshSession,
-    deleteUser,
-    updateUser,
-    updateUserMetadata
-  };
-
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  return (
+    <AuthContext.Provider value={{
+      user,
+      isAuthenticated: !!user,
+      isEmailConfirmed,
+      userRole: user?.user_metadata?.role || null,
+      isLoading,
+      signIn,
+      signUp,
+      signOut,
+      resetPassword,
+      getDashboardUrlForRole,
+      getFullName,
+      refreshSession,
+      deleteUser,
+      updateUser,
+      updateUserMetadata
+    }}>
+      {children}
+    </AuthContext.Provider>
+  );
 };
 
 export const useAuth = () => {
