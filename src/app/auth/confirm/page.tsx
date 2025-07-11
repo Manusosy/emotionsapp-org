@@ -83,6 +83,7 @@ export default function AuthConfirmPage() {
               gender: data.user.user_metadata?.gender || 'Prefer not to say'
             }]);
           profileError = err;
+          profileError = err;
         }
 
         if (profileError) {
