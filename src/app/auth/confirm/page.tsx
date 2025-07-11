@@ -15,12 +15,15 @@ export default function AuthConfirmPage() {
   useEffect(() => {
     const confirmEmail = async () => {
       try {
+        // First sign out to ensure clean state
+        await supabase.auth.signOut();
+        
         const token_hash = searchParams.get('token_hash');
         const type = searchParams.get('type');
         
         if (!token_hash || !type) {
           setStatus('error');
-          setMessage('Invalid confirmation link. Please try signing up again.');
+          setMessage('Invalid confirmation link. Please check your email for the correct link or request a new one.');
           return;
         }
         
@@ -35,22 +38,22 @@ export default function AuthConfirmPage() {
           setStatus('error');
           
           if (error.message.includes('expired')) {
-            setMessage('This confirmation link has expired. Please sign up again to receive a new confirmation email.');
+            setMessage('This confirmation link has expired. Please request a new confirmation email from the sign-in page.');
           } else if (error.message.includes('invalid')) {
-            setMessage('This confirmation link is invalid. Please sign up again.');
+            setMessage('This confirmation link is invalid. Please check your email for the correct link.');
           } else {
-            setMessage('Email confirmation failed. Please try again or contact support.');
+            setMessage('Unable to confirm your email. Please try again or contact support.');
           }
           return;
         }
         
         if (!data?.user) {
           setStatus('error');
-          setMessage('Email confirmation completed but user data is missing. Please try signing in.');
+          setMessage('Unable to verify your account. Please try again or contact support.');
           return;
         }
 
-        // Now that email is confirmed, create the user profile
+        // Create the user profile
         const userRole = data.user.user_metadata?.role;
         const profileData = {
           id: data.user.id,
@@ -88,16 +91,13 @@ export default function AuthConfirmPage() {
         if (profileError) {
           console.error('Error creating profile:', profileError);
           setStatus('error');
-          setMessage('Your email was confirmed but we encountered an error creating your profile. Please try signing in or contact support.');
+          setMessage('We encountered a technical issue setting up your account. Please contact support for assistance.');
           return;
         }
 
         setStatus('success');
-        setMessage('Email confirmed successfully!');
+        setMessage('Your email has been confirmed! You can now sign in to access your account.');
         toast.success('Email confirmed successfully!');
-        
-        // Sign out the user to ensure a clean sign-in
-        await supabase.auth.signOut();
       } catch (error: any) {
         console.error('Unexpected error during email confirmation:', error);
         setStatus('error');
@@ -110,6 +110,10 @@ export default function AuthConfirmPage() {
   
   const handleSignIn = () => {
     navigate('/signin');
+  };
+
+  const handleSupport = () => {
+    navigate('/contact');
   };
   
   return (
@@ -125,7 +129,7 @@ export default function AuthConfirmPage() {
           {status === 'loading' && (
             <div className="space-y-4">
               <Spinner className="mx-auto" />
-              <p className="text-gray-600">Confirming your email...</p>
+              <p className="text-gray-600">Verifying your email address...</p>
             </div>
           )}
           
@@ -134,7 +138,7 @@ export default function AuthConfirmPage() {
               <CheckCircle className="mx-auto h-12 w-12 text-green-500" />
               <div className="space-y-2">
                 <h3 className="text-lg font-medium text-gray-900">
-                  Email Confirmed!
+                  Email Confirmed Successfully
                 </h3>
                 <p className="text-gray-600">{message}</p>
               </div>
@@ -142,7 +146,7 @@ export default function AuthConfirmPage() {
                 onClick={handleSignIn}
                 className="w-full"
               >
-                Continue to Sign In
+                Sign In to Your Account
               </Button>
             </div>
           )}
@@ -152,16 +156,25 @@ export default function AuthConfirmPage() {
               <XCircle className="mx-auto h-12 w-12 text-red-500" />
               <div className="space-y-2">
                 <h3 className="text-lg font-medium text-gray-900">
-                  Confirmation Failed
+                  Email Confirmation Failed
                 </h3>
                 <p className="text-gray-600">{message}</p>
               </div>
-              <Button 
-                onClick={handleSignIn}
-                className="w-full"
-              >
-                Go to Sign In
-              </Button>
+              <div className="space-y-4">
+                <Button 
+                  onClick={handleSignIn}
+                  className="w-full"
+                  variant="outline"
+                >
+                  Return to Sign In
+                </Button>
+                <Button
+                  onClick={handleSupport}
+                  className="w-full"
+                >
+                  Contact Support
+                </Button>
+              </div>
             </div>
           )}
         </div>

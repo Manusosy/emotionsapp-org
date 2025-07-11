@@ -152,8 +152,8 @@ export default function PatientSignup() {
 
       if (user) {
         toast.success("Account created successfully! Please check your email to verify your account.");
-        // Navigate to email confirmation page
-        navigate('/auth/email-confirmation', { 
+        // Navigate to email confirmation instructions page
+        navigate('/auth/email-sent', { 
           state: { 
             email: formData.email,
             userType: 'patient'

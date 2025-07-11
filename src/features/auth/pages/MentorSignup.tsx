@@ -188,7 +188,8 @@ export default function MentorSignup() {
 
       if (user) {
         toast.success("Account created successfully! Please check your email to verify your account.");
-        navigate('/auth/email-confirmation', { 
+        // Navigate to email confirmation instructions page
+        navigate('/auth/email-sent', { 
           state: { 
             email: formData.email,
             userType: 'mentor'

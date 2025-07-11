@@ -1,35 +1,19 @@
-import { useEffect } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { Mail, ArrowLeft } from 'lucide-react';
+import { Mail } from 'lucide-react';
 import AuthLayout from '../components/AuthLayout';
 
-interface EmailConfirmationPageProps {
-  userType?: 'patient' | 'mentor';
-}
-
-export default function EmailConfirmationPage({ userType }: EmailConfirmationPageProps) {
-  const navigate = useNavigate();
+export default function EmailSentPage() {
   const location = useLocation();
-  
-  // Get email and user type from location state
+  const navigate = useNavigate();
   const email = location.state?.email;
-  const actualUserType = location.state?.userType || userType;
-  
-  useEffect(() => {
-    // If no email in state, redirect to appropriate signup
-    if (!email) {
-      const signupPath = actualUserType === 'mentor' ? '/signup/mentor' : '/signup/patient';
-      navigate(signupPath, { replace: true });
-    }
-  }, [email, actualUserType, navigate]);
+  const userType = location.state?.userType;
 
-  const handleBackToSignup = () => {
-    const signupPath = actualUserType === 'mentor' ? '/signup/mentor' : '/signup/patient';
-    navigate(signupPath);
+  const handleResendEmail = async () => {
+    // TODO: Implement resend email functionality
   };
 
-  const handleGoToSignIn = () => {
+  const handleBackToSignIn = () => {
     navigate('/signin');
   };
 
@@ -61,17 +45,16 @@ export default function EmailConfirmationPage({ userType }: EmailConfirmationPag
             <Button
               variant="outline"
               className="w-full"
-              onClick={handleGoToSignIn}
+              onClick={handleResendEmail}
             >
-              Return to Sign In
+              Resend confirmation email
             </Button>
             <Button
               variant="ghost"
               className="w-full"
-              onClick={handleBackToSignup}
+              onClick={handleBackToSignIn}
             >
-              <ArrowLeft className="h-4 w-4 mr-2" />
-              Back to Sign Up
+              Back to sign in
             </Button>
           </div>
         </div>

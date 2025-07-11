@@ -2,7 +2,7 @@ import React, { createContext, useContext, useState, useEffect, ReactNode } from
 import { UserRole } from '../types/user';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
-import { User } from '@supabase/supabase-js';
+import { User, AuthError } from '@supabase/supabase-js';
 import { UserWithMetadata } from '@/services/auth/auth.service';
 
 interface AuthContextType {
@@ -81,6 +81,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     gender?: string | null;
   }) => {
     try {
+      // Get the current domain
+      const domain = window.location.origin;
+      
       const { data: authData, error } = await supabase.auth.signUp({
         email: data.email,
         password: data.password,
@@ -91,7 +94,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
             country: data.country,
             gender: data.gender
           },
-          emailRedirectTo: `${window.location.origin}/app/auth/confirm`
+          emailRedirectTo: `${domain}/auth/confirm`
         }
       });
       
@@ -106,7 +109,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       return { user: null, error: "Signup failed" };
     } catch (error) {
       console.error('Error in signUp:', error);
-      return { user: null, error: error.message };
+      const authError = error as AuthError;
+      return { user: null, error: authError.message };
     }
   };
 

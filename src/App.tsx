@@ -72,6 +72,7 @@ import { PatientDirectCallPage, MentorDirectCallPage } from './components/calls/
 import { syncSupportGroupCounts } from '@/utils/sync-support-groups';
 import { resetAllSessionData } from '@/utils/reset-session-data';
 import GroupSessionPage from "./features/dashboard/pages/GroupSessionPage";
+import EmailSentPage from "@/features/auth/pages/EmailSentPage";
 // Test files removed
 
 // Type definition for UserRole
@@ -284,6 +285,7 @@ const AppContent = () => {
               <Route path="/auth/confirm" element={<AuthConfirmPage />} />
               <Route path="/app/auth/confirm" element={<AuthConfirmPage />} />
               <Route path="/auth/email-confirmation" element={<EmailConfirmationPage />} />
+              <Route path="/auth/email-sent" element={<EmailSentPage />} />
               
               {/* New specific role-based auth routes */}
               <Route path="/patient-signin" element={<SignIn userType="patient" />} />
