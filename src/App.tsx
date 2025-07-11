@@ -282,6 +282,7 @@ const AppContent = () => {
               
               {/* Email confirmation routes */}
               <Route path="/auth/confirm" element={<AuthConfirmPage />} />
+              <Route path="/app/auth/confirm" element={<AuthConfirmPage />} />
               <Route path="/auth/email-confirmation" element={<EmailConfirmationPage />} />
               
               {/* New specific role-based auth routes */}
