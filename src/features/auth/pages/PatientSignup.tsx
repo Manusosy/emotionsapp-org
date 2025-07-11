@@ -36,7 +36,9 @@ type ValidationErrors = {
 
 export default function PatientSignup() {
   const navigate = useNavigate();
-  const { signUp } = useContext(AuthContext);
+  const auth = useContext(AuthContext);
+  if (!auth) throw new Error("Auth context must be used within AuthProvider");
+  const { signUp } = auth;
   
   const [formData, setFormData] = useState({
     firstName: "",
@@ -149,28 +151,14 @@ export default function PatientSignup() {
       }
 
       if (user) {
-        // Create patient profile in the database with correct fields
-        const { error: profileError } = await supabase.from('patient_profiles').insert({
-          user_id: user.id,
-          email: formData.email,
-          full_name: `${formData.firstName} ${formData.lastName}`,
-          location: formData.country,
-          name_slug: `${formData.firstName.toLowerCase()}-${formData.lastName.toLowerCase()}`,
-          gender: 'Prefer not to say', // Default value
-          is_profile_complete: false,
-          is_active: true,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        });
-
-        if (profileError) {
-          console.error("Error creating patient profile:", profileError);
-          // Continue anyway as the auth user was created
-        }
-        
         toast.success("Account created successfully! Please check your email to verify your account.");
-        // Navigate to signin page since email verification is required
-        navigate('/patient-signin');
+        // Navigate to email confirmation page
+        navigate('/auth/email-confirmation', { 
+          state: { 
+            email: formData.email,
+            userType: 'patient'
+          } 
+        });
       }
     } catch (error: any) {
       toast.error(error.message || "Error creating account");

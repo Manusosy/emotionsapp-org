@@ -18,7 +18,7 @@ interface ProtectedRouteProps {
  * @param requiredRole - Optional role or array of roles required to access the route
  */
 export default function ProtectedRoute({ children, requiredRole }: ProtectedRouteProps) {
-  const { isAuthenticated, userRole } = useAuth();
+  const { isAuthenticated, userRole, isEmailConfirmed } = useAuth();
   const [isAuthorized, setIsAuthorized] = useState<boolean | null>(null);
   const [isCheckingSession, setIsCheckingSession] = useState(true);
   const [isRefreshingSession, setIsRefreshingSession] = useState(false);
@@ -115,6 +115,18 @@ export default function ProtectedRoute({ children, requiredRole }: ProtectedRout
   if (!isAuthenticated) {
     // Store the location they were trying to access for later redirect
     return <Navigate to="/patient-signin" state={{ from: location }} replace />;
+  }
+
+  // Redirect to email confirmation page if email is not confirmed
+  if (isAuthenticated && !isEmailConfirmed) {
+    return <Navigate 
+      to="/auth/email-confirmation" 
+      state={{ 
+        email: user?.email,
+        userType: userRole === 'mood_mentor' ? 'mentor' : 'patient'
+      }} 
+      replace 
+    />;
   }
 
   // Redirect to unauthorized page if user doesn't have required role

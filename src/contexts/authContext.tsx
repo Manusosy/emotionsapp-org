@@ -53,6 +53,14 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       if (error) throw error;
       
       if (data.user) {
+        // Check if email is confirmed
+        if (!data.user.email_confirmed_at) {
+          await supabase.auth.signOut();
+          return { 
+            user: null, 
+            error: "Please verify your email before signing in. Check your inbox for the confirmation link." 
+          };
+        }
         updateAuthState(data.user);
       }
       
@@ -82,17 +90,20 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
             role: data.role,
             country: data.country,
             gender: data.gender
-          }
+          },
+          emailRedirectTo: `${window.location.origin}/app/auth/confirm`
         }
       });
       
       if (error) throw error;
       
       if (authData.user) {
-        updateAuthState(authData.user);
+        // For signup, we don't want to update the auth state yet
+        // since the email needs to be confirmed first
+        return { user: authData.user as UserWithMetadata };
       }
       
-      return { user: authData.user as UserWithMetadata };
+      return { user: null, error: "Signup failed" };
     } catch (error) {
       console.error('Error in signUp:', error);
       return { user: null, error: error.message };
@@ -257,21 +268,20 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     });
 
     // Initial session check
-    supabase.auth.getSession().then(({ data: { session }, error: sessionError }) => {
-      if (sessionError) {
-        console.error('Error getting session:', sessionError);
+    supabase.auth.getSession().then(({ data: { session }, error }) => {
+      if (error) {
+        console.error('Error checking session:', error);
         updateAuthState(null);
         return;
       }
-      
+
       if (session?.user) {
         // Check if email is confirmed
         if (!session.user.email_confirmed_at) {
-          console.log('Email not confirmed, signing out');
+          console.log('Email not confirmed during initial check, signing out');
           supabase.auth.signOut().then(() => updateAuthState(null));
           return;
         }
-        
         updateAuthState(session.user);
       } else {
         updateAuthState(null);

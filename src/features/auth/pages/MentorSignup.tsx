@@ -51,7 +51,10 @@ type ValidationErrors = {
 
 export default function MentorSignup() {
   const navigate = useNavigate();
-  const { signUp } = useContext(AuthContext);
+  const auth = useContext(AuthContext);
+  if (!auth) throw new Error("Auth context must be used within AuthProvider");
+  const { signUp } = auth;
+  
   const [formData, setFormData] = useState({
     firstName: "",
     lastName: "",
@@ -184,23 +187,13 @@ export default function MentorSignup() {
       }
 
       if (user) {
-        // Create mentor profile
-        const { error: profileError } = await supabase.from('mood_mentor_profiles').insert({
-          id: user.id,
-          email: formData.email,
-          full_name: `${formData.firstName} ${formData.lastName}`,
-          specialty: formData.specialty,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        });
-
-        if (profileError) {
-          console.error("Error creating mentor profile:", profileError);
-          // Continue anyway as the auth user was created
-        }
-        
         toast.success("Account created successfully! Please check your email to verify your account.");
-        navigate('/mentor-signin');
+        navigate('/auth/email-confirmation', { 
+          state: { 
+            email: formData.email,
+            userType: 'mentor'
+          } 
+        });
       }
     } catch (error: any) {
       toast.error(error.message || "Error creating account");

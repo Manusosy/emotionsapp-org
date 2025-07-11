@@ -15,6 +15,15 @@ body {
   font-weight: 400;
 }
 
+/* Cursor styles for interactive elements */
+button, [role="button"], .cursor-pointer {
+  cursor: pointer !important;
+}
+
+button:hover, [role="button"]:hover, .cursor-pointer:hover {
+  cursor: pointer !important;
+}
+
 /* Adjust font weights globally */
 @layer base {
   h1, h2, h3, h4, h5, h6 {

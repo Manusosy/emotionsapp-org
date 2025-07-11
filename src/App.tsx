@@ -61,6 +61,8 @@ import DashboardMessagesPage from "@/features/dashboard/pages/MessagesPage";
 import MoodMentorMessagesPage from "@/features/mood_mentors/pages/MessagesPage";
 import ScrollToTop from "@/components/layout/ScrollToTop";
 import AuthCallbackPage from "@/app/auth/callback/page";
+import AuthConfirmPage from "@/app/auth/confirm/page";
+import EmailConfirmationPage from "@/features/auth/components/EmailConfirmationPage";
 import MoodMentorProfile from "@/features/mood_mentors/pages/MoodMentorProfile";
 import { useAuth } from "@/contexts/authContext";
 import { setupDatabaseFunctions } from './lib/supabase';
@@ -277,6 +279,10 @@ const AppContent = () => {
               
               {/* Auth callback route for OAuth providers */}
               <Route path="/auth/callback" element={<AuthCallbackPage />} />
+              
+              {/* Email confirmation routes */}
+              <Route path="/auth/confirm" element={<AuthConfirmPage />} />
+              <Route path="/auth/email-confirmation" element={<EmailConfirmationPage />} />
               
               {/* New specific role-based auth routes */}
               <Route path="/patient-signin" element={<SignIn userType="patient" />} />

@@ -28,9 +28,16 @@ export default function SignIn({ userType }: SignInProps) {
   const searchParams = new URLSearchParams(location.search);
   const redirectTo = searchParams.get('redirectTo');
   
-  // Check for state passed from the journal page
-  const fromState = location.state as { from: string, returnToJournal?: boolean } | null;
+  // Check for state passed from the journal page or signup page
+  const fromState = location.state as { 
+    from?: string, 
+    returnToJournal?: boolean,
+    message?: string,
+    email?: string 
+  } | null;
   const returnToJournal = fromState?.returnToJournal;
+  const signupMessage = fromState?.message;
+  const signupEmail = fromState?.email;
 
   // If already authenticated, redirect to appropriate destination
   if (isAuthenticated) {
@@ -177,6 +184,23 @@ export default function SignIn({ userType }: SignInProps) {
       subtitle={subtitle}
       formType={userType}
     >
+      {signupMessage && (
+        <div className="mb-4 p-4 bg-blue-50 text-blue-700 rounded-md text-sm border border-blue-200">
+          <div className="flex items-start space-x-2">
+            <Mail className="h-4 w-4 mt-0.5 flex-shrink-0" />
+            <div>
+              <p className="font-medium">Email Confirmation Required</p>
+              <p className="mt-1">{signupMessage}</p>
+              {signupEmail && (
+                <p className="mt-1 text-blue-600">
+                  Check your inbox at <strong>{signupEmail}</strong>
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+      
       {error && (
         <div className="mb-4 p-3 bg-red-50 text-red-700 rounded-md text-sm">
           {error}

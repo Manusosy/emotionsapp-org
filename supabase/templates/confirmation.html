@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <title>Confirm Your Email</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        background-color: #f8f9fa;
+        color: #343a40;
+        margin: 0;
+        padding: 20px;
+      }
+      .container {
+        background-color: #ffffff;
+        border-radius: 8px;
+        max-width: 600px;
+        margin: 0 auto;
+        padding: 30px;
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+      }
+      h2 {
+        color: #2c3e50;
+      }
+      .button {
+        display: inline-block;
+        margin-top: 20px;
+        padding: 12px 24px;
+        font-size: 16px;
+        background-color: #3b82f6;
+        color: white;
+        text-decoration: none;
+        border-radius: 6px;
+      }
+      .features {
+        margin-top: 30px;
+        padding-left: 20px;
+      }
+      .features li {
+        margin-bottom: 10px;
+      }
+      .footer {
+        margin-top: 40px;
+        font-size: 12px;
+        color: #6c757d;
+        text-align: center;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h2>Confirm Your Email Address</h2>
+      <p>Hi there,</p>
+      <p>Thank you for signing up for <strong>EmotionsApp</strong>.</p>
+      <p>To complete your registration, please confirm your email address by clicking the button below:</p>
+      <a href="{{ .SiteURL }}/app/auth/confirm?token_hash={{ .TokenHash }}&type=email" class="button">Confirm My Email</a>
+
+      <div class="features">
+        <p>Once confirmed, you'll be able to:</p>
+        <ul>
+          <li>Track your mood and emotions</li>
+          <li>Connect with certified mood mentors</li>
+          <li>Join supportive community groups</li>
+          <li>Access mental health resources</li>
+          <li>Keep a private journal</li>
+        </ul>
+      </div>
+
+      <p>If you did not create this account, you can safely ignore this email.</p>
+
+      <div class="footer">
+        &copy; 2025 EmotionsApp. All rights reserved.<br />
+        You're receiving this email because you signed up for EmotionsApp.
+      </div>
+    </div>
+  </body>
+</html> 
