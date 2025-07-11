@@ -55,7 +55,37 @@ class SupabaseAuthService implements AuthService {
       });
 
       if (error) throw error;
-      return { user: data.user as UserWithMetadata | null };
+      
+      if (!data.user) {
+        return { user: null, error: "Invalid login credentials" };
+      }
+
+      // Check email verification status
+      if (!data.user.email_confirmed_at) {
+        await supabase.auth.signOut();
+        return { 
+          user: null, 
+          error: "Please verify your email before signing in. Check your inbox for the confirmation link." 
+        };
+      }
+
+      // Check if profile exists
+      const tableName = data.user.user_metadata?.role === 'patient' ? 'patient_profiles' : 'mood_mentor_profiles';
+      const { data: profile, error: profileError } = await supabase
+        .from(tableName)
+        .select('id')
+        .eq('id', data.user.id)
+        .single();
+
+      if (profileError || !profile) {
+        await supabase.auth.signOut();
+        return {
+          user: null,
+          error: "Account setup incomplete. Please contact support."
+        };
+      }
+
+      return { user: data.user as UserWithMetadata };
     } catch (error: any) {
       console.error('Error in signIn:', error);
       return { user: null, error: error.message };
@@ -72,7 +102,20 @@ class SupabaseAuthService implements AuthService {
     gender?: string | null;
   }): Promise<{ user: UserWithMetadata | null; error?: string }> {
     try {
-      const { data: authData, error } = await supabase.auth.signUp({
+      // First check if a profile already exists
+      const tableName = data.role === 'patient' ? 'patient_profiles' : 'mood_mentor_profiles';
+      const { data: existingProfile } = await supabase
+        .from(tableName)
+        .select('id')
+        .eq('email', data.email)
+        .maybeSingle();
+
+      if (existingProfile) {
+        return { user: null, error: `Email already registered as a ${data.role === 'patient' ? 'Patient' : 'Mood Mentor'}` };
+      }
+
+      // Create auth user with retry logic
+      let authResponse = await supabase.auth.signUp({
         email: data.email,
         password: data.password,
         options: {
@@ -84,31 +127,77 @@ class SupabaseAuthService implements AuthService {
           }
         }
       });
-
-      if (error) throw error;
-
-      if (authData.user) {
-        // Create profile based on role
-        if (data.role === 'patient') {
-          await supabase.from('patient_profiles').insert({
-            id: authData.user.id,
-            full_name: `${data.firstName} ${data.lastName}`,
-            email: data.email,
-            country: data.country,
-            gender: data.gender
-          });
-        } else if (data.role === 'mood_mentor') {
-          await supabase.from('mood_mentor_profiles').insert({
-            id: authData.user.id,
-            full_name: `${data.firstName} ${data.lastName}`,
-            email: data.email,
-            country: data.country,
-            gender: data.gender
-          });
-        }
+      
+      for (let i = 0; i < 1; i++) { // Try one more time if first attempt fails
+        if (!authResponse.error) break;
+        
+        await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1s before retry
+        
+        authResponse = await supabase.auth.signUp({
+          email: data.email,
+          password: data.password,
+          options: {
+            data: {
+              name: `${data.firstName} ${data.lastName}`,
+              role: data.role,
+              country: data.country,
+              gender: data.gender
+            }
+          }
+        });
       }
 
-      return { user: authData.user as UserWithMetadata | null };
+      if (authResponse.error) {
+        throw authResponse.error;
+      }
+
+      const user = authResponse.data.user;
+      if (!user) {
+        throw new Error('No user returned from auth signup');
+      }
+
+      // Create profile with retry logic
+      const profileData = {
+        id: user.id,
+        full_name: `${data.firstName} ${data.lastName}`,
+        email: data.email,
+        country: data.country,
+        gender: data.gender
+      };
+
+      let profileError;
+      for (let i = 0; i < 2; i++) { // Try twice
+        const { error } = await supabase
+          .from(tableName)
+          .insert(profileData);
+        
+        if (!error) {
+          profileError = null;
+          break;
+        }
+        
+        profileError = error;
+        if (i === 0) await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1s before retry
+      }
+
+      if (profileError) {
+        // If profile creation fails, attempt to clean up the auth user
+        try {
+          // Note: We can't delete the user directly from the client
+          // Instead, mark them for deletion in user metadata
+          await supabase.auth.updateUser({
+            data: { 
+              needsDeletion: true,
+              failedProfileCreation: true
+            }
+          });
+        } catch (cleanupError) {
+          console.error('Failed to mark user for deletion:', cleanupError);
+        }
+        throw new Error('Failed to create user profile');
+      }
+
+      return { user: user as UserWithMetadata };
     } catch (error: any) {
       console.error('Error in signUp:', error);
       return { user: null, error: error.message };
