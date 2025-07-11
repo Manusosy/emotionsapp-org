@@ -83,7 +83,6 @@ export default function AuthConfirmPage() {
               gender: data.user.user_metadata?.gender || 'Prefer not to say'
             }]);
           profileError = err;
-          profileError = err;
         }
 
         if (profileError) {
@@ -94,22 +93,11 @@ export default function AuthConfirmPage() {
         }
 
         setStatus('success');
-        setMessage('Email confirmed successfully! Redirecting to sign in...');
+        setMessage('Email confirmed successfully!');
         toast.success('Email confirmed successfully!');
         
         // Sign out the user to ensure a clean sign-in
         await supabase.auth.signOut();
-        
-        // Redirect to sign in after 2 seconds
-        setTimeout(() => {
-          const signInPath = userRole === 'mood_mentor' ? '/mentor-signin' : '/patient-signin';
-          navigate(signInPath, {
-            state: { 
-              message: 'Your email has been confirmed! Please sign in to continue.',
-              email: data.user.email
-            }
-          });
-        }, 2000);
       } catch (error: any) {
         console.error('Unexpected error during email confirmation:', error);
         setStatus('error');
@@ -120,66 +108,60 @@ export default function AuthConfirmPage() {
     confirmEmail();
   }, [searchParams, navigate]);
   
-  const handleRetrySignup = () => {
-    navigate('/');
-  };
-  
   const handleSignIn = () => {
     navigate('/signin');
   };
   
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
+    <div className="min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-md w-full space-y-8">
         <div className="text-center">
-          <h2 className="text-3xl font-extrabold text-gray-900">
+          <h2 className="text-2xl font-semibold text-gray-900">
             Email Confirmation
           </h2>
         </div>
         
-        <div className="bg-white shadow-md rounded-lg p-6">
+        <div className="text-center">
           {status === 'loading' && (
-            <div className="text-center">
-              <Spinner className="mx-auto mb-4" />
+            <div className="space-y-4">
+              <Spinner className="mx-auto" />
               <p className="text-gray-600">Confirming your email...</p>
             </div>
           )}
           
           {status === 'success' && (
-            <div className="text-center">
-              <CheckCircle className="mx-auto mb-4 h-12 w-12 text-green-500" />
-              <h3 className="text-lg font-medium text-gray-900 mb-2">
-                Email Confirmed!
-              </h3>
-              <p className="text-gray-600 mb-4">{message}</p>
-              <p className="text-sm text-gray-500">
-                You will be redirected to sign in in a few seconds...
-              </p>
+            <div className="space-y-6">
+              <CheckCircle className="mx-auto h-12 w-12 text-green-500" />
+              <div className="space-y-2">
+                <h3 className="text-lg font-medium text-gray-900">
+                  Email Confirmed!
+                </h3>
+                <p className="text-gray-600">{message}</p>
+              </div>
+              <Button 
+                onClick={handleSignIn}
+                className="w-full"
+              >
+                Continue to Sign In
+              </Button>
             </div>
           )}
           
           {status === 'error' && (
-            <div className="text-center">
-              <XCircle className="mx-auto mb-4 h-12 w-12 text-red-500" />
-              <h3 className="text-lg font-medium text-gray-900 mb-2">
-                Confirmation Failed
-              </h3>
-              <p className="text-gray-600 mb-4">{message}</p>
-              <div className="space-y-3">
-                <Button 
-                  onClick={handleRetrySignup}
-                  variant="outline"
-                  className="w-full"
-                >
-                  Try Signing Up Again
-                </Button>
-                <Button 
-                  onClick={handleSignIn}
-                  className="w-full"
-                >
-                  Go to Sign In
-                </Button>
+            <div className="space-y-6">
+              <XCircle className="mx-auto h-12 w-12 text-red-500" />
+              <div className="space-y-2">
+                <h3 className="text-lg font-medium text-gray-900">
+                  Confirmation Failed
+                </h3>
+                <p className="text-gray-600">{message}</p>
               </div>
+              <Button 
+                onClick={handleSignIn}
+                className="w-full"
+              >
+                Go to Sign In
+              </Button>
             </div>
           )}
         </div>
