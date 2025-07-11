@@ -183,11 +183,13 @@ export default function MentorSignup() {
         } else {
           toast.error(error);
         }
+        setIsLoading(false);
         return;
       }
 
       if (user) {
         toast.success("Account created successfully! Please check your email to verify your account.");
+        setIsLoading(false); // Add this line to reset loading state
         // Navigate to email confirmation instructions page
         navigate('/auth/email-sent', { 
           state: { 
@@ -195,10 +197,12 @@ export default function MentorSignup() {
             userType: 'mentor'
           } 
         });
+      } else {
+        toast.error("Failed to create account. Please try again.");
+        setIsLoading(false);
       }
     } catch (error: any) {
       toast.error(error.message || "Error creating account");
-    } finally {
       setIsLoading(false);
     }
   };
