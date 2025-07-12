@@ -73,26 +73,25 @@ export default function AuthConfirmPage() {
           }
         }
 
-        // After successful confirmation, show success message
+        // After successful confirmation, show success message and prepare for redirect
         setStatus('success');
-        toast.success('Email confirmed successfully!');
         
-        // Wait for user to see the success message, then sign out and redirect
-        setTimeout(async () => {
-          // Clean up the session
-          await supabase.auth.signOut();
-          
-          // Determine the correct sign in URL based on user role
-          const signInPath = userRole === 'mood_mentor' ? '/mentor-signin' : '/patient-signin';
-          
-          // Redirect to sign in
+        // Clean up session immediately but don't wait for it
+        supabase.auth.signOut();
+        
+        // Determine the correct sign in URL based on user role
+        const signInPath = userRole === 'mood_mentor' ? '/mentor-signin' : '/patient-signin';
+        
+        // Show success toast and redirect quickly
+        toast.success('Email confirmed successfully!');
+        setTimeout(() => {
           navigate(signInPath, { 
             state: { 
               confirmationSuccess: true,
               email: userEmail
             } 
           });
-        }, 3000); // Increased delay to 3 seconds to ensure user sees the success message
+        }, 1500); // Reduced to 1.5 seconds for better UX
 
       } catch (error: any) {
         console.error('Unexpected error during email confirmation:', error);
@@ -115,9 +114,21 @@ export default function AuthConfirmPage() {
         
         <div className="text-center">
           {status === 'loading' && (
-            <div className="space-y-4">
-              <Spinner className="mx-auto" />
-              <p className="text-gray-600">Verifying your email address...</p>
+            <div className="space-y-6">
+              <div className="relative">
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <div className="w-16 h-16 rounded-full bg-primary/10 animate-ping" />
+                </div>
+                <Spinner className="w-12 h-12 text-primary relative z-10" />
+              </div>
+              <div className="space-y-2">
+                <p className="text-lg font-medium text-primary animate-pulse">
+                  Verifying your email...
+                </p>
+                <p className="text-sm text-muted-foreground opacity-80">
+                  This will only take a moment
+                </p>
+              </div>
             </div>
           )}
           
