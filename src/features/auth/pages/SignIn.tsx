@@ -1,11 +1,11 @@
-import { useState, useEffect, useContext } from "react";
+import { useState, useEffect } from "react";
 import { Link, useNavigate, useLocation, Navigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import AuthLayout from "../components/AuthLayout";
-import { AuthContext } from "@/contexts/authContext";
-import { Mail, Lock, Eye, EyeOff } from "lucide-react";
+import { useAuth } from "@/hooks/use-auth";
+import { Mail, Lock, Eye, EyeOff, CheckCircle } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/lib/supabase";
 
@@ -19,8 +19,9 @@ export default function SignIn({ userType }: SignInProps) {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
   
-  const { signIn, isAuthenticated, user, getDashboardUrlForRole } = useContext(AuthContext);
+  const { signIn, isAuthenticated, user, getDashboardUrlForRole } = useAuth();
   const userRole = user?.user_metadata?.role;
   const navigate = useNavigate();
   const location = useLocation();
@@ -28,16 +29,37 @@ export default function SignIn({ userType }: SignInProps) {
   const searchParams = new URLSearchParams(location.search);
   const redirectTo = searchParams.get('redirectTo');
   
-  // Check for state passed from the journal page or signup page
-  const fromState = location.state as { 
+  // Get state from location or use query params
+  const state = location.state as { 
     from?: string, 
     returnToJournal?: boolean,
     message?: string,
-    email?: string 
+    email?: string,
+    confirmationSuccess?: boolean 
   } | null;
-  const returnToJournal = fromState?.returnToJournal;
-  const signupMessage = fromState?.message;
-  const signupEmail = fromState?.email;
+  
+  const returnToJournal = state?.returnToJournal;
+  const signupMessage = state?.message;
+  const signupEmail = state?.email;
+  const confirmationSuccess = state?.confirmationSuccess;
+
+  useEffect(() => {
+    if (confirmationSuccess) {
+      setSuccessMessage("Email confirmed successfully! Please sign in to continue.");
+      
+      // If we have an email from the confirmation, pre-fill it
+      if (signupEmail) {
+        setEmail(signupEmail);
+      }
+      
+      // Clear the success state from history so refreshing doesn't show it again
+      window.history.replaceState(
+        {}, 
+        document.title,
+        window.location.pathname
+      );
+    }
+  }, [confirmationSuccess, signupEmail]);
 
   // If already authenticated, redirect to appropriate destination
   if (isAuthenticated) {
@@ -47,7 +69,7 @@ export default function SignIn({ userType }: SignInProps) {
     }
     
     // Otherwise use normal redirect logic
-    const fromPath = fromState?.from;
+    const fromPath = state?.from;
     const dashboardUrl = getDashboardUrlForRole(userRole);
     return <Navigate to={redirectTo || fromPath || dashboardUrl} replace />;
   }
@@ -55,6 +77,7 @@ export default function SignIn({ userType }: SignInProps) {
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
+    setSuccessMessage("");
     
     if (!email || !password) {
       setError("Please enter both email and password");
@@ -184,7 +207,19 @@ export default function SignIn({ userType }: SignInProps) {
       subtitle={subtitle}
       formType={userType}
     >
-      {signupMessage && (
+      {successMessage && (
+        <div className="mb-4 p-4 bg-emerald-50 text-emerald-700 rounded-md text-sm border border-emerald-200">
+          <div className="flex items-start space-x-2">
+            <CheckCircle className="h-4 w-4 mt-0.5 flex-shrink-0" />
+            <div>
+              <p className="font-medium">Success!</p>
+              <p>{successMessage}</p>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {signupMessage && !successMessage && (
         <div className="mb-4 p-4 bg-blue-50 text-blue-700 rounded-md text-sm border border-blue-200">
           <div className="flex items-start space-x-2">
             <Mail className="h-4 w-4 mt-0.5 flex-shrink-0" />
@@ -303,4 +338,4 @@ export default function SignIn({ userType }: SignInProps) {
       </div>
     </AuthLayout>
   );
-} 
+}
