@@ -144,23 +144,6 @@ export default function MentorSignup() {
     setIsLoading(true);
 
     try {
-      // First check if email is already registered as a patient
-      const { data: existingPatient } = await supabase
-        .from('patient_profiles')
-        .select('id')
-        .eq('email', formData.email)
-        .maybeSingle();
-        
-      if (existingPatient) {
-        toast.error("This email is already registered as a Patient. Please use a different email or sign in as a patient.");
-        setErrors({
-          ...errors,
-          email: "Email already registered as a Patient"
-        });
-        setIsLoading(false);
-        return;
-      }
-      
       // Register the user
       const { user, error } = await signUp({
         email: formData.email,

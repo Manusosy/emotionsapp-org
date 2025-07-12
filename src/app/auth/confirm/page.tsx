@@ -60,38 +60,18 @@ export default function AuthConfirmPage() {
           return;
         }
 
-        // Check if profile exists and create if needed
-        const tableName = userRole === 'patient' ? 'patient_profiles' : 'mood_mentor_profiles';
-        
-        const { data: existingProfile } = await supabase
-          .from(tableName)
-          .select('id')
-          .eq('id', user.id)
-          .single();
+        // We don't need to create the profile here since it's handled by the Edge Function
+        // Just verify that metadata is correctly set
+        if (userRole !== user.user_metadata?.role) {
+          // Update user metadata if role doesn't match
+          const { error: updateError } = await supabase.auth.updateUser({
+            data: { role: userRole }
+          });
 
-        if (!existingProfile) {
-          // Create the user profile if it doesn't exist
-          const profileData = {
-            id: user.id,
-            email: userEmail,
-            full_name: user.user_metadata?.name || 'User',
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-            location: user.user_metadata?.country || '',
-            gender: user.user_metadata?.gender || 'Prefer not to say',
-            is_active: true,
-            is_profile_complete: false,
-            name_slug: user.user_metadata?.name?.toLowerCase().replace(/\s+/g, '-') || 'user'
-          };
-
-          const { error: profileError } = await supabase
-            .from(tableName)
-            .insert([profileData]);
-
-          if (profileError) {
-            console.error('Error creating profile:', profileError);
+          if (updateError) {
+            console.error('Error updating user role:', updateError);
             setStatus('error');
-            setMessage('We encountered a technical issue setting up your account. Please contact support for assistance.');
+            setMessage('Error updating user information. Please try again or contact support.');
             return;
           }
         }

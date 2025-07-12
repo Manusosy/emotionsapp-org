@@ -91,7 +91,42 @@ export default function AuthCallbackPage() {
         console.log("User metadata:", user.user_metadata);
         console.log("User email:", user.email);
         
-        // Check if the user already exists in either profile table by ID
+        // When signing up, immediately update user metadata with the correct role
+        if (isSignUp) {
+          const role = userType === 'mentor' ? 'mood_mentor' : 'patient';
+          const { error: updateError } = await supabase.auth.updateUser({
+            data: { 
+              role,
+              signup_completed: false // Add this flag to track signup completion
+            }
+          });
+
+          if (updateError) {
+            console.error("Error updating user metadata:", updateError);
+            throw updateError;
+          }
+
+          // For mentors, verify country eligibility
+          if (userType === 'mentor') {
+            const userCountry = user.user_metadata?.country;
+            if (!isCountryAllowedForMentors(userCountry)) {
+              setError("Mood Mentor registration is currently not available in your country.");
+              await handleClearAndSignOut();
+              return;
+            }
+          }
+
+          // Redirect to email confirmation page
+          navigate('/auth/email-sent', { 
+            state: { 
+              email: user.email,
+              userType: userType
+            }
+          });
+          return;
+        }
+
+        // For non-signup flows, check existing profiles
         const { data: existingPatient } = await supabase
           .from('patient_profiles')
           .select('id')

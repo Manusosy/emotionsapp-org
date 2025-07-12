@@ -109,23 +109,6 @@ export default function PatientSignup() {
     setIsLoading(true);
 
     try {
-      // First check if email is already registered as a mood mentor
-      const { data: existingMentor } = await supabase
-        .from('mood_mentor_profiles')
-        .select('id')
-        .eq('email', formData.email)
-        .maybeSingle();
-        
-      if (existingMentor) {
-        toast.error("This email is already registered as a Mood Mentor. Please use a different email or sign in as a mentor.");
-        setErrors({
-          ...errors,
-          email: "Email already registered as a Mood Mentor"
-        });
-        setIsLoading(false);
-        return;
-      }
-      
       // Register the user
       const { user, error } = await signUp({
         email: formData.email,
