@@ -15,8 +15,12 @@ export default function AuthConfirmPage() {
   useEffect(() => {
     const confirmEmail = async () => {
       try {
+        // Always start with a clean auth state
+        await supabase.auth.signOut();
+        
         const token_hash = searchParams.get('token_hash');
         const type = searchParams.get('type');
+        const userType = searchParams.get('userType');
         
         if (!token_hash || !type || type !== 'email') {
           setStatus('error');
@@ -24,77 +28,65 @@ export default function AuthConfirmPage() {
           return;
         }
 
-        // Get the current session if any
-        const { data: { session: currentSession } } = await supabase.auth.getSession();
-        
         // Verify the email confirmation token
         const { data, error } = await supabase.auth.verifyOtp({
           token_hash,
           type: 'email' as any,
         });
         
-        if (error) {
+        if (error || !data?.user?.email) {
           console.error('Email confirmation error:', error);
           setStatus('error');
           
-          if (error.message.includes('expired')) {
+          const errorMessage = error?.message || '';
+          if (errorMessage.includes('expired')) {
             setMessage('This confirmation link has expired. Please request a new confirmation email from the sign-in page.');
-          } else if (error.message.includes('invalid')) {
+          } else if (errorMessage.includes('invalid')) {
             setMessage('This confirmation link is invalid. Please check your email for the correct link.');
           } else {
             setMessage('Unable to confirm your email. Please try again or contact support.');
           }
           return;
         }
+
+        const user = data.user;
+        const userEmail = user.email;
+        const userRole = user.user_metadata?.role;
         
-        if (!data?.user) {
+        // Verify we have the required user data
+        if (!userRole || !userEmail) {
           setStatus('error');
-          setMessage('Unable to verify your account. Please try again or contact support.');
+          setMessage('Invalid account data. Please contact support.');
           return;
         }
 
-        // Check if profile already exists
-        const userRole = data.user.user_metadata?.role;
+        // Check if profile exists and create if needed
         const tableName = userRole === 'patient' ? 'patient_profiles' : 'mood_mentor_profiles';
         
         const { data: existingProfile } = await supabase
           .from(tableName)
           .select('id')
-          .eq('id', data.user.id)
+          .eq('id', user.id)
           .single();
 
         if (!existingProfile) {
           // Create the user profile if it doesn't exist
           const profileData = {
-            id: data.user.id,
-            email: data.user.email,
-            full_name: data.user.user_metadata?.name || 'User',
+            id: user.id,
+            email: userEmail,
+            full_name: user.user_metadata?.name || 'User',
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),
-            location: data.user.user_metadata?.country || '',
-            gender: data.user.user_metadata?.gender || 'Prefer not to say',
-            is_active: true
+            location: user.user_metadata?.country || '',
+            gender: user.user_metadata?.gender || 'Prefer not to say',
+            is_active: true,
+            is_profile_complete: false,
+            name_slug: user.user_metadata?.name?.toLowerCase().replace(/\s+/g, '-') || 'user'
           };
 
-          let profileError;
-          if (userRole === 'patient') {
-            const { error: err } = await supabase
-              .from('patient_profiles')
-              .insert([{
-                ...profileData,
-                is_profile_complete: false,
-                name_slug: data.user.user_metadata?.name?.toLowerCase().replace(/\s+/g, '-') || 'user'
-              }]);
-            profileError = err;
-          } else if (userRole === 'mood_mentor') {
-            const { error: err } = await supabase
-              .from('mood_mentor_profiles')
-              .insert([{
-                ...profileData,
-                specialty: data.user.user_metadata?.specialty || 'General'
-              }]);
-            profileError = err;
-          }
+          const { error: profileError } = await supabase
+            .from(tableName)
+            .insert([profileData]);
 
           if (profileError) {
             console.error('Error creating profile:', profileError);
@@ -104,33 +96,23 @@ export default function AuthConfirmPage() {
           }
         }
 
-        // If user was already authenticated with a different account
-        if (currentSession && currentSession.user.id !== data.user.id) {
-          await supabase.auth.signOut();
-        }
-
-        // Sign in the user after confirmation
-        const { error: signInError } = await supabase.auth.signInWithPassword({
-          email: data.user.email!,
-          password: searchParams.get('password') || '' // This will be empty if not provided
-        });
-
-        if (!signInError) {
-          // Successful confirmation and sign in
-          setStatus('success');
-          toast.success('Email confirmed successfully!');
-          // Redirect to dashboard after a short delay
-          setTimeout(() => {
-            navigate('/dashboard');
-          }, 1500);
-          return;
-        }
-
-        // If auto sign-in fails, show success message with sign in button
+        // After successful confirmation and profile creation/verification
         setStatus('success');
-        setMessage('Your email has been confirmed! Please sign in to access your account.');
-        toast.success('Email confirmed successfully!');
+        toast.success('Email confirmed successfully! Please sign in to continue.');
         
+        // Determine the correct sign in URL based on user role
+        const signInPath = userRole === 'mood_mentor' ? '/mentor-signin' : '/patient-signin';
+        
+        // Redirect to appropriate sign in page after a brief delay
+        setTimeout(() => {
+          navigate(signInPath, { 
+            state: { 
+              confirmationSuccess: true,
+              email: userEmail
+            } 
+          });
+        }, 2000);
+
       } catch (error: any) {
         console.error('Unexpected error during email confirmation:', error);
         setStatus('error');
@@ -140,15 +122,7 @@ export default function AuthConfirmPage() {
     
     confirmEmail();
   }, [searchParams, navigate]);
-  
-  const handleSignIn = () => {
-    navigate('/signin');
-  };
 
-  const handleSupport = () => {
-    navigate('/contact');
-  };
-  
   return (
     <div className="min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-md w-full space-y-8">
@@ -173,16 +147,10 @@ export default function AuthConfirmPage() {
                 <h3 className="text-lg font-medium text-gray-900">
                   Email Confirmed Successfully
                 </h3>
-                <p className="text-gray-600">{message || 'Redirecting to dashboard...'}</p>
+                <p className="text-gray-600">
+                  Your email has been confirmed. Redirecting you to sign in...
+                </p>
               </div>
-              {message && (
-                <Button 
-                  onClick={handleSignIn}
-                  className="w-full"
-                >
-                  Sign In to Your Account
-                </Button>
-              )}
             </div>
           )}
           
@@ -197,14 +165,14 @@ export default function AuthConfirmPage() {
               </div>
               <div className="space-y-4">
                 <Button 
-                  onClick={handleSignIn}
+                  onClick={() => navigate('/signin')}
                   className="w-full"
                   variant="outline"
                 >
                   Return to Sign In
                 </Button>
                 <Button
-                  onClick={handleSupport}
+                  onClick={() => navigate('/contact')}
                   className="w-full"
                 >
                   Contact Support
@@ -216,4 +184,4 @@ export default function AuthConfirmPage() {
       </div>
     </div>
   );
-} 
+}
