@@ -4,6 +4,7 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/authContext';
 import DashboardLayout from "@/features/dashboard/components/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { DeleteAccountDialog } from '../components/DeleteAccountDialog';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { Input } from "@/components/ui/input";
@@ -23,7 +24,7 @@ import { format } from "date-fns";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
-import { CalendarIcon, Loader2, KeyRound, Bell, Mail, ShieldAlert, Eye, EyeOff } from "lucide-react";
+import { CalendarIcon, Loader2, KeyRound, Bell, Mail, ShieldAlert, Eye, EyeOff, AlertTriangle, Trash2 } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { authService } from '@/services';
 import { ServiceResponse } from '@/services';
@@ -65,7 +66,7 @@ export default function SettingsPage() {
   const [passwordError, setPasswordError] = useState('');
   
   const [settings, setSettings] = useState<MoodMentorSettings | null>(null);
-  const [deletingAccount, setDeletingAccount] = useState(false);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
 
   useEffect(() => {
     const loadSettings = async () => {
@@ -93,38 +94,38 @@ export default function SettingsPage() {
 
   // Handle switch change
   const handleSwitchChange = (field: string, value: boolean) => {
-    if (settings) {
-      setSettings(prev => ({
-        ...prev,
-        [field]: value
-      }));
-    }
+    if (!settings) return;
+    
+    setSettings({
+      ...settings,
+      [field]: value
+    } as MoodMentorSettings);
   };
   
   // Handle nested switch change (for working hours)
   const handleWorkingHoursChange = (day: string, field: string, value: any) => {
-    if (settings) {
-      setSettings(prev => ({
-        ...prev,
-        working_hours: {
-          ...prev.working_hours,
-          [day]: {
-            ...prev.working_hours[day as keyof typeof prev.working_hours],
-            [field]: value
-          }
+    if (!settings) return;
+    
+    setSettings({
+      ...settings,
+      working_hours: {
+        ...settings.working_hours,
+        [day]: {
+          ...settings.working_hours[day as keyof typeof settings.working_hours],
+          [field]: value
         }
-      }));
-    }
+      }
+    } as MoodMentorSettings);
   };
   
   // Handle radio change
   const handleRadioChange = (field: string, value: string) => {
-    if (settings) {
-      setSettings(prev => ({
-        ...prev,
-        [field]: value
-      }));
-    }
+    if (!settings) return;
+    
+    setSettings({
+      ...settings,
+      [field]: value
+    } as MoodMentorSettings);
   };
   
   // Handle password input change
@@ -214,6 +215,11 @@ export default function SettingsPage() {
   };
 
   const handleDeleteAccount = async () => {
+    if (!user?.id) {
+      toast.error('User not found');
+      return;
+    }
+
     // Ask for confirmation before deleting account
     const confirmed = window.confirm(
       'Are you sure you want to delete your account? This action cannot be undone.'
@@ -328,32 +334,6 @@ export default function SettingsPage() {
                         checked={settings?.auto_accept_appointments}
                         onCheckedChange={(checked) => handleSwitchChange('auto_accept_appointments', checked)}
                       />
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-              
-              <Card>
-                <CardHeader>
-                  <CardTitle>Account Management</CardTitle>
-                  <CardDescription>
-                    Manage your account or delete it
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-6">
-                  <div className="space-y-2">
-                    <div className="pt-2">
-                      <Button
-                        variant="destructive"
-                        className="w-full sm:w-auto"
-                        onClick={handleDeleteAccount}
-                      >
-                        Delete Account
-                      </Button>
-                      <p className="text-sm text-muted-foreground mt-2">
-                        This will permanently delete your account and all associated data.
-                        This action cannot be undone.
-                      </p>
                     </div>
                   </div>
                 </CardContent>
@@ -499,74 +479,59 @@ export default function SettingsPage() {
                 </CardHeader>
                 <CardContent className="space-y-6">
                   <div className="space-y-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="currentPassword">Current Password</Label>
-                      <div className="relative">
-                        <Input
-                          id="currentPassword"
-                          name="currentPassword"
-                          type={showPassword ? 'text' : 'password'}
-                          value={passwordData.currentPassword}
-                          onChange={handlePasswordChange}
-                          className="pr-10"
-                        />
-                        <button
-                          type="button"
-                          onClick={togglePasswordVisibility}
-                          className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500"
-                        >
-                          {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                        </button>
+                    <div className="grid gap-4">
+                      <div className="grid gap-2">
+                        <Label htmlFor="currentPassword">Current password</Label>
+                        <div className="relative">
+                          <Input
+                            id="currentPassword"
+                            name="currentPassword"
+                            type={showPassword ? "text" : "password"}
+                            value={passwordData.currentPassword}
+                            onChange={handlePasswordChange}
+                          />
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="absolute right-2 top-1/2 -translate-y-1/2"
+                            onClick={togglePasswordVisibility}
+                          >
+                            {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                          </Button>
+                        </div>
+                      </div>
+                      <div className="grid gap-2">
+                        <Label htmlFor="newPassword">New password</Label>
+                        <div className="relative">
+                          <Input
+                            id="newPassword"
+                            name="newPassword"
+                            type={showPassword ? "text" : "password"}
+                            value={passwordData.newPassword}
+                            onChange={handlePasswordChange}
+                          />
+                        </div>
+                      </div>
+                      <div className="grid gap-2">
+                        <Label htmlFor="confirmPassword">Confirm new password</Label>
+                        <div className="relative">
+                          <Input
+                            id="confirmPassword"
+                            name="confirmPassword"
+                            type={showPassword ? "text" : "password"}
+                            value={passwordData.confirmPassword}
+                            onChange={handlePasswordChange}
+                          />
+                        </div>
                       </div>
                     </div>
-                    
-                    <div className="space-y-2">
-                      <Label htmlFor="newPassword">New Password</Label>
-                      <div className="relative">
-                        <Input
-                          id="newPassword"
-                          name="newPassword"
-                          type={showPassword ? 'text' : 'password'}
-                          value={passwordData.newPassword}
-                          onChange={handlePasswordChange}
-                          className="pr-10"
-                        />
-                        <button
-                          type="button"
-                          onClick={togglePasswordVisibility}
-                          className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500"
-                        >
-                          {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                        </button>
-                      </div>
-                    </div>
-                    
-                    <div className="space-y-2">
-                      <Label htmlFor="confirmPassword">Confirm New Password</Label>
-                      <Input
-                        id="confirmPassword"
-                        name="confirmPassword"
-                        type={showPassword ? 'text' : 'password'}
-                        value={passwordData.confirmPassword}
-                        onChange={handlePasswordChange}
-                      />
-                    </div>
-                    
                     {passwordError && (
-                      <Alert variant="destructive">
-                        <AlertTitle>Error</AlertTitle>
-                        <AlertDescription>{passwordError}</AlertDescription>
-                      </Alert>
+                      <div className="text-sm text-red-500">{passwordError}</div>
                     )}
-                    
-                    <Button
+                    <Button 
                       onClick={handlePasswordUpdate}
-                      disabled={
-                        isSaving || 
-                        !passwordData.currentPassword || 
-                        !passwordData.newPassword || 
-                        !passwordData.confirmPassword
-                      }
+                      disabled={isSaving}
                     >
                       {isSaving ? (
                         <>
@@ -575,106 +540,38 @@ export default function SettingsPage() {
                         </>
                       ) : 'Update Password'}
                     </Button>
-                    
-                    <p className="text-sm text-muted-foreground">
-                      Passwords must be at least 8 characters long and should include a mix of letters, numbers, and special characters.
-                    </p>
                   </div>
                 </CardContent>
               </Card>
-              
+
               <Card>
                 <CardHeader>
-                  <CardTitle>Two-Factor Authentication</CardTitle>
+                  <CardTitle className="text-red-600">Danger Zone</CardTitle>
                   <CardDescription>
-                    Add an extra layer of security to your account
+                    Irreversible account actions
                   </CardDescription>
                 </CardHeader>
-                <CardContent className="space-y-6">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <Label htmlFor="two_factor_enabled" className="text-base">
-                        Enable Two-Factor Authentication
-                      </Label>
-                      <p className="text-sm text-muted-foreground">
-                        Protect your account with an additional security layer
-                      </p>
-                    </div>
-                    <Switch 
-                      id="two_factor_enabled"
-                      checked={settings?.two_factor_enabled}
-                      onCheckedChange={(checked) => handleSwitchChange('two_factor_enabled', checked)}
-                    />
-                  </div>
-                  
-                  {settings?.two_factor_enabled && (
-                    <Alert>
-                      <KeyRound className="h-4 w-4" />
-                      <AlertTitle>Two-Factor Authentication is enabled</AlertTitle>
-                      <AlertDescription>
-                        You will be asked for a verification code when you sign in on a new device.
-                      </AlertDescription>
-                    </Alert>
-                  )}
-                </CardContent>
-              </Card>
-              
-              <Card>
-                <CardHeader>
-                  <CardTitle>Privacy Settings</CardTitle>
-                  <CardDescription>
-                    Control who can see your profile
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-6">
+                <CardContent>
                   <div className="space-y-4">
-                    <div className="space-y-2">
-                      <Label>Profile Privacy</Label>
-                      
-                      <div className="space-y-2">
-                        <div className="flex items-center space-x-2">
-                          <input
-                            type="radio"
-                            id="privacy-public"
-                            name="profile_privacy"
-                            value="public"
-                            className="rounded text-primary focus:ring-primary"
-                            checked={settings?.profile_privacy === 'public'}
-                            onChange={() => handleRadioChange('profile_privacy', 'public')}
-                          />
-                          <Label htmlFor="privacy-public" className="text-sm font-normal">
-                            Public - Anyone can view your profile
-                          </Label>
+                    <div className="rounded-lg border border-red-200 bg-red-50 p-4">
+                      <div className="flex items-start space-x-4">
+                        <div className="mt-0.5">
+                          <AlertTriangle className="h-5 w-5 text-red-600" />
                         </div>
-                        
-                        <div className="flex items-center space-x-2">
-                          <input
-                            type="radio"
-                            id="privacy-connections"
-                            name="profile_privacy"
-                            value="connections_only"
-                            className="rounded text-primary focus:ring-primary"
-                            checked={settings?.profile_privacy === 'connections_only'}
-                            onChange={() => handleRadioChange('profile_privacy', 'connections_only')}
-                          />
-                          <Label htmlFor="privacy-connections" className="text-sm font-normal">
-                            Connections Only - Only your patients can view your profile
-                          </Label>
-                        </div>
-                        
-                        <div className="flex items-center space-x-2">
-                          <input
-                            type="radio"
-                            id="privacy-private"
-                            name="profile_privacy"
-                            value="private"
-                            className="rounded text-primary focus:ring-primary"
-                            checked={settings?.profile_privacy === 'private'}
-                            onChange={() => handleRadioChange('profile_privacy', 'private')}
-                          />
-                          <Label htmlFor="privacy-private" className="text-sm font-normal">
-                            Private - Your profile is not visible to others
-                          </Label>
+                        <div className="flex-1 space-y-2">
+                          <h5 className="font-medium text-red-900">Delete Account</h5>
+                          <p className="text-sm text-red-700">
+                            Once you delete your account, all of your data will be permanently removed. This includes your profile, messages, appointments, reviews, and all other associated data.
+                          </p>
+                          <Button
+                            variant="destructive"
+                            size="sm"
+                            className="mt-2"
+                            onClick={() => setShowDeleteDialog(true)}
+                          >
+                            <Trash2 className="mr-2 h-4 w-4" />
+                            Delete Account
+                          </Button>
                         </div>
                       </div>
                     </div>
@@ -737,6 +634,6 @@ export default function SettingsPage() {
       </div>
     </DashboardLayout>
   );
-} 
+}
 
 
