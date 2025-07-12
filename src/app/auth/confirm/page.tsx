@@ -15,9 +15,6 @@ export default function AuthConfirmPage() {
   useEffect(() => {
     const confirmEmail = async () => {
       try {
-        // Always start with a clean auth state
-        await supabase.auth.signOut();
-        
         const token_hash = searchParams.get('token_hash');
         const type = searchParams.get('type');
         const userType = searchParams.get('userType');
@@ -76,22 +73,26 @@ export default function AuthConfirmPage() {
           }
         }
 
-        // After successful confirmation and profile creation/verification
+        // After successful confirmation, show success message
         setStatus('success');
-        toast.success('Email confirmed successfully! Please sign in to continue.');
+        toast.success('Email confirmed successfully!');
         
-        // Determine the correct sign in URL based on user role
-        const signInPath = userRole === 'mood_mentor' ? '/mentor-signin' : '/patient-signin';
-        
-        // Redirect to appropriate sign in page after a brief delay
-        setTimeout(() => {
+        // Wait for user to see the success message, then sign out and redirect
+        setTimeout(async () => {
+          // Clean up the session
+          await supabase.auth.signOut();
+          
+          // Determine the correct sign in URL based on user role
+          const signInPath = userRole === 'mood_mentor' ? '/mentor-signin' : '/patient-signin';
+          
+          // Redirect to sign in
           navigate(signInPath, { 
             state: { 
               confirmationSuccess: true,
               email: userEmail
             } 
           });
-        }, 2000);
+        }, 3000); // Increased delay to 3 seconds to ensure user sees the success message
 
       } catch (error: any) {
         console.error('Unexpected error during email confirmation:', error);
@@ -123,13 +124,18 @@ export default function AuthConfirmPage() {
           {status === 'success' && (
             <div className="space-y-6">
               <CheckCircle className="mx-auto h-12 w-12 text-green-500" />
-              <div className="space-y-2">
-                <h3 className="text-lg font-medium text-gray-900">
-                  Email Confirmed Successfully
+              <div className="space-y-4">
+                <h3 className="text-xl font-medium text-gray-900">
+                  Email Confirmed Successfully! 🎉
                 </h3>
-                <p className="text-gray-600">
-                  Your email has been confirmed. Redirecting you to sign in...
-                </p>
+                <div className="space-y-2">
+                  <p className="text-gray-600">
+                    Your email has been verified and your account is now active.
+                  </p>
+                  <p className="text-gray-600">
+                    You'll be redirected to sign in momentarily...
+                  </p>
+                </div>
               </div>
             </div>
           )}
