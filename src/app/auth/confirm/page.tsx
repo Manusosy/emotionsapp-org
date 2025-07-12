@@ -15,9 +15,6 @@ export default function AuthConfirmPage() {
   useEffect(() => {
     const confirmEmail = async () => {
       try {
-        // First sign out to ensure clean state
-        await supabase.auth.signOut();
-        
         const token_hash = searchParams.get('token_hash');
         const type = searchParams.get('type');
         
@@ -28,11 +25,7 @@ export default function AuthConfirmPage() {
         }
 
         // Get the current session if any
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session) {
-          // If there's an existing session, sign out first
-          await supabase.auth.signOut();
-        }
+        const { data: { session: currentSession } } = await supabase.auth.getSession();
         
         // Verify the email confirmation token
         const { data, error } = await supabase.auth.verifyOtp({
@@ -111,19 +104,37 @@ export default function AuthConfirmPage() {
           }
         }
 
-        // Always sign out after confirmation to ensure clean state
-        await supabase.auth.signOut();
+        // If user was already authenticated with a different account
+        if (currentSession && currentSession.user.id !== data.user.id) {
+          await supabase.auth.signOut();
+        }
 
+        // Sign in the user after confirmation
+        const { error: signInError } = await supabase.auth.signInWithPassword({
+          email: data.user.email!,
+          password: searchParams.get('password') || '' // This will be empty if not provided
+        });
+
+        if (!signInError) {
+          // Successful confirmation and sign in
+          setStatus('success');
+          toast.success('Email confirmed successfully!');
+          // Redirect to dashboard after a short delay
+          setTimeout(() => {
+            navigate('/dashboard');
+          }, 1500);
+          return;
+        }
+
+        // If auto sign-in fails, show success message with sign in button
         setStatus('success');
         setMessage('Your email has been confirmed! Please sign in to access your account.');
         toast.success('Email confirmed successfully!');
+        
       } catch (error: any) {
         console.error('Unexpected error during email confirmation:', error);
         setStatus('error');
         setMessage('An unexpected error occurred. Please try again or contact support.');
-        
-        // Ensure user is signed out in case of error
-        await supabase.auth.signOut();
       }
     };
     
@@ -162,14 +173,16 @@ export default function AuthConfirmPage() {
                 <h3 className="text-lg font-medium text-gray-900">
                   Email Confirmed Successfully
                 </h3>
-                <p className="text-gray-600">{message}</p>
+                <p className="text-gray-600">{message || 'Redirecting to dashboard...'}</p>
               </div>
-              <Button 
-                onClick={handleSignIn}
-                className="w-full"
-              >
-                Sign In to Your Account
-              </Button>
+              {message && (
+                <Button 
+                  onClick={handleSignIn}
+                  className="w-full"
+                >
+                  Sign In to Your Account
+                </Button>
+              )}
             </div>
           )}
           

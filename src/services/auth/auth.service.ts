@@ -1,6 +1,8 @@
 import { supabase } from '@/lib/supabase';
 import { User } from '@supabase/supabase-js';
 import { UserRole } from '@/types/user';
+import { validateSignupData, isDisposableEmail } from '@/utils/validation';
+import { rateLimiter } from '@/utils/rateLimiter';
 
 // Extended User type to include metadata
 export interface UserWithMetadata extends User {
@@ -102,53 +104,85 @@ class SupabaseAuthService implements AuthService {
     gender?: string | null;
   }): Promise<{ user: UserWithMetadata | null; error?: string }> {
     try {
-      // First check if a profile already exists
+      // Validate input data
+      const validationErrors = validateSignupData(data);
+      if (validationErrors) {
+        return { user: null, error: Object.values(validationErrors)[0] };
+      }
+
+      // Check for disposable email
+      if (await isDisposableEmail(data.email)) {
+        return { user: null, error: 'Please use a valid non-disposable email address' };
+      }
+
+      // Rate limiting check using client IP
+      const ipAddress = window.localStorage.getItem('client_ip') || 'unknown';
+      if (!rateLimiter.checkRateLimit(ipAddress)) {
+        const timeoutMs = rateLimiter.getTimeoutRemaining(ipAddress);
+        const timeoutMinutes = Math.ceil(timeoutMs / 60000);
+        return { 
+          user: null, 
+          error: `Too many signup attempts. Please try again in ${timeoutMinutes} minutes` 
+        };
+      }
+
+      // Check if profile already exists using transaction
       const tableName = data.role === 'patient' ? 'patient_profiles' : 'mood_mentor_profiles';
-      const { data: existingProfile } = await supabase
-        .from(tableName)
-        .select('id')
-        .eq('email', data.email)
-        .maybeSingle();
-
-      if (existingProfile) {
-        return { user: null, error: `Email already registered as a ${data.role === 'patient' ? 'Patient' : 'Mood Mentor'}` };
-      }
-
-      // Create auth user with retry logic
-      let authResponse = await supabase.auth.signUp({
-        email: data.email,
-        password: data.password,
-        options: {
-          data: {
-            name: `${data.firstName} ${data.lastName}`,
-            role: data.role,
-            country: data.country,
-            gender: data.gender
-          }
-        }
-      });
-      
-      for (let i = 0; i < 1; i++) { // Try one more time if first attempt fails
-        if (!authResponse.error) break;
-        
-        await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1s before retry
-        
-        authResponse = await supabase.auth.signUp({
-          email: data.email,
-          password: data.password,
-          options: {
-            data: {
-              name: `${data.firstName} ${data.lastName}`,
-              role: data.role,
-              country: data.country,
-              gender: data.gender
-            }
-          }
+      const { data: existingProfile, error: profileCheckError } = await supabase
+        .rpc('check_profile_exists', {
+          p_email: data.email,
+          p_table_name: tableName
         });
+
+      if (profileCheckError) {
+        console.error('Error checking profile:', profileCheckError);
+        return { user: null, error: 'Unable to process signup. Please try again.' };
       }
 
-      if (authResponse.error) {
-        throw authResponse.error;
+      if (existingProfile?.exists) {
+        return { 
+          user: null, 
+          error: `Email already registered as a ${data.role === 'patient' ? 'Patient' : 'Mood Mentor'}` 
+        };
+      }
+
+      // Create auth user with improved retry logic
+      const MAX_RETRIES = 3;
+      const RETRY_DELAY = 1000;
+      let authResponse;
+
+      for (let i = 0; i < MAX_RETRIES; i++) {
+        try {
+          authResponse = await supabase.auth.signUp({
+            email: data.email,
+            password: data.password,
+            options: {
+              data: {
+                name: `${data.firstName} ${data.lastName}`,
+                role: data.role,
+                country: data.country,
+                gender: data.gender,
+                signupTimestamp: new Date().toISOString()
+              },
+              emailRedirectTo: `${window.location.origin}/auth/confirm`
+            }
+          });
+
+          if (!authResponse.error) break;
+
+          // If it's not a retryable error, break immediately
+          if (!['AuthRetryable', 'NetworkError'].includes(authResponse.error?.name || '')) {
+            throw authResponse.error;
+          }
+
+          await new Promise(resolve => setTimeout(resolve, RETRY_DELAY * Math.pow(2, i))); // Exponential backoff
+        } catch (error) {
+          if (i === MAX_RETRIES - 1) throw error;
+        }
+      }
+
+      if (!authResponse || authResponse.error) {
+        throw authResponse?.error || new Error('Failed to create user account');
       }
 
       const user = authResponse.data.user;
@@ -156,51 +190,70 @@ class SupabaseAuthService implements AuthService {
         throw new Error('No user returned from auth signup');
       }
 
-      // Create profile with retry logic
+      // Create profile with improved retry logic and transaction
       const profileData = {
         id: user.id,
         full_name: `${data.firstName} ${data.lastName}`,
         email: data.email,
         country: data.country,
-        gender: data.gender
+        gender: data.gender,
+        is_active: true,
+        is_profile_complete: false,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
       };
 
-      let profileError;
-      for (let i = 0; i < 2; i++) { // Try twice
-        const { error } = await supabase
-          .from(tableName)
-          .insert(profileData);
-        
-        if (!error) {
-          profileError = null;
-          break;
-        }
-        
-        profileError = error;
-        if (i === 0) await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1s before retry
-      }
+      // Use a stored procedure to create profile in transaction
+      const { data: profile, error: profileError } = await supabase
+        .rpc('create_user_profile', {
+          p_user_id: user.id,
+          p_profile_data: profileData,
+          p_table_name: tableName
+        });
 
       if (profileError) {
-        // If profile creation fails, attempt to clean up the auth user
+        // If profile creation fails, mark user for cleanup
         try {
-          // Note: We can't delete the user directly from the client
-          // Instead, mark them for deletion in user metadata
           await supabase.auth.updateUser({
             data: { 
               needsDeletion: true,
-              failedProfileCreation: true
+              failedProfileCreation: true,
+              failureReason: profileError.message,
+              failureTimestamp: new Date().toISOString()
             }
           });
+
+          // Trigger cleanup function
+          await supabase.functions.invoke('cleanup-failed-signup', {
+            body: { userId: user.id }
+          });
         } catch (cleanupError) {
-          console.error('Failed to mark user for deletion:', cleanupError);
+          console.error('Failed to handle failed signup:', cleanupError);
         }
-        throw new Error('Failed to create user profile');
+        throw new Error('Failed to create user profile. Please try again or contact support.');
       }
+
+      // Reset rate limit on successful signup
+      rateLimiter.resetAttempts(ipAddress); // Reuse the ipAddress variable from above
 
       return { user: user as UserWithMetadata };
     } catch (error: any) {
       console.error('Error in signUp:', error);
-      return { user: null, error: error.message };
+      
+      // Enhance error messages for users
+      let userMessage = 'An error occurred during signup. Please try again.';
+      
+      if (error.message?.toLowerCase().includes('password')) {
+        userMessage = 'Please ensure your password meets the security requirements.';
+      } else if (error.message?.toLowerCase().includes('email')) {
+        userMessage = 'Please provide a valid email address.';
+      } else if (error.message?.toLowerCase().includes('network')) {
+        userMessage = 'Network error. Please check your internet connection and try again.';
+      } else if (error.message?.toLowerCase().includes('rate')) {
+        userMessage = 'Too many attempts. Please wait a few minutes before trying again.';
+      }
+      
+      return { user: null, error: userMessage };
     }
   }
 
@@ -297,4 +350,4 @@ class SupabaseAuthService implements AuthService {
   }
 }
 
-export const authService = new SupabaseAuthService(); 
+export const authService = new SupabaseAuthService();

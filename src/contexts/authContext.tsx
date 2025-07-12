@@ -278,7 +278,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         updateAuthState(null);
         return;
       }
-
+      
       if (session?.user) {
         // Check if email is confirmed
         if (!session.user.email_confirmed_at) {
