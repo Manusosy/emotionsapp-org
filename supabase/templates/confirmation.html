@@ -53,7 +53,7 @@
       <p>Hi there,</p>
       <p>Thank you for signing up for <strong>EmotionsApp</strong>.</p>
       <p>To complete your registration, please confirm your email address by clicking the button below:</p>
-      <a href="{{ .SiteURL }}/app/auth/confirm?token_hash={{ .TokenHash }}&type=email" class="button">Confirm My Email</a>
+      <a href="{{ .SiteURL }}/app/auth/confirm?token_hash={{ .TokenHash }}&type=email&userType={{ .user.user_metadata.role }}" class="button">Confirm My Email</a>
 
       <div class="features">
         <p>Once confirmed, you'll be able to:</p>
