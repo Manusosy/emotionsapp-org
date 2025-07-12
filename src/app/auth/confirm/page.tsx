@@ -73,25 +73,39 @@ export default function AuthConfirmPage() {
           }
         }
 
-        // After successful confirmation, show success message and prepare for redirect
+        // After successful confirmation, handle different roles appropriately
         setStatus('success');
-        
-        // Clean up session immediately but don't wait for it
-        supabase.auth.signOut();
         
         // Determine the correct sign in URL based on user role
         const signInPath = userRole === 'mood_mentor' ? '/mentor-signin' : '/patient-signin';
         
-        // Show success toast and redirect quickly
-        toast.success('Email confirmed successfully!');
-        setTimeout(() => {
-          navigate(signInPath, { 
-            state: { 
-              confirmationSuccess: true,
-              email: userEmail
-            } 
-          });
-        }, 1500); // Reduced to 1.5 seconds for better UX
+        if (userRole === 'mood_mentor') {
+          // For mentors, we need to ensure session is cleaned up properly
+          await supabase.auth.signOut();
+          toast.success('Email confirmed successfully!');
+          
+          // Give a slightly longer delay for mentor accounts
+          setTimeout(() => {
+            navigate(signInPath, { 
+              state: { 
+                confirmationSuccess: true,
+                email: userEmail
+              } 
+            });
+          }, 800); // Faster transition for better UX
+        } else {
+          // For patients, maintain the quick flow
+          supabase.auth.signOut(); // Non-blocking
+          toast.success('Email confirmed successfully!');
+          setTimeout(() => {
+            navigate(signInPath, { 
+              state: { 
+                confirmationSuccess: true,
+                email: userEmail
+              } 
+            });
+          }, 600);
+        }
 
       } catch (error: any) {
         console.error('Unexpected error during email confirmation:', error);
@@ -114,18 +128,18 @@ export default function AuthConfirmPage() {
         
         <div className="text-center">
           {status === 'loading' && (
-            <div className="space-y-6">
-              <div className="relative">
+            <div className="mt-8 space-y-6">
+              <div className="relative w-24 h-24 mx-auto">
                 <div className="absolute inset-0 flex items-center justify-center">
-                  <div className="w-16 h-16 rounded-full bg-primary/10 animate-ping" />
+                  <div className="w-20 h-20 rounded-full bg-[#20C0F3]/10 animate-ping" />
                 </div>
-                <Spinner className="w-12 h-12 text-primary relative z-10" />
+                <Spinner className="absolute inset-0 m-auto w-16 h-16 text-[#20C0F3]" />
               </div>
-              <div className="space-y-2">
-                <p className="text-lg font-medium text-primary animate-pulse">
+              <div className="space-y-3">
+                <p className="text-lg font-medium text-[#20C0F3] animate-pulse">
                   Verifying your email...
                 </p>
-                <p className="text-sm text-muted-foreground opacity-80">
+                <p className="text-sm text-muted-foreground/70">
                   This will only take a moment
                 </p>
               </div>
@@ -133,18 +147,23 @@ export default function AuthConfirmPage() {
           )}
           
           {status === 'success' && (
-            <div className="space-y-6">
-              <CheckCircle className="mx-auto h-12 w-12 text-green-500" />
+            <div className="mt-8 space-y-6">
+              <div className="relative w-24 h-24 mx-auto">
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <div className="w-20 h-20 rounded-full bg-green-500/10 animate-scale-up" />
+                </div>
+                <CheckCircle className="absolute inset-0 m-auto w-16 h-16 text-green-500 animate-fade-in" />
+              </div>
               <div className="space-y-4">
-                <h3 className="text-xl font-medium text-gray-900">
+                <h3 className="text-xl font-medium text-gray-900 animate-fade-in">
                   Email Confirmed Successfully! 🎉
                 </h3>
-                <div className="space-y-2">
+                <div className="space-y-2 animate-fade-in-delayed">
                   <p className="text-gray-600">
                     Your email has been verified and your account is now active.
                   </p>
                   <p className="text-gray-600">
-                    You'll be redirected to sign in momentarily...
+                    Redirecting you to sign in...
                   </p>
                 </div>
               </div>
