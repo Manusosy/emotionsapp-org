@@ -287,13 +287,13 @@ export default function ProfilePage() {
           default: return 'Prefer not to say';
         }
       };
-      
+
       // Get user metadata from auth context - ensure we use actual user data
       const userMetadata = {
-        fullName: user.user_metadata?.full_name || 
-                 user.user_metadata?.name || 
-                 `${user.user_metadata?.first_name || ''} ${user.user_metadata?.last_name || ''}`.trim() ||
-                 user.email?.split('@')[0] || '',  // Fallback to email username if no name found
+        fullName: user.user_metadata?.full_name || // First try full_name from metadata
+                 user.user_metadata?.name || // Then try name
+                 `${user.user_metadata?.first_name || ''} ${user.user_metadata?.last_name || ''}`.trim() || // Then try combining first and last
+                 (user.email ? user.email.split('@')[0] : 'New Mentor'), // Finally fallback to email username or 'New Mentor'
         email: user.email || '', // Always use the actual email from auth
         location: countryName,
         gender: formatGender(user.user_metadata?.gender),
@@ -306,10 +306,10 @@ export default function ProfilePage() {
         // The response is already in camelCase format from our service
         const profileData = response.data;
         
-        // Merge with any missing data from user metadata
+        // Merge with any missing data from user metadata, but prioritize the user metadata name
         const completeProfile = {
           ...profileData,
-          fullName: profileData.fullName || userMetadata.fullName,
+          fullName: userMetadata.fullName, // Always use the name from user metadata
           email: user.email, // Always use the authenticated email
           gender: profileData.gender || userMetadata.gender as any,
           location: profileData.location || userMetadata.location,
@@ -324,7 +324,6 @@ export default function ProfilePage() {
         if (completeProfile.avatarUrl) {
           setAvatarPreview(completeProfile.avatarUrl);
         }
-        
       } else {
         console.log("No profile found, creating new profile from user metadata");
         // Create new profile from user metadata
@@ -360,7 +359,7 @@ export default function ProfilePage() {
           fullName: user.user_metadata?.full_name || 
                    user.user_metadata?.name || 
                    `${user.user_metadata?.first_name || ''} ${user.user_metadata?.last_name || ''}`.trim() ||
-                   user.email?.split('@')[0] || 'New Mentor',
+                   (user.email ? user.email.split('@')[0] : 'New Mentor'),
           email: user.email || '',
         };
         setProfile(basicProfile);
