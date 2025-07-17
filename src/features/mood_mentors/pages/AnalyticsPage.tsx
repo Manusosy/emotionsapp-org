@@ -36,7 +36,8 @@ import {
   Star,
   FileText,
   BarChart2,
-  PieChart as PieChartIcon
+  PieChart as PieChartIcon,
+  AlertCircle
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
@@ -49,6 +50,15 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Progress } from "@/components/ui/progress";
 
 // Define interfaces for our data
 interface MentorStats {
@@ -89,6 +99,8 @@ export default function AnalyticsPage() {
   const [timeRange, setTimeRange] = useState<'week' | 'month' | 'year'>('month');
   const [activeTab, setActiveTab] = useState('overview');
   const [isLoading, setIsLoading] = useState(true);
+  const [showWelcomeDialog, setShowWelcomeDialog] = useState(false);
+  const [isProfileComplete, setIsProfileComplete] = useState(false);
   const [stats, setStats] = useState<MentorStats>({
     totalPatients: 0,
     activePatients: 0,
@@ -116,6 +128,29 @@ export default function AnalyticsPage() {
 
     setIsLoading(true);
     try {
+      // Check if mentor profile is complete first
+      const { data: mentorProfile, error: profileError } = await supabase
+        .from('mood_mentor_profiles')
+        .select('is_profile_complete')
+        .eq('user_id', user.id)
+        .single();
+
+      if (profileError) {
+        console.error('Error checking mentor profile:', profileError);
+        toast.error('Failed to load analytics data');
+        return;
+      }
+
+      // If profile is not complete, show welcome dialog and return
+      if (!mentorProfile?.is_profile_complete) {
+        setIsProfileComplete(false);
+        setShowWelcomeDialog(true);
+        setIsLoading(false);
+        return;
+      }
+
+      setIsProfileComplete(true);
+
       // Calculate date range
       const today = new Date();
       let startDate;
@@ -335,8 +370,43 @@ export default function AnalyticsPage() {
     }
   };
 
+  const handleCloseWelcomeDialog = () => {
+    setShowWelcomeDialog(false);
+    navigate('/mood-mentor-dashboard/profile');
+  };
+
   return (
     <DashboardLayout>
+      {/* Welcome Dialog for incomplete profile */}
+      <Dialog open={showWelcomeDialog} onOpenChange={setShowWelcomeDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Complete Your Profile</DialogTitle>
+            <DialogDescription>
+              You need to complete your profile before accessing analytics.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4 py-2">
+            <div className="flex items-center p-3 bg-amber-50 text-amber-800 rounded-lg">
+              <AlertCircle className="h-5 w-5 mr-2 flex-shrink-0" />
+              <p className="text-sm">
+                Analytics are only available after completing your profile information.
+              </p>
+            </div>
+          </div>
+          
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowWelcomeDialog(false)}>
+              Later
+            </Button>
+            <Button onClick={handleCloseWelcomeDialog}>
+              Complete Profile
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <div className="space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>

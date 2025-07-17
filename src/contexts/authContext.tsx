@@ -2,7 +2,7 @@ import React, { createContext, useContext, useState, useEffect, ReactNode } from
 import { UserRole } from '../types/user';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
-import { User, AuthError } from '@supabase/supabase-js';
+import { User, AuthError, AuthSession } from '@supabase/supabase-js';
 import { UserWithMetadata } from '@/services/auth/auth.service';
 
 interface AuthContextType {
@@ -248,49 +248,72 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       console.log('Auth state changed:', event);
       if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
         if (session?.user) {
-          // Check if email is confirmed
-          const { data: { user: currentUser }, error: userError } = await supabase.auth.getUser();
-          if (userError) {
-            console.error('Error getting user:', userError);
-            updateAuthState(null);
-            return;
-          }
+          updateAuthState(session.user);
           
-          // If email is not confirmed, sign out the user
-          if (!currentUser?.email_confirmed_at) {
-            console.log('Email not confirmed, signing out');
-            await supabase.auth.signOut();
-            updateAuthState(null);
-            return;
-          }
-          
-          updateAuthState(currentUser);
+          // Store the session timestamp
+          const now = new Date().toISOString();
+          localStorage.setItem('app_session_last_active', now);
+          localStorage.setItem('app_session_active', JSON.stringify({
+            active: true,
+            created: now,
+            refreshToken: true
+          }));
         }
       } else if (event === 'SIGNED_OUT') {
         updateAuthState(null);
+        // Clean up session data
+        localStorage.removeItem('app_session_active');
+        localStorage.removeItem('app_session_last_active');
       }
     });
 
-    // Initial session check
-    supabase.auth.getSession().then(({ data: { session }, error }) => {
-      if (error) {
-        console.error('Error checking session:', error);
-        updateAuthState(null);
-        return;
-      }
-      
-      if (session?.user) {
-        // Check if email is confirmed
-        if (!session.user.email_confirmed_at) {
-          console.log('Email not confirmed during initial check, signing out');
-          supabase.auth.signOut().then(() => updateAuthState(null));
+    // Check for existing session on mount
+    const checkSession = async () => {
+      try {
+        const { data: { session }, error } = await supabase.auth.getSession();
+        if (error instanceof AuthError) {
+          console.error('Error getting session:', error.message);
+          updateAuthState(null);
           return;
         }
-        updateAuthState(session.user);
-      } else {
+        
+        if (session?.user) {
+          updateAuthState(session.user);
+          
+          // Verify session is still valid
+          const lastActive = localStorage.getItem('app_session_last_active');
+          if (lastActive) {
+            const lastActiveTime = new Date(lastActive);
+            const currentTime = new Date();
+            const minutesSinceLastActive = (currentTime.getTime() - lastActiveTime.getTime()) / (1000 * 60);
+            
+            if (minutesSinceLastActive > 60) { // 1 hour
+              console.log('Session expired due to inactivity');
+              await signOut();
+              return;
+            }
+          }
+          
+          // Refresh session
+          const { error: refreshError } = await supabase.auth.refreshSession();
+          if (refreshError instanceof AuthError) {
+            console.error('Error refreshing session:', refreshError.message);
+            await signOut();
+            return;
+          }
+        } else {
+          updateAuthState(null);
+        }
+      } catch (error) {
+        const authError = error as Error;
+        console.error('Error checking session:', authError.message);
         updateAuthState(null);
+      } finally {
+        setIsLoading(false);
       }
-    });
+    };
+
+    checkSession();
 
     return () => {
       subscription.unsubscribe();

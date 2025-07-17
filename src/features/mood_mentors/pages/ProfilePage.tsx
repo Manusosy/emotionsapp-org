@@ -288,11 +288,13 @@ export default function ProfilePage() {
         }
       };
       
-      // Get user metadata from auth context
+      // Get user metadata from auth context - ensure we use actual user data
       const userMetadata = {
-        fullName: user.user_metadata?.name || user.user_metadata?.full_name || 
-                 `${user.user_metadata?.first_name || ''} ${user.user_metadata?.last_name || ''}`.trim(),
-        email: user.email || '',
+        fullName: user.user_metadata?.full_name || 
+                 user.user_metadata?.name || 
+                 `${user.user_metadata?.first_name || ''} ${user.user_metadata?.last_name || ''}`.trim() ||
+                 user.email?.split('@')[0] || '',  // Fallback to email username if no name found
+        email: user.email || '', // Always use the actual email from auth
         location: countryName,
         gender: formatGender(user.user_metadata?.gender),
         avatarUrl: user.user_metadata?.avatar_url || '',
@@ -308,7 +310,7 @@ export default function ProfilePage() {
         const completeProfile = {
           ...profileData,
           fullName: profileData.fullName || userMetadata.fullName,
-          email: profileData.email || userMetadata.email,
+          email: user.email, // Always use the authenticated email
           gender: profileData.gender || userMetadata.gender as any,
           location: profileData.location || userMetadata.location,
           avatarUrl: profileData.avatarUrl || userMetadata.avatarUrl,
@@ -330,7 +332,7 @@ export default function ProfilePage() {
           ...defaultProfile,
           userId: user.id,
           fullName: userMetadata.fullName,
-          email: userMetadata.email,
+          email: user.email, // Always use the authenticated email
           gender: userMetadata.gender,
           location: userMetadata.location,
           avatarUrl: userMetadata.avatarUrl,
@@ -355,13 +357,15 @@ export default function ProfilePage() {
         const basicProfile = {
           ...defaultProfile,
           userId: user.id,
-          fullName: user.user_metadata?.name || user.user_metadata?.full_name || user.email?.split('@')[0] || 'Mood Mentor',
+          fullName: user.user_metadata?.full_name || 
+                   user.user_metadata?.name || 
+                   `${user.user_metadata?.first_name || ''} ${user.user_metadata?.last_name || ''}`.trim() ||
+                   user.email?.split('@')[0] || 'New Mentor',
           email: user.email || '',
         };
         setProfile(basicProfile);
       }
     } finally {
-      // Always set loading to false to prevent infinite loading state
       setIsLoading(false);
     }
   };

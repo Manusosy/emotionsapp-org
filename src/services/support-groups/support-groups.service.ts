@@ -23,6 +23,26 @@ class SupportGroupsService implements ISupportGroupsService {
     is_public?: boolean;
   }): Promise<SupportGroup[]> {
     try {
+      // If mentor_id is provided, check if their profile is complete first
+      if (filters?.mentor_id) {
+        const { data: mentorProfile, error: mentorError } = await supabase
+          .from('mood_mentor_profiles')
+          .select('is_profile_complete')
+          .eq('user_id', filters.mentor_id)
+          .single();
+
+        if (mentorError) {
+          console.error('Error checking mentor profile:', mentorError);
+          return [];
+        }
+
+        // If profile is not complete, return empty array
+        if (!mentorProfile?.is_profile_complete) {
+          console.log('Mentor profile not complete, returning empty groups array');
+          return [];
+        }
+      }
+
       let query = supabase
         .from('support_groups')
         .select('*')
@@ -1169,7 +1189,7 @@ class SupportGroupsService implements ISupportGroupsService {
         .select(`
           group_id,
           status,
-          support_groups(*)
+          support_groups (*)
         `)
         .eq('user_id', userId)
         .eq('status', 'active');

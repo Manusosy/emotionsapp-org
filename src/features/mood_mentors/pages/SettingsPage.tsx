@@ -4,7 +4,6 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/authContext';
 import DashboardLayout from "@/features/dashboard/components/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { DeleteAccountDialog } from '../components/DeleteAccountDialog';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { Input } from "@/components/ui/input";
@@ -31,8 +30,10 @@ import { ServiceResponse } from '@/services';
 
 interface MoodMentorSettings {
   id: string;
+  mentor_id: string;
   notifications_enabled: boolean;
   email_notifications: boolean;
+  sms_notifications: boolean;
   appointment_reminders: boolean;
   message_notifications: boolean;
   review_notifications: boolean;
@@ -73,14 +74,54 @@ export default function SettingsPage() {
       if (!user?.id) return;
       
       try {
+        // Try to get existing settings
         const { data, error } = await supabase
           .from('mood_mentor_settings')
           .select('*')
           .eq('mentor_id', user.id)
           .single();
           
-        if (error) throw error;
-        setSettings(data);
+        if (error) {
+          if (error.code === 'PGRST116') {
+            // No settings found, create default settings
+            const defaultSettings: MoodMentorSettings = {
+              id: crypto.randomUUID(),
+              mentor_id: user.id,
+              notifications_enabled: true,
+              email_notifications: true,
+              sms_notifications: false,
+              appointment_reminders: true,
+              message_notifications: true,
+              review_notifications: true,
+              marketing_emails: false,
+              profile_privacy: 'public',
+              two_factor_enabled: false,
+              auto_accept_appointments: false,
+              working_hours: {
+                monday: { enabled: true, start: '09:00', end: '17:00' },
+                tuesday: { enabled: true, start: '09:00', end: '17:00' },
+                wednesday: { enabled: true, start: '09:00', end: '17:00' },
+                thursday: { enabled: true, start: '09:00', end: '17:00' },
+                friday: { enabled: true, start: '09:00', end: '17:00' },
+                saturday: { enabled: false, start: '09:00', end: '17:00' },
+                sunday: { enabled: false, start: '09:00', end: '17:00' }
+              }
+            };
+            
+            // Insert default settings
+            const { error: insertError } = await supabase
+              .from('mood_mentor_settings')
+              .insert(defaultSettings);
+              
+            if (insertError) throw insertError;
+            
+            setSettings(defaultSettings);
+          } else {
+            throw error;
+          }
+        } else {
+          setSettings(data);
+        }
       } catch (error) {
         console.error('Error loading settings:', error);
         toast.error('Failed to load settings');
@@ -197,10 +238,7 @@ export default function SettingsPage() {
     try {
       const { error } = await supabase
         .from('mood_mentor_settings')
-        .upsert({
-          mentor_id: user.id,
-          ...newSettings
-        });
+        .upsert(newSettings);
         
       if (error) throw error;
       
@@ -214,39 +252,8 @@ export default function SettingsPage() {
     }
   };
 
-  const handleDeleteAccount = async () => {
-    if (!user?.id) {
-      toast.error('User not found');
-      return;
-    }
-
-    // Ask for confirmation before deleting account
-    const confirmed = window.confirm(
-      'Are you sure you want to delete your account? This action cannot be undone.'
-    );
-    
-    if (!confirmed) return;
-    
-    try {
-      // Delete the user's profile first
-      const { error: profileError } = await supabase
-        .from('mood_mentor_profiles')
-        .delete()
-        .eq('id', user.id);
-        
-      if (profileError) throw profileError;
-      
-      // We can't directly delete the user with client API
-      // We'll need to trigger account deletion workflow
-      // For now, just sign out the user
-      await supabase.auth.signOut();
-      
-      toast.success("Your account has been deleted.");
-      navigate('/');
-    } catch (error) {
-      console.error('Error deleting account:', error);
-      toast.error('Failed to delete account');
-    }
+  const handleDeleteAccount = () => {
+    navigate('/delete-account');
   };
 
   const daysOfWeek = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];

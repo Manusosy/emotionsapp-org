@@ -87,34 +87,43 @@ export default function SignIn({ userType }: SignInProps) {
     try {
       setIsLoading(true);
       
-      // First, check if there's a user with this email to provide a better error message
-      const { data: authData, error: checkError } = await supabase
-        .from(userType === 'mentor' ? 'mood_mentor_profiles' : 'patient_profiles')
-        .select('id')
-        .eq('email', email)
-        .maybeSingle();
+      // Add a timeout to prevent infinite loading
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('Sign in timeout')), 15000);
+      });
       
-      // If we couldn't find the user in the right profile table, they might be using the wrong signin form
-      if (!authData && !checkError) {
-        const otherType = userType === 'mentor' ? 'patient' : 'mentor';
-        const { data: otherAuthData } = await supabase
-          .from(otherType === 'mentor' ? 'mood_mentor_profiles' : 'patient_profiles')
+      // Race between the sign-in attempt and the timeout
+      const signInPromise = (async () => {
+        // First, check if there's a user with this email to provide a better error message
+        const { data: authData, error: checkError } = await supabase
+          .from(userType === 'mentor' ? 'mood_mentor_profiles' : 'patient_profiles')
           .select('id')
           .eq('email', email)
           .maybeSingle();
-          
-        if (otherAuthData) {
-          const errorMessage = userType === 'mentor' 
-            ? "This email is registered as a patient. Please use the Patient sign in."
-            : "This email is registered as a mood mentor. Please use the Mentor sign in.";
-          setError(errorMessage);
-          toast.error(errorMessage);
-          return;
+        
+        // If we couldn't find the user in the right profile table, they might be using the wrong signin form
+        if (!authData && !checkError) {
+          const otherType = userType === 'mentor' ? 'patient' : 'mentor';
+          const { data: otherAuthData } = await supabase
+            .from(otherType === 'mentor' ? 'mood_mentor_profiles' : 'patient_profiles')
+            .select('id')
+            .eq('email', email)
+            .maybeSingle();
+            
+          if (otherAuthData) {
+            const errorMessage = userType === 'mentor' 
+              ? "This email is registered as a patient. Please use the Patient sign in."
+              : "This email is registered as a mood mentor. Please use the Mentor sign in.";
+            throw new Error(errorMessage);
+          }
         }
-      }
+        
+        // Proceed with the actual sign in attempt
+        const response = await signIn({ email, password });
+        return response;
+      })();
       
-      // Proceed with the actual sign in attempt
-      const response = await signIn({ email, password });
+      const response = await Promise.race([signInPromise, timeoutPromise]);
       
       if (response.error) {
         // Handle specific error cases
@@ -154,14 +163,16 @@ export default function SignIn({ userType }: SignInProps) {
         }
         // Component will otherwise re-render and redirect due to isAuthenticated changing
       } else {
-        const unknownErrorMsg = "Sign in attempt completed with no user and no error.";
-        setError(unknownErrorMsg);
-        toast.error("An unexpected issue occurred during sign in.");
+        throw new Error("Sign in attempt completed with no user and no error.");
       }
     } catch (error: any) {
       const errorMsg = error.message || "An unexpected server error occurred.";
       setError(errorMsg);
-      toast.error(errorMsg);
+      if (errorMsg === 'Sign in timeout') {
+        toast.error("Sign in is taking longer than expected. Please try again.");
+      } else {
+        toast.error(errorMsg);
+      }
     } finally {
       setIsLoading(false);
     }

@@ -114,34 +114,25 @@ export const supabase = createClient<Database>(
       storage: {
         getItem: (key) => {
           try {
-            // Use a unified approach to get session data
             const value = localStorage.getItem(key);
-            if (value) {
-              try {
-                // Keep track of fetch for debugging and refresh logic
-                if (key.includes('supabase.auth.token')) {
-                  console.log('Retrieved auth token from storage');
-                  
-                  // Check if we have our custom app session tracking
-                  const appSession = localStorage.getItem('app_session_active');
-                  if (!appSession) {
-                    // Initialize our session tracking
-                    localStorage.setItem('app_session_active', JSON.stringify({
-                      active: true,
-                      created: new Date().toISOString(),
-                      refreshToken: true
-                    }));
-                    localStorage.setItem('app_session_last_active', new Date().toISOString());
-                  }
-                }
-                return JSON.parse(value);
-              } catch (parseError) {
-                console.error('Error parsing localStorage value:', parseError);
-                // Don't remove on parse error, might be temporary
-                return null;
+            if (!value) return null;
+            
+            // Keep track of session access
+            if (key.includes('supabase.auth.token')) {
+              const now = new Date().toISOString();
+              localStorage.setItem('app_session_last_active', now);
+              
+              // Initialize session tracking if not exists
+              if (!localStorage.getItem('app_session_active')) {
+                localStorage.setItem('app_session_active', JSON.stringify({
+                  active: true,
+                  created: now,
+                  refreshToken: true
+                }));
               }
             }
-            return null;
+            
+            return JSON.parse(value);
           } catch (error) {
             console.error('Error retrieving auth session:', error);
             return null;
@@ -152,15 +143,15 @@ export const supabase = createClient<Database>(
             const valueStr = JSON.stringify(value);
             localStorage.setItem(key, valueStr);
             
-            // Set session metadata
+            // Update session metadata
             if (key.includes('supabase.auth.token')) {
-              console.log('Storing new auth token');
+              const now = new Date().toISOString();
               localStorage.setItem('app_session_active', JSON.stringify({
                 active: true,
-                created: new Date().toISOString(),
+                created: now,
                 refreshToken: true
               }));
-              localStorage.setItem('app_session_last_active', new Date().toISOString());
+              localStorage.setItem('app_session_last_active', now);
             }
           } catch (error) {
             console.error('Error storing auth session:', error);
@@ -169,10 +160,7 @@ export const supabase = createClient<Database>(
         removeItem: (key) => {
           try {
             localStorage.removeItem(key);
-            
-            // Clean up our custom session tracking
             if (key.includes('supabase.auth.token')) {
-              console.log('Removing auth session data');
               localStorage.removeItem('app_session_active');
               localStorage.removeItem('app_session_last_active');
             }
@@ -181,7 +169,8 @@ export const supabase = createClient<Database>(
           }
         }
       },
-      flowType: 'implicit',
+      storageKey: 'emotions_app_auth',
+      flowType: 'pkce',
       debug: import.meta.env.DEV
     },
     global: {
