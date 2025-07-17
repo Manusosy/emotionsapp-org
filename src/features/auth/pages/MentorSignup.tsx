@@ -152,7 +152,8 @@ export default function MentorSignup() {
         lastName: formData.lastName,
         role: 'mood_mentor',
         country: formData.country,
-        gender: formData.gender
+        gender: formData.gender,
+        full_name: `${formData.firstName} ${formData.lastName}`.trim() // Explicitly set full_name
       });
 
       if (error) {

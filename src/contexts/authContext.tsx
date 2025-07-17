@@ -2,8 +2,9 @@ import React, { createContext, useContext, useState, useEffect, ReactNode } from
 import { UserRole } from '../types/user';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
-import { User, AuthError, AuthSession } from '@supabase/supabase-js';
+import { User, AuthError, AuthSession, AuthResponse, AuthTokenResponse } from '@supabase/supabase-js';
 import { UserWithMetadata } from '@/services/auth/auth.service';
+import { PostgrestError } from '@supabase/postgrest-js';
 
 interface AuthContextType {
   user: UserWithMetadata | null;
@@ -12,7 +13,7 @@ interface AuthContextType {
   userRole: UserRole | null;
   isLoading: boolean;
   signIn: (credentials: { email: string; password: string }) => Promise<{ user: UserWithMetadata | null; error?: string }>;
-  signUp: (data: { email: string; password: string; firstName: string; lastName: string; role: UserRole; country: string; gender?: string | null; }) => Promise<{ user: UserWithMetadata | null; error?: string }>;
+  signUp: (data: { email: string; password: string; firstName: string; lastName: string; role: UserRole; country: string; gender?: string | null; full_name?: string; }) => Promise<{ user: UserWithMetadata | null; error?: string }>;
   signOut: () => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
   getDashboardUrlForRole: (role: string | undefined | null) => string;
@@ -79,20 +80,23 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     role: UserRole;
     country: string;
     gender?: string | null;
+    full_name?: string;
   }) => {
     try {
-      // Get the current domain
       const domain = window.location.origin;
       
-      const { data: authData, error } = await supabase.auth.signUp({
+      const { data: authData, error }: AuthResponse = await supabase.auth.signUp({
         email: data.email,
         password: data.password,
         options: {
           data: {
-            name: `${data.firstName} ${data.lastName}`,
+            full_name: data.full_name || `${data.firstName} ${data.lastName}`.trim(),
+            name: `${data.firstName} ${data.lastName}`.trim(),
             role: data.role,
             country: data.country,
-            gender: data.gender
+            gender: data.gender,
+            first_name: data.firstName,
+            last_name: data.lastName
           },
           emailRedirectTo: `${domain}/auth/confirm`
         }
@@ -101,54 +105,65 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       if (error) throw error;
       
       if (authData.user) {
-        // For signup, we don't want to update the auth state yet
-        // since the email needs to be confirmed first
         return { user: authData.user as UserWithMetadata };
       }
       
       return { user: null, error: "Signup failed" };
-    } catch (error) {
-      console.error('Error in signUp:', error);
-      const authError = error as AuthError;
-      return { user: null, error: authError.message };
+    } catch (err) {
+      console.error('Error in signUp:', err);
+      if (err instanceof AuthError || err instanceof PostgrestError) {
+        return { user: null, error: err.message };
+      }
+      return { user: null, error: 'An unexpected error occurred during signup' };
     }
   };
 
   const signOut = async (): Promise<void> => {
     try {
-      const { error } = await supabase.auth.signOut();
+      const { error }: AuthResponse = await supabase.auth.signOut();
       if (error) throw error;
       updateAuthState(null);
-    } catch (error) {
-      console.error('Error signing out:', error);
-      toast.error('Error signing out');
+    } catch (err) {
+      console.error('Error signing out:', err);
+      if (err instanceof AuthError || err instanceof PostgrestError) {
+        toast.error(err.message);
+      } else {
+        toast.error('Error signing out');
+      }
     }
   };
 
   const resetPassword = async (email: string): Promise<void> => {
     try {
-      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      const { error }: AuthResponse = await supabase.auth.resetPasswordForEmail(email, {
         redirectTo: `${window.location.origin}/auth/reset-password`,
       });
       
       if (error) throw error;
       toast.success('Password reset email sent');
-    } catch (error) {
-      console.error('Error resetting password:', error);
-      toast.error('Error sending password reset email');
+    } catch (err) {
+      console.error('Error resetting password:', err);
+      if (err instanceof AuthError || err instanceof PostgrestError) {
+        toast.error(err.message);
+      } else {
+        toast.error('Error sending password reset email');
+      }
     }
   };
 
   const refreshSession = async (): Promise<boolean> => {
     try {
-      const { data: { session }, error } = await supabase.auth.refreshSession();
+      const { data: { session }, error }: AuthTokenResponse = await supabase.auth.refreshSession();
       if (error || !session) {
         console.error('Error refreshing session:', error);
         return false;
       }
       return true;
-    } catch (error) {
-      console.error('Error in refreshSession:', error);
+    } catch (err) {
+      console.error('Error in refreshSession:', err);
+      if (err instanceof AuthError || err instanceof PostgrestError) {
+        console.error('Session refresh error:', err.message);
+      }
       return false;
     }
   };
