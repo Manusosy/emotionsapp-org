@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabase';
 import { cn } from "@/lib/utils";
 import { Sparkles, Calendar } from "lucide-react";
 import { useAuth } from '@/contexts/authContext';
+import DOMPurify from 'dompurify';
 
 type JournalEntry = {
   id: string;
@@ -181,7 +182,12 @@ const JournalSidebar = ({ onPromptSelect }: JournalSidebarProps = {}) => {
           
           <div 
             className="prose prose-sm max-w-none mb-4 text-sm"
-            dangerouslySetInnerHTML={{ __html: selectedEntry.content || "" }}
+            dangerouslySetInnerHTML={{ 
+              __html: DOMPurify.sanitize(selectedEntry.content || "", {
+                ALLOWED_TAGS: ['p', 'br', 'strong', 'em', 'u', 'ol', 'ul', 'li', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6'],
+                ALLOWED_ATTR: []
+              }) 
+            }}
           />
           
           {selectedEntry.tomorrows_intention && (

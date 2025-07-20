@@ -18,7 +18,7 @@ interface ProtectedRouteProps {
  * @param requiredRole - Optional role or array of roles required to access the route
  */
 export default function ProtectedRoute({ children, requiredRole }: ProtectedRouteProps) {
-  const { isAuthenticated, userRole, isEmailConfirmed } = useAuth();
+  const { isAuthenticated, userRole, isEmailConfirmed, user } = useAuth();
   const [isAuthorized, setIsAuthorized] = useState<boolean | null>(null);
   const [isCheckingSession, setIsCheckingSession] = useState(true);
   const [isRefreshingSession, setIsRefreshingSession] = useState(false);

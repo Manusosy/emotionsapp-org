@@ -370,7 +370,14 @@ const SupportGroupsPage = () => {
   const loadFavorites = () => {
     const savedFavorites = localStorage.getItem(`favorites_${user?.id}`)
     if (savedFavorites) {
-      setFavoriteGroups(new Set(JSON.parse(savedFavorites)))
+      try {
+        setFavoriteGroups(new Set(JSON.parse(savedFavorites)))
+      } catch (error) {
+        console.error('Failed to parse favorites from localStorage:', error)
+        // Reset to empty set and clear corrupted data
+        setFavoriteGroups(new Set())
+        localStorage.removeItem(`favorites_${user?.id}`)
+      }
     }
   }
 
