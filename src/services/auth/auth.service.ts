@@ -107,7 +107,7 @@ class SupabaseAuthService implements AuthService {
       // Validate input data
       const validationErrors = validateSignupData(data);
       if (validationErrors) {
-        return { user: null, error: Object.values(validationErrors)[0] };
+        return { user: null, error: Object.values(validationErrors)[0] as string };
       }
 
       // Check for disposable email
@@ -126,20 +126,20 @@ class SupabaseAuthService implements AuthService {
         };
       }
 
-      // Check if profile already exists using transaction
+      // Check if profile already exists using direct table query
       const tableName = data.role === 'patient' ? 'patient_profiles' : 'mood_mentor_profiles';
       const { data: existingProfile, error: profileCheckError } = await supabase
-        .rpc('check_profile_exists', {
-          p_email: data.email,
-          p_table_name: tableName
-        });
+        .from(tableName)
+        .select('id')
+        .eq('email', data.email)
+        .single();
 
-      if (profileCheckError) {
+      if (profileCheckError && profileCheckError.code !== 'PGRST116') {
         console.error('Error checking profile:', profileCheckError);
         return { user: null, error: 'Unable to process signup. Please try again.' };
       }
 
-      if (existingProfile?.exists) {
+      if (existingProfile) {
         return { 
           user: null, 
           error: `Email already registered as a ${data.role === 'patient' ? 'Patient' : 'Mood Mentor'}` 
@@ -190,7 +190,7 @@ class SupabaseAuthService implements AuthService {
         throw new Error('No user returned from auth signup');
       }
 
-      // Create profile with improved retry logic and transaction
+      // Create profile with direct table insertion
       const profileData = {
         id: user.id,
         full_name: `${data.firstName} ${data.lastName}`,
@@ -203,16 +203,13 @@ class SupabaseAuthService implements AuthService {
         updated_at: new Date().toISOString()
       };
 
-      // Use a stored procedure to create profile in transaction
-      const { data: profile, error: profileError } = await supabase
-        .rpc('create_user_profile', {
-          p_user_id: user.id,
-          p_profile_data: profileData,
-          p_table_name: tableName
-        });
+      // Insert profile directly into the appropriate table
+      const { error: profileError } = await supabase
+        .from(tableName)
+        .insert([profileData]);
 
       if (profileError) {
-        // If profile creation fails, mark user for cleanup
+        // If profile creation fails, try to clean up the auth user
         try {
           await supabase.auth.updateUser({
             data: { 
@@ -222,19 +219,20 @@ class SupabaseAuthService implements AuthService {
               failureTimestamp: new Date().toISOString()
             }
           });
-
-          // Trigger cleanup function
-          await supabase.functions.invoke('cleanup-failed-signup', {
-            body: { userId: user.id }
-          });
         } catch (cleanupError) {
           console.error('Failed to handle failed signup:', cleanupError);
         }
-        throw new Error('Failed to create user profile. Please try again or contact support.');
+        
+        // Return a more specific error message
+        if (profileError.code === '23505') { // Unique constraint violation
+          return { user: null, error: 'Email already registered. Please sign in instead.' };
+        }
+        
+        return { user: null, error: 'Failed to create user profile. Please try again or contact support.' };
       }
 
       // Reset rate limit on successful signup
-      rateLimiter.resetAttempts(ipAddress); // Reuse the ipAddress variable from above
+      rateLimiter.resetAttempts(ipAddress);
 
       return { user: user as UserWithMetadata };
     } catch (error: any) {

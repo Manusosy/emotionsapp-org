@@ -18,4 +18,17 @@ export interface UserProfile {
   role: UserRole;
   avatarUrl?: string;
   created_at?: string;
+}
+
+/**
+ * Signup data interface
+ */
+export interface SignupData {
+  email: string;
+  password: string;
+  firstName: string;
+  lastName: string;
+  role: UserRole;
+  country: string;
+  gender?: string | null;
 } 
