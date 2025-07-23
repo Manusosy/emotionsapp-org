@@ -230,13 +230,15 @@ export class UserService implements IUserService {
    */
   async deleteUser(userId: string): Promise<{ success: boolean, error: string | null }> {
     try {
-      const { error } = await supabase
-        .from('profiles')
-        .delete()
-        .eq('id', userId);
-
-      if (error) throw error;
-      return { success: true, error: null };
+      // Note: User deletion should be handled through the database triggers
+      // when the auth.users record is deleted (from Supabase dashboard or admin functions)
+      // Client-side deletion is not supported for security reasons
+      
+      console.log('User deletion requested for:', userId);
+      return { 
+        success: false, 
+        error: 'User deletion must be performed through Supabase dashboard or admin functions' 
+      };
     } catch (error) {
       console.error("Error deleting user:", error);
       return { success: false, error: 'Failed to delete user' };

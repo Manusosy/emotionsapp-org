@@ -197,9 +197,18 @@ const GroupsPage = () => {
       console.error('Database error:', error)
       setMyGroups([])
       
-      // Show error message for real database issues
+      // Only show error message for real database issues, not for empty results
       if (error && typeof error === 'object' && ('code' in error || 'message' in error)) {
-        toast.error('Failed to load groups. Please try again.')
+        // Check if it's a real error or just no results/profile issues
+        const errorMessage = error.message || error.toString()
+        if (!errorMessage.includes('profile not complete') && 
+            !errorMessage.includes('profile not found') &&
+            !errorMessage.includes('recursion detected') &&
+            !errorMessage.includes('infinite recursion')) {
+          toast.error('Failed to load groups. Please try again.')
+        } else {
+          console.log('No groups found or profile not ready:', errorMessage)
+        }
       }
     } finally {
       setLoading(false)

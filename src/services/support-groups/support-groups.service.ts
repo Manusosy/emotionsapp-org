@@ -23,23 +23,26 @@ class SupportGroupsService implements ISupportGroupsService {
     is_public?: boolean;
   }): Promise<SupportGroup[]> {
     try {
-      // If mentor_id is provided, check if their profile is complete first
+      // If mentor_id is provided, check if their profile exists and is active
       if (filters?.mentor_id) {
         const { data: mentorProfile, error: mentorError } = await supabase
           .from('mood_mentor_profiles')
-          .select('is_profile_complete')
+          .select('is_profile_complete, is_active')
           .eq('user_id', filters.mentor_id)
           .single();
 
         if (mentorError) {
           console.error('Error checking mentor profile:', mentorError);
-          return [];
-        }
-
-        // If profile is not complete, return empty array
-        if (!mentorProfile?.is_profile_complete) {
-          console.log('Mentor profile not complete, returning empty groups array');
-          return [];
+          // Don't return empty array immediately - the mentor might still be able to create groups
+          // Just log the error and continue
+          console.log('Mentor profile not found, but allowing group operations to continue');
+        } else {
+          // If profile exists but is not active, return empty array
+          if (!mentorProfile?.is_active) {
+            console.log('Mentor profile not active, returning empty groups array');
+            return [];
+          }
+          // Note: Removed is_profile_complete check as it's too restrictive
         }
       }
 
@@ -140,13 +143,29 @@ class SupportGroupsService implements ISupportGroupsService {
 
   async createSupportGroup(data: Omit<SupportGroup, 'id' | 'created_at' | 'updated_at' | 'current_participants'>): Promise<SupportGroup> {
     try {
+      // Transform the data to match database structure
+      const insertData = {
+        name: data.name,
+        description: data.description,
+        group_type: data.group_type,
+        meeting_type: data.meeting_type,
+        max_participants: data.max_participants,
+        mentor_id: data.mentor_id,
+        status: data.status || 'active',
+        // Convert meeting_schedule array to JSONB format expected by database
+        meeting_schedule: Array.isArray(data.meeting_schedule) 
+          ? data.meeting_schedule[0] || {}  // Take first schedule item and convert to object
+          : data.meeting_schedule || {},    // Or use as-is if already an object
+        group_rules: data.group_rules || null,
+        location: data.location || null,
+        is_public: data.is_public !== undefined ? data.is_public : true,
+        is_active: true,
+        current_participants: 0
+      };
+
       const { data: group, error } = await supabase
         .from('support_groups')
-        .insert({
-          ...data,
-          current_participants: 0,
-          status: data.status || 'active'
-        })
+        .insert(insertData)
         .select()
         .single();
 
@@ -1250,6 +1269,10 @@ class SupportGroupsService implements ISupportGroupsService {
 
       if (groupsError) {
         console.error('Error fetching groups for sync:', groupsError);
+        // Don't treat "no groups found" as an error
+        if (groupsError.message?.includes('infinite recursion')) {
+          return { updated: 0, errors: ['Database policy recursion issue - please contact admin'] };
+        }
         return { updated: 0, errors: [groupsError.message] };
       }
 

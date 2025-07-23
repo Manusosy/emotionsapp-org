@@ -3,7 +3,7 @@ import { UserRole } from '../types/user';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 import { User, AuthError, AuthSession, AuthResponse, AuthTokenResponse } from '@supabase/supabase-js';
-import { UserWithMetadata } from '@/services/auth/auth.service';
+import { UserWithMetadata, authService } from '@/services/auth/auth.service';
 import { PostgrestError } from '@supabase/postgrest-js';
 
 interface AuthContextType {
@@ -83,32 +83,18 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     full_name?: string;
   }) => {
     try {
-      const domain = window.location.origin;
-      
-      const { data: authData, error }: AuthResponse = await supabase.auth.signUp({
+      // Use the AuthService which has proper validation and profile creation
+      const result = await authService.signUp({
         email: data.email,
         password: data.password,
-        options: {
-          data: {
-            full_name: data.full_name || `${data.firstName} ${data.lastName}`.trim(),
-            name: `${data.firstName} ${data.lastName}`.trim(),
-            role: data.role,
-            country: data.country,
-            gender: data.gender,
-            first_name: data.firstName,
-            last_name: data.lastName
-          },
-          emailRedirectTo: `${domain}/auth/confirm`
-        }
+        firstName: data.firstName,
+        lastName: data.lastName,
+        role: data.role,
+        country: data.country,
+        gender: data.gender
       });
       
-      if (error) throw error;
-      
-      if (authData.user) {
-        return { user: authData.user as UserWithMetadata };
-      }
-      
-      return { user: null, error: "Signup failed" };
+      return result;
     } catch (err) {
       console.error('Error in signUp:', err);
       if (err instanceof AuthError || err instanceof PostgrestError) {
@@ -229,28 +215,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const deleteUser = async (userId: string): Promise<{ error?: string }> => {
     try {
-      // Delete the user's profile based on their role
-      const userRole = user?.user_metadata?.role;
-      if (userRole === 'patient') {
-        const { error: profileError } = await supabase
-          .from('patient_profiles')
-          .delete()
-          .eq('id', userId);
-        if (profileError) throw profileError;
-      } else if (userRole === 'mood_mentor') {
-        const { error: profileError } = await supabase
-          .from('mood_mentor_profiles')
-          .delete()
-          .eq('id', userId);
-        if (profileError) throw profileError;
-      }
-
-      // We can't directly delete the user with client API
-      // We'll need to trigger account deletion workflow
-      // For now, just sign out the user
-      await signOut();
-      
-      return {};
+      // Use the AuthService for consistent deletion handling
+      return await authService.deleteAccount(userId);
     } catch (error) {
       console.error('Error deleting user:', error);
       return { error: error.message };

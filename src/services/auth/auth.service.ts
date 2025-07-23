@@ -2,7 +2,7 @@ import { supabase } from '@/lib/supabase';
 import { User } from '@supabase/supabase-js';
 import { UserRole } from '@/types/user';
 import { validateSignupData, isDisposableEmail } from '@/utils/validation';
-import { rateLimiter } from '@/utils/rateLimiter';
+
 
 // Extended User type to include metadata
 export interface UserWithMetadata extends User {
@@ -115,18 +115,9 @@ class SupabaseAuthService implements AuthService {
         return { user: null, error: 'Please use a valid non-disposable email address' };
       }
 
-      // Rate limiting check using client IP
-      const ipAddress = window.localStorage.getItem('client_ip') || 'unknown';
-      if (!rateLimiter.checkRateLimit(ipAddress)) {
-        const timeoutMs = rateLimiter.getTimeoutRemaining(ipAddress);
-        const timeoutMinutes = Math.ceil(timeoutMs / 60000);
-        return { 
-          user: null, 
-          error: `Too many signup attempts. Please try again in ${timeoutMinutes} minutes` 
-        };
-      }
+      
 
-      // Check if profile already exists using transaction
+      // Check if profile already exists using RPC function 
       const tableName = data.role === 'patient' ? 'patient_profiles' : 'mood_mentor_profiles';
       const { data: existingProfile, error: profileCheckError } = await supabase
         .rpc('check_profile_exists', {
@@ -139,7 +130,7 @@ class SupabaseAuthService implements AuthService {
         return { user: null, error: 'Unable to process signup. Please try again.' };
       }
 
-      if (existingProfile?.exists) {
+      if (existingProfile?.[0]?.profile_exists) {
         return { 
           user: null, 
           error: `Email already registered as a ${data.role === 'patient' ? 'Patient' : 'Mood Mentor'}` 
@@ -190,51 +181,23 @@ class SupabaseAuthService implements AuthService {
         throw new Error('No user returned from auth signup');
       }
 
-      // Create profile with improved retry logic and transaction
-      const profileData = {
-        id: user.id,
-        full_name: `${data.firstName} ${data.lastName}`,
-        email: data.email,
-        country: data.country,
-        gender: data.gender,
-        is_active: true,
-        is_profile_complete: false,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      };
-
-      // Use a stored procedure to create profile in transaction
+      // Profile will be automatically created by database triggers
+      // Wait a moment for the trigger to complete
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      // Verify the profile was created
       const { data: profile, error: profileError } = await supabase
-        .rpc('create_user_profile', {
-          p_user_id: user.id,
-          p_profile_data: profileData,
-          p_table_name: tableName
-        });
+        .from(tableName)
+        .select('id')
+        .eq('user_id', user.id)
+        .single();
 
-      if (profileError) {
-        // If profile creation fails, mark user for cleanup
-        try {
-          await supabase.auth.updateUser({
-            data: { 
-              needsDeletion: true,
-              failedProfileCreation: true,
-              failureReason: profileError.message,
-              failureTimestamp: new Date().toISOString()
-            }
-          });
-
-          // Trigger cleanup function
-          await supabase.functions.invoke('cleanup-failed-signup', {
-            body: { userId: user.id }
-          });
-        } catch (cleanupError) {
-          console.error('Failed to handle failed signup:', cleanupError);
-        }
-        throw new Error('Failed to create user profile. Please try again or contact support.');
+      if (profileError || !profile) {
+        console.error('Profile verification failed:', profileError);
+        throw new Error('Profile creation failed. Please try again or contact support.');
       }
 
-      // Reset rate limit on successful signup
-      rateLimiter.resetAttempts(ipAddress); // Reuse the ipAddress variable from above
+      
 
       return { user: user as UserWithMetadata };
     } catch (error: any) {
@@ -305,29 +268,18 @@ class SupabaseAuthService implements AuthService {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('No user found');
 
-      // Delete the user's profile based on their role
-      const userRole = user.user_metadata?.role;
-      if (userRole === 'patient') {
-        const { error: profileError } = await supabase
-          .from('patient_profiles')
-          .delete()
-          .eq('id', userId);
-        if (profileError) throw profileError;
-      } else if (userRole === 'mood_mentor') {
-        const { error: profileError } = await supabase
-          .from('mood_mentor_profiles')
-          .delete()
-          .eq('id', userId);
-        if (profileError) throw profileError;
-      }
-
-      // We can't directly delete the user with client API
-      // We'll need to trigger account deletion workflow
-      // This would typically send a request to a server function
-      // For now, just sign out the user
+      // Note: We can't directly delete users from client-side for security reasons.
+      // In a production app, this would call a secure server function.
+      // For now, we'll provide user instructions and sign them out.
+      
+      console.log('User deletion requested for:', userId);
+      
+      // Sign out the user
       await supabase.auth.signOut();
       
-      return {};
+      return { 
+        error: 'Please contact support to complete account deletion, or delete your account from the Supabase dashboard.' 
+      };
     } catch (error: any) {
       console.error('Error deleting account:', error);
       return { error: error.message };
