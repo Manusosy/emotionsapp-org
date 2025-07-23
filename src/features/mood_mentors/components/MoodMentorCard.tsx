@@ -121,7 +121,7 @@ export function MoodMentorCard({
         </p>
 
         {/* Availability and Booking */}
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div className="flex items-center gap-2">
             <span
               className={`w-3 h-3 rounded-full ${
@@ -137,7 +137,7 @@ export function MoodMentorCard({
             moodMentorName={name}
             disabled={!isAvailable}
             size="sm"
-            className={!isAvailable ? "opacity-50 cursor-not-allowed" : ""}
+            className={`${!isAvailable ? "opacity-50 cursor-not-allowed" : ""} w-full sm:w-auto flex-shrink-0`}
             variant="default"
           />
         </div>

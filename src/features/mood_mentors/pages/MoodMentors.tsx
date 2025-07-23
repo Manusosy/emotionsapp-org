@@ -683,7 +683,7 @@ const MoodMentors = () => {
                           </motion.div>
                           
                           <motion.div 
-                            className="flex justify-end gap-3 mt-4"
+                            className="flex flex-col sm:flex-row sm:justify-end gap-3 mt-4"
                             initial={{ opacity: 0, y: 20 }}
                             whileInView={{ opacity: 1, y: 0 }}
                             viewport={{ once: false }}
@@ -692,10 +692,11 @@ const MoodMentors = () => {
                             <motion.div
                               whileHover={{ scale: 1.05 }}
                               whileTap={{ scale: 0.95 }}
+                              className="w-full sm:w-auto"
                             >
                               <Link 
                                 to={`/mood-mentor/${moodMentor.nameSlug}`}
-                                className="inline-flex items-center justify-center px-5 py-2 border border-[#20C0F3] text-[#20C0F3] text-sm font-medium rounded-lg hover:bg-[#20C0F3] hover:text-white focus:ring-2 focus:ring-[#20C0F3] focus:ring-offset-2 transition-colors duration-200"
+                                className="inline-flex items-center justify-center w-full sm:w-auto px-5 py-2 border border-[#20C0F3] text-[#20C0F3] text-sm font-medium rounded-lg hover:bg-[#20C0F3] hover:text-white focus:ring-2 focus:ring-[#20C0F3] focus:ring-offset-2 transition-colors duration-200"
                               >
                                 VIEW PROFILE
                               </Link>
@@ -703,12 +704,13 @@ const MoodMentors = () => {
                             <motion.div
                               whileHover={{ scale: 1.05 }}
                               whileTap={{ scale: 0.95 }}
+                              className="w-full sm:w-auto"
                             >
                               <BookingButton 
                                 moodMentorId={moodMentor.id}
                                 moodMentorName={moodMentor.name}
                                 nameSlug={moodMentor.nameSlug}
-                                className="px-5 py-2 bg-[#0066FF] text-white text-sm font-medium rounded-lg hover:bg-blue-600 transition-colors duration-200"
+                                className="w-full sm:w-auto px-5 py-2 bg-[#0066FF] text-white text-sm font-medium rounded-lg hover:bg-blue-600 transition-colors duration-200"
                                 buttonText="BOOK APPOINTMENT"
                                 variant="default"
                               />
