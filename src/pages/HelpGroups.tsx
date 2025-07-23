@@ -135,17 +135,39 @@ const HelpGroups = () => {
   const fetchSupportGroups = async () => {
     try {
       setLoading(true)
+      console.log('HelpGroups: Starting to fetch support groups...')
       
-      // First, sync member counts to ensure accuracy
-      await supportGroupsService.syncGroupMemberCounts()
+      // First, sync member counts to ensure accuracy (optional - don't fail if this errors)
+      console.log('HelpGroups: Syncing group member counts...')
+      try {
+        await supportGroupsService.syncGroupMemberCounts()
+        console.log('HelpGroups: Member count sync completed')
+      } catch (syncError) {
+        console.warn('HelpGroups: Member count sync failed, but continuing:', syncError)
+        // Continue even if sync fails
+      }
       
+      console.log('HelpGroups: Fetching public support groups...')
       const groups = await supportGroupsService.getSupportGroups({
         is_public: true,
         status: 'active'
       })
+      
+      console.log('HelpGroups: Fetched groups:', groups)
       setSupportGroups(groups)
+      
+      if (groups && groups.length > 0) {
+        console.log(`HelpGroups: Successfully loaded ${groups.length} support groups`)
+      } else {
+        console.log('HelpGroups: No support groups found')
+      }
     } catch (error) {
-      console.error('Error fetching support groups:', error)
+      console.error('HelpGroups: Error fetching support groups:', error)
+      console.error('HelpGroups: Error details:', {
+        message: error?.message,
+        code: error?.code,
+        details: error?.details
+      })
       toast.error('Failed to load support groups')
     } finally {
       setLoading(false)

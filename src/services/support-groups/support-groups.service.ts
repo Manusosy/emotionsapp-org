@@ -72,9 +72,11 @@ class SupportGroupsService implements ISupportGroupsService {
       const { data, error } = await query;
 
       if (error) {
-        console.error('Error fetching support groups:', error);
+        console.error('SupportGroupsService: Error fetching support groups:', error);
         throw error;
       }
+
+      console.log('SupportGroupsService: Raw data from query:', data);
 
       // Fetch mentor information for each group
       const transformedData = await Promise.all(
@@ -114,9 +116,10 @@ class SupportGroupsService implements ISupportGroupsService {
         })
       );
 
+      console.log('SupportGroupsService: Transformed data:', transformedData);
       return transformedData;
     } catch (error) {
-      console.error('Error in getSupportGroups:', error);
+      console.error('SupportGroupsService: Error in getSupportGroups:', error);
       throw error;
     }
   }
@@ -1268,12 +1271,12 @@ class SupportGroupsService implements ISupportGroupsService {
         .eq('status', 'active');
 
       if (groupsError) {
-        console.error('Error fetching groups for sync:', groupsError);
-        // Don't treat "no groups found" as an error
+        console.log('SupportGroupsService: Error or no groups found during sync:', groupsError.message);
+        // Don't treat "no groups found" as an error that should block the main fetch
         if (groupsError.message?.includes('infinite recursion')) {
           return { updated: 0, errors: ['Database policy recursion issue - please contact admin'] };
         }
-        return { updated: 0, errors: [groupsError.message] };
+        return { updated: 0, errors: [] }; // Return empty errors array instead of the error message
       }
 
       const errors: string[] = [];
