@@ -43,10 +43,9 @@ export default function MoodMentorGrid() {
     try {
       setIsLoading(true);
       
-      // Get up to 3 top-rated mentors from the real service
+      // Get up to 3 mentors from the real service (removed minRating filter to show all available mentors)
       const mentors = await moodMentorService.getMoodMentors({
-        limit: 3,
-        minRating: 4.0
+        limit: 3
       });
       
       if (mentors && mentors.length > 0) {
@@ -58,7 +57,7 @@ export default function MoodMentorGrid() {
           specialties: mentor.specialties || [],
           location: mentor.location || 'Remote',
           duration: mentor.sessionDuration || '30 Min',
-          rating: mentor.rating,
+          rating: mentor.rating || null,
           reviewCount: mentor.reviewCount || 0,
           available: mentor.availabilityStatus === 'available',
           languages: mentor.languages || ['English'],
@@ -72,10 +71,15 @@ export default function MoodMentorGrid() {
         }));
         
         setMoodMentors(mappedMentors);
+        setError(null); // Clear any previous errors
       } else {
-        // Log error but don't show to user
-        console.error("No mentors returned from service");
-        setError("Failed to load mood mentors");
+        // Log detailed information for debugging
+        console.log("No mentors returned from service. Service response:", mentors);
+        console.log("This could be due to:");
+        console.log("- No mood mentors in database");
+        console.log("- All mentors have is_active = false");
+        console.log("- All mentors have is_profile_complete = false");
+        setError("No mood mentors are currently available");
       }
     } catch (error) {
       console.error("Error fetching mood mentors:", error);
