@@ -58,26 +58,9 @@ import { PostgrestSingleResponse } from '@supabase/supabase-js';
 import { dataService } from '@/services';
 import BookingButton from "@/features/booking/components/BookingButton";
 import ActiveGroupSessions from "../components/ActiveGroupSessions";
+import { UserProfile } from '@/types/user';
 
 // Add this interface before the MoodMentor interface
-interface UserProfile {
-  id: string;
-  email?: string;
-  first_name?: string;
-  last_name?: string;
-  phone_number?: string;
-  date_of_birth?: string;
-  gender?: string;
-  country?: string;
-  address?: string;
-  city?: string;
-  state?: string;
-  pincode?: string;
-  avatar_url?: string;
-  created_at?: string;
-  updated_at?: string;
-}
-
 interface MoodMentor {
   id: string;
   user_metadata: {
@@ -138,11 +121,12 @@ export default function PatientDashboard() {
   const [reportsLoading, setReportsLoading] = useState(false);
   const [checkInDates, setCheckInDates] = useState<Date[]>([]);
   const [isStressModalOpen, setIsStressModalOpen] = useState(false);
+
   // Extract user's first name for display
   const firstName = user?.user_metadata?.first_name || 
-                    user?.user_metadata?.name?.split(' ')[0] || 
-                    user?.email?.split('@')[0] || 
-                    'User';
+                   user?.user_metadata?.name?.split(' ')[0] || 
+                   user?.email?.split('@')[0] || 
+                   'User';
 
   // Ensure user is a patient
   useEffect(() => {
@@ -188,21 +172,20 @@ export default function PatientDashboard() {
 
         // Create profile from user metadata
         const userProfileData: UserProfile = {
-          id: user?.id || '',
-          first_name: user?.user_metadata?.first_name || '',
-          last_name: user?.user_metadata?.last_name || '',
-          email: user?.email || '',
-          phone_number: user?.user_metadata?.phone_number || '',
-          country: user?.user_metadata?.country || '',
-          address: user?.user_metadata?.address || '',
-          city: user?.user_metadata?.city || '',
-          state: user?.user_metadata?.state || '',
-          pincode: user?.user_metadata?.pincode || '',
-          avatar_url: user?.user_metadata?.avatar_url || '',
-          created_at: new Date().toISOString(),
-          name: user?.user_metadata?.name || user?.email?.split('@')[0] || 'User',
-          role: user?.user_metadata?.role || 'patient',
-          updated_at: new Date().toISOString()
+          id: user.id,
+          email: user.email || '',
+          first_name: user.user_metadata?.first_name || '',
+          last_name: user.user_metadata?.last_name || '',
+          phone_number: user.user_metadata?.phone_number || '',
+          country: user.user_metadata?.country || '',
+          address: user.user_metadata?.address || '',
+          city: user.user_metadata?.city || '',
+          state: user.user_metadata?.state || '',
+          pincode: user.user_metadata?.pincode || '',
+          avatar_url: user.user_metadata?.avatar_url || '',
+          date_of_birth: user.user_metadata?.date_of_birth || '',
+          gender: user.user_metadata?.gender || '',
+          created_at: new Date().toISOString()
         };
 
         if (isMounted) {
@@ -711,7 +694,10 @@ export default function PatientDashboard() {
     return await supabase
       .from('messages')
       .select('*')
-      .or(`sender_id.eq.${userId},receiver_id.eq.${userId}`)
+      .or([
+        { sender_id: userId },
+        { recipient_id: userId }
+      ])
       .order('created_at', { ascending: false });
   };
 
