@@ -472,12 +472,20 @@ export default function AppointmentsPage() {
     });
     
     try {
+      // Get current user
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      if (!user) {
+        throw new Error('Not authenticated');
+      }
+
       const { error } = await supabase
         .from('appointments')
         .update({ 
           status: 'cancelled',
           cancellation_reason: 'Cancelled by patient',
-          cancelled_by: 'patient'
+          cancelled_by: user.id,
+          updated_at: new Date().toISOString()
         })
         .eq('id', appointmentId);
 
