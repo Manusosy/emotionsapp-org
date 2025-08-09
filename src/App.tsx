@@ -28,7 +28,7 @@ import BookingPage from "@/features/booking/pages/BookingPage";
 import PatientDashboard from "@/features/dashboard/pages/PatientDashboard";
 import PatientAppointmentsPage from "@/features/dashboard/pages/AppointmentsPage";
 import SupportGroupsPage from "@/features/dashboard/pages/SupportGroupsPage";
-import FavoritesPage from "@/features/dashboard/pages/FavoritesPage";
+
 import Settings from "@/features/dashboard/pages/Settings";
 import Profile from "@/features/dashboard/pages/Profile";
 import DeleteAccount from "@/features/dashboard/pages/DeleteAccount";
@@ -349,11 +349,7 @@ const AppContent = () => {
                   <SupportGroupsPage />
                 </ProtectedErrorBoundary>
               } />
-              <Route path="/patient-dashboard/favorites" element={
-                <ProtectedErrorBoundary dashboardPath="/patient-dashboard">
-                  <FavoritesPage />
-                </ProtectedErrorBoundary>
-              } />
+
               <Route path="/patient-dashboard/settings" element={
                 <ProtectedErrorBoundary dashboardPath="/patient-dashboard">
                   <Settings />
@@ -570,6 +566,3 @@ const App = () => {
 };
 
 export default App;
-
-
-

@@ -1,12 +1,12 @@
-import { useEffect, useContext } from "react";
+import { useEffect } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { AuthContext } from "@/contexts/authContext";
+import { useAuth } from "@/contexts/authContext"; // Import useAuth hook
 
 export default function NotFound() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { user, userRole } = useContext(AuthContext);
+  const { user, userRole } = useAuth(); // Use the useAuth hook
   
   // Handle navigation based on context
   useEffect(() => {
@@ -20,13 +20,12 @@ export default function NotFound() {
         ? '/patient-dashboard'
         : '/mood-mentor-dashboard';
       
-      // Set a timeout to automatically navigate back
-      const timer = setTimeout(() => {
-        // Navigate back in history
-        navigate(-1);
-      }, 3000);
-      
-      return () => clearTimeout(timer);
+      // Temporarily disabled for debugging 404 issues
+      // const timer = setTimeout(() => {
+      //   // Navigate back in history
+      //   navigate(-1);
+      // }, 3000);
+      // return () => clearTimeout(timer);
     }
   }, [location.pathname, navigate, userRole]);
   

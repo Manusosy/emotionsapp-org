@@ -321,7 +321,7 @@ export default function MoodMentorDashboard() {
             patient_name: apt.patient_name || 'Unknown Patient',
             date: apt.date,
             time: apt.start_time,
-            type: apt.meeting_type as 'video' | 'in-person' | 'chat',
+            type: apt.meeting_type as 'video' | 'audio',
             status: apt.status === 'scheduled' ? 'upcoming' as const : 'completed' as const,
             patient_email: apt.patient_email,
             patient_avatar_url: apt.patient_avatar_url
@@ -1248,7 +1248,7 @@ export default function MoodMentorDashboard() {
                     patient_name: apt.patient_name || 'Unknown Patient',
                     date: apt.date,
                     time: apt.start_time,
-                    type: apt.meeting_type as 'video' | 'in-person' | 'chat',
+                    type: apt.meeting_type as 'video' | 'audio',
                     status: apt.status === 'scheduled' ? 'upcoming' as const : 'completed' as const,
                     patient_email: apt.patient_email,
                     patient_avatar_url: apt.patient_avatar_url

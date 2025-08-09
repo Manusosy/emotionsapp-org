@@ -90,46 +90,48 @@ export default function NotificationItem({
       className={`transition-colors ${!notification.isRead ? 'bg-muted/30' : ''} cursor-pointer`}
       onClick={handleClick}
     >
-      <CardContent className="p-4">
-        <div className="flex space-x-4">
+      <CardContent className="p-3 sm:p-4">
+        <div className="flex space-x-3 sm:space-x-4">
           <div className="relative mt-1 flex-shrink-0">
-            {getIconByType(notification.type)}
+            <div className="scale-75 sm:scale-100">
+              {getIconByType(notification.type)}
+            </div>
             {!notification.isRead && (
-              <span className="absolute right-0 top-0 h-3 w-3 rounded-full bg-red-500" />
+              <span className="absolute right-0 top-0 h-2 w-2 sm:h-3 sm:w-3 rounded-full bg-red-500" />
             )}
           </div>
-          <div className="flex-1 space-y-1">
-            <div className="flex items-start justify-between">
-              <div>
-                <h4 className="font-semibold text-sm">{notification.title || notification.senderName}</h4>
+          <div className="flex-1 space-y-1 min-w-0">
+            <div className="flex items-start justify-between gap-2">
+              <div className="flex-1 min-w-0">
+                <h4 className="font-semibold text-sm truncate pr-2">{notification.title || notification.senderName}</h4>
                 <p className="text-xs text-muted-foreground">
                   {formatNotificationDate(notification.createdAt)}
                 </p>
               </div>
-              <div className="flex space-x-1">
+              <div className="flex space-x-1 flex-shrink-0">
                 {!notification.isRead && (
                   <Button 
                     variant="ghost" 
                     size="icon" 
-                    className="h-7 w-7"
+                    className="h-6 w-6 sm:h-7 sm:w-7"
                     onClick={handleMarkAsRead}
                     disabled={isMarkingAsRead}
                   >
-                    <Check className="h-4 w-4" />
+                    <Check className="h-3 w-3 sm:h-4 sm:w-4" />
                   </Button>
                 )}
                 <Button 
                   variant="ghost" 
                   size="icon" 
-                  className="h-7 w-7"
+                  className="h-6 w-6 sm:h-7 sm:w-7"
                   onClick={handleDelete}
                   disabled={isDeleting}
                 >
-                  <Trash2 className="h-4 w-4" />
+                  <Trash2 className="h-3 w-3 sm:h-4 sm:w-4" />
                 </Button>
               </div>
             </div>
-            <p className="text-sm">{notification.message}</p>
+            <p className="text-sm pr-2 break-words">{notification.message}</p>
           </div>
         </div>
       </CardContent>

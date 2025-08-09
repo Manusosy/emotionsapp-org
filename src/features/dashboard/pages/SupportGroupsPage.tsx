@@ -272,7 +272,7 @@ const SupportGroupsPage = () => {
     if (!schedule || schedule.length === 0) return "Schedule TBD"
     
     const firstSchedule = schedule[0]
-    if (!firstSchedule.time) return "Schedule TBD"
+    if (!firstSchedule || !firstSchedule.time) return "Schedule TBD"
     
     try {
       const time = new Date(`2000-01-01T${firstSchedule.time}`).toLocaleTimeString([], { 
@@ -435,7 +435,7 @@ const SupportGroupsPage = () => {
   return (
     <DashboardLayout>
       <div className="p-6 space-y-8">
-        <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
+        <div className="flex flex-col gap-4">
           <div>
             <h1 className="text-3xl font-bold text-gray-900">Support Groups</h1>
             <p className="text-gray-600 mt-2">
@@ -443,11 +443,11 @@ const SupportGroupsPage = () => {
             </p>
           </div>
           
-          <div className="flex items-center gap-3">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
             <Button
               variant="outline"
               onClick={() => setActiveTab("my-groups")}
-              className={activeTab === "my-groups" ? "bg-[#20C0F3] text-white border-[#20C0F3]" : ""}
+              className={`flex-1 sm:flex-none ${activeTab === "my-groups" ? "bg-[#20C0F3] text-white border-[#20C0F3]" : ""}`}
             >
               <Users className="w-4 h-4 mr-2" />
               My Groups
@@ -455,7 +455,7 @@ const SupportGroupsPage = () => {
             <Button
               variant="outline"
               onClick={() => setActiveTab("discover")}
-              className={activeTab === "discover" ? "bg-[#20C0F3] text-white border-[#20C0F3]" : ""}
+              className={`flex-1 sm:flex-none ${activeTab === "discover" ? "bg-[#20C0F3] text-white border-[#20C0F3]" : ""}`}
             >
               <Search className="w-4 h-4 mr-2" />
               Discover
@@ -488,14 +488,14 @@ const SupportGroupsPage = () => {
                     {activeGroupSessions
                       .filter(gs => gs.activeSession)
                       .map((groupSession) => (
-                        <div key={groupSession.group.id} className="flex items-center justify-between p-4 bg-white rounded-lg border border-green-200 shadow-sm">
-                          <div className="flex items-center space-x-3">
-                            <div className="relative">
+                        <div key={groupSession.group.id} className="flex flex-col sm:flex-row sm:items-center justify-between p-4 bg-white rounded-lg border border-green-200 shadow-sm gap-3">
+                          <div className="flex items-center space-x-3 min-w-0 flex-1">
+                            <div className="relative flex-shrink-0">
                               <div className="h-3 w-3 bg-green-500 rounded-full animate-pulse"></div>
                               <div className="absolute inset-0 h-3 w-3 bg-green-500 rounded-full animate-ping opacity-75"></div>
                             </div>
-                            <div className="flex-1">
-                              <h4 className="font-semibold text-gray-900">{groupSession.group.name}</h4>
+                            <div className="flex-1 min-w-0">
+                              <h4 className="font-semibold text-gray-900 truncate">{groupSession.group.name}</h4>
                               <p className="text-sm text-gray-600">Session in progress</p>
                               <div className="flex items-center mt-1">
                                 <Badge variant="outline" className="text-xs">
@@ -506,7 +506,7 @@ const SupportGroupsPage = () => {
                           </div>
                           <Button
                             onClick={() => handleJoinSession(groupSession.activeSession!)}
-                            className="bg-green-600 hover:bg-green-700 text-white"
+                            className="bg-green-600 hover:bg-green-700 text-white w-full sm:w-auto"
                             size="sm"
                           >
                             <Play className="w-4 h-4 mr-1" />
@@ -534,14 +534,14 @@ const SupportGroupsPage = () => {
                     {myGroups.slice(0, 3).map((group) => {
                       const countdown = getNextSessionCountdown(group.meeting_schedule)
                       return (
-                        <div key={group.id} className="flex items-center justify-between p-4 bg-white rounded-lg border border-blue-200 shadow-sm">
-                          <div className="flex items-center space-x-3">
-                            <div className="h-10 w-10 bg-blue-100 rounded-full flex items-center justify-center">
+                        <div key={group.id} className="flex flex-col sm:flex-row sm:items-center justify-between p-4 bg-white rounded-lg border border-blue-200 shadow-sm gap-3">
+                          <div className="flex items-center space-x-3 min-w-0 flex-1">
+                            <div className="h-10 w-10 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0">
                               <Users className="h-5 w-5 text-blue-600" />
                             </div>
-                            <div className="flex-1">
-                              <h4 className="font-semibold text-gray-900">{group.name}</h4>
-                              <p className="text-sm text-gray-600">{formatSchedule(group.meeting_schedule)}</p>
+                            <div className="flex-1 min-w-0">
+                              <h4 className="font-semibold text-gray-900 truncate">{group.name}</h4>
+                              <p className="text-sm text-gray-600 truncate">{formatSchedule(group.meeting_schedule)}</p>
                               {countdown && (
                                 <div className="flex items-center mt-1">
                                   <Clock className="w-3 h-3 mr-1 text-blue-600" />
@@ -554,7 +554,7 @@ const SupportGroupsPage = () => {
                             variant="outline"
                             size="sm"
                             onClick={() => handleViewGroup(group)}
-                            className="border-blue-300 text-blue-600 hover:bg-blue-50"
+                            className="border-blue-300 text-blue-600 hover:bg-blue-50 w-full sm:w-auto"
                           >
                             View Details
                           </Button>
@@ -579,7 +579,7 @@ const SupportGroupsPage = () => {
             <TabsContent value="my-groups" className="space-y-6">
               {/* Quick Stats */}
               {myGroups.length > 0 && (
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                   <Card className="text-center p-4">
                     <div className="text-2xl font-bold text-[#20C0F3]">{myGroups.length}</div>
                     <div className="text-sm text-gray-600">Groups Joined</div>
@@ -618,7 +618,7 @@ const SupportGroupsPage = () => {
                   </Button>
                 </Card>
               ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
                   {myGroups
                     .sort((a, b) => {
                       // Sort favorites first
@@ -727,11 +727,12 @@ const SupportGroupsPage = () => {
                                 <Button 
                                   size="sm" 
                                   variant="outline" 
-                                  className="flex items-center"
+                                  className="flex items-center flex-1 sm:flex-none"
                                   onClick={() => handleViewGroup(group)}
                                 >
                                   <Eye className="h-3.5 w-3.5 mr-1.5" />
-                                  View
+                                  <span className="hidden sm:inline">View</span>
+                                  <span className="sm:hidden">Details</span>
                                 </Button>
                                 
                                 {/* Actions Dropdown */}
@@ -801,7 +802,7 @@ const SupportGroupsPage = () => {
                   <CardTitle className="text-lg">Find Support Groups</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                     <div className="relative">
                       <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
                       <Input
@@ -842,7 +843,7 @@ const SupportGroupsPage = () => {
               </Card>
 
               {/* Available Groups */}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
                 {getAvailableGroups().map((group) => (
                   <motion.div
                     key={group.id}

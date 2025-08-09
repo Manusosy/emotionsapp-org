@@ -50,15 +50,14 @@ const formSchema = z.object({
     required_error: 'Please select a time for your session',
   }),
   notes: z.string().min(10, 'Please provide at least 10 characters').max(500),
-  meeting_type: z.enum(['video', 'audio', 'chat'], {
+  meeting_type: z.enum(['video', 'audio'], {
     required_error: 'Please select a meeting type',
   }),
 });
 
 const meetingTypes = [
   { value: 'video', label: 'Video Call' },
-  { value: 'audio', label: 'Audio Call' },
-  { value: 'chat', label: 'Chat' }
+  { value: 'audio', label: 'Audio Call' }
 ];
 
 interface BookingModalProps {

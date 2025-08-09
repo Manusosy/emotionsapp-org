@@ -163,17 +163,17 @@ export default function NotificationsPage({ userRole, dashboardLayout: Dashboard
   return (
     <DashboardLayout>
       <div className="space-y-6">
-        <div className="flex justify-between items-center">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
             <h1 className="text-2xl font-bold tracking-tight">Notifications</h1>
             <p className="text-muted-foreground">
               Manage your notifications and alerts
             </p>
           </div>
-          <div className="flex space-x-2">
+          <div className="flex flex-col sm:flex-row w-full sm:w-auto space-y-2 sm:space-y-0 sm:space-x-2">
             <Dialog open={isSettingsOpen} onOpenChange={setIsSettingsOpen}>
               <DialogTrigger asChild>
-                <Button variant="outline" size="sm">
+                <Button variant="outline" size="sm" className="w-full sm:w-auto">
                   <Settings className="w-4 h-4 mr-2" />
                   Settings
                 </Button>
@@ -389,6 +389,7 @@ export default function NotificationsPage({ userRole, dashboardLayout: Dashboard
               size="sm" 
               onClick={markAllAsRead} 
               disabled={unreadCount === 0}
+              className="w-full sm:w-auto"
             >
               <Check className="w-4 h-4 mr-2" />
               Mark All as Read
@@ -397,32 +398,38 @@ export default function NotificationsPage({ userRole, dashboardLayout: Dashboard
         </div>
 
         <Tabs defaultValue="all" value={activeTab} onValueChange={(value) => setActiveTab(value as any)} className="space-y-4">
-          <div className="flex justify-between items-center">
-            <TabsList>
-              <TabsTrigger value="all" className="relative">
+          <div className="flex justify-center sm:justify-between items-center">
+            <TabsList className="grid w-full max-w-full grid-cols-3 sm:grid-cols-5 md:grid-cols-6 lg:flex lg:w-auto overflow-x-auto">
+              <TabsTrigger value="all" className="relative text-xs sm:text-sm">
                 All
                 {unreadCount > 0 && (
-                  <Badge className="ml-2 px-1 py-0 h-5 min-w-5 bg-primary text-xs">
-                    {unreadCount}
+                  <Badge className="ml-1 sm:ml-2 px-1 py-0 h-4 sm:h-5 min-w-4 sm:min-w-5 bg-primary text-xs">
+                    {unreadCount > 99 ? '99+' : unreadCount}
                   </Badge>
                 )}
               </TabsTrigger>
-              <TabsTrigger value="unread">Unread</TabsTrigger>
-              <TabsTrigger value="appointment">Appointments</TabsTrigger>
+              <TabsTrigger value="unread" className="text-xs sm:text-sm">Unread</TabsTrigger>
+              <TabsTrigger value="appointment" className="text-xs sm:text-sm">
+                <span className="hidden sm:inline">Appointments</span>
+                <span className="sm:hidden">Appt</span>
+              </TabsTrigger>
               
               {/* Role-specific tabs */}
               {userRole === 'mood_mentor' && (
                 <>
-                  <TabsTrigger value="patient">Patients</TabsTrigger>
-                  <TabsTrigger value="group">Groups</TabsTrigger>
+                  <TabsTrigger value="patient" className="text-xs sm:text-sm">Patients</TabsTrigger>
+                  <TabsTrigger value="group" className="text-xs sm:text-sm">Groups</TabsTrigger>
                 </>
               )}
               
               {userRole === 'patient' && (
-                <TabsTrigger value="journal">Journal</TabsTrigger>
+                <TabsTrigger value="journal" className="text-xs sm:text-sm">Journal</TabsTrigger>
               )}
               
-              <TabsTrigger value="message">Messages</TabsTrigger>
+              <TabsTrigger value="message" className="text-xs sm:text-sm">
+                <span className="hidden sm:inline">Messages</span>
+                <span className="sm:hidden">Msg</span>
+              </TabsTrigger>
             </TabsList>
           </div>
 

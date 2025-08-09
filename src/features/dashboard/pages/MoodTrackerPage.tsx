@@ -166,14 +166,14 @@ export default function MoodTrackerPage() {
                     <CardTitle>Mood Analytics</CardTitle>
                     <CardDescription>Visualize your emotional patterns</CardDescription>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
                     {/* Time Range Filters */}
-                    <div className="flex gap-1 mr-2">
+                    <div className="flex gap-1 sm:mr-2">
                       <Button
                         variant={timeRange === 'week' ? 'default' : 'outline'}
                         size="sm"
                         onClick={() => setTimeRange('week')}
-                        className="min-w-[60px]"
+                        className="flex-1 sm:min-w-[60px] sm:flex-none"
                       >
                         Week
                       </Button>
@@ -181,7 +181,7 @@ export default function MoodTrackerPage() {
                         variant={timeRange === 'month' ? 'default' : 'outline'}
                         size="sm"
                         onClick={() => setTimeRange('month')}
-                        className="min-w-[60px]"
+                        className="flex-1 sm:min-w-[60px] sm:flex-none"
                       >
                         Month
                       </Button>
@@ -189,7 +189,7 @@ export default function MoodTrackerPage() {
                         variant={timeRange === 'year' ? 'default' : 'outline'}
                         size="sm"
                         onClick={() => setTimeRange('year')}
-                        className="min-w-[60px]"
+                        className="flex-1 sm:min-w-[60px] sm:flex-none"
                       >
                         Year
                       </Button>

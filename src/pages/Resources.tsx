@@ -30,7 +30,9 @@ import {
   Link as LinkIcon,
   Headphones,
   Calendar,
-  Plus
+  Plus,
+  X,
+  ArrowLeft
 } from "lucide-react";
 
 // Resource type definition
@@ -75,6 +77,8 @@ const Resources = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [activeCategory, setActiveCategory] = useState("all");
+  const [viewingResource, setViewingResource] = useState<Resource | null>(null);
+  const [showResourceViewer, setShowResourceViewer] = useState(false);
   const { user } = useAuth();
   
   // Animation variants
@@ -89,6 +93,14 @@ const Resources = () => {
       opacity: 1,
       transition: { staggerChildren: 0.1 }
     }
+  };
+
+  // Custom styles for responsive grid
+  const gridStyles = {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
+    gap: '1rem',
+    padding: '1rem'
   };
 
   // Fetch resources from the database
@@ -204,12 +216,38 @@ const Resources = () => {
         }
       }
       
-      // Open the URL
-      window.open(accessUrl, "_blank");
+      // Open resource in app viewer instead of new window
+      setViewingResource(resource);
+      setShowResourceViewer(true);
     } catch (error) {
       console.error('Error accessing resource:', error);
       toast.error("Failed to access resource");
     }
+  };
+
+  // Handle closing resource viewer
+  const handleCloseViewer = () => {
+    setShowResourceViewer(false);
+    setViewingResource(null);
+  };
+
+  // Get embed URL for videos (YouTube, Vimeo, etc.)
+  const getEmbedUrl = (url: string) => {
+    // YouTube
+    const youtubeRegex = /(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&\n?#]+)/;
+    const youtubeMatch = url.match(youtubeRegex);
+    if (youtubeMatch) {
+      return `https://www.youtube.com/embed/${youtubeMatch[1]}`;
+    }
+    
+    // Vimeo
+    const vimeoRegex = /vimeo\.com\/(\d+)/;
+    const vimeoMatch = url.match(vimeoRegex);
+    if (vimeoMatch) {
+      return `https://player.vimeo.com/video/${vimeoMatch[1]}`;
+    }
+    
+    return url;
   };
   
   // Handle resource sharing
@@ -407,8 +445,8 @@ const Resources = () => {
             transition={{ duration: 0.6 }}
             className="text-center max-w-3xl mx-auto"
           >
-            <h1 className="text-4xl md:text-5xl font-bold mb-6 text-white">Mental Health Resources</h1>
-            <p className="text-lg md:text-xl max-w-2xl mx-auto text-blue-50 mb-8">
+            <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold mb-6 text-white">Mental Health Resources</h1>
+            <p className="text-base sm:text-lg md:text-xl max-w-2xl mx-auto text-blue-50 mb-8 px-4">
               Access a wide range of materials to support your mental wellbeing, from educational content to interactive tools.
             </p>
             <div className="relative max-w-xl mx-auto">
@@ -433,8 +471,8 @@ const Resources = () => {
       {/* Categories */}
       <div className="container mx-auto px-4">
         <section className="mb-16 mt-8">
-          <h2 className="text-2xl font-bold text-gray-900 mb-6">Browse by Category</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <h2 className="text-xl sm:text-2xl font-bold text-gray-900 mb-6">Browse by Category</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {categories.map((category) => (
               <motion.div
                 key={category.id}
@@ -463,8 +501,8 @@ const Resources = () => {
         
         {/* Featured Resources */}
         <section className="mb-12">
-          <h2 className="text-2xl font-bold mb-6">Featured Resources</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <h2 className="text-xl sm:text-2xl font-bold mb-6">Featured Resources</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
             {featuredResources.map((resource) => (
               <Card key={resource.id} className="overflow-hidden bg-white border-none shadow-md h-full">
                 <div className="relative aspect-[4/3] h-52">
@@ -565,25 +603,28 @@ const Resources = () => {
         
         {/* All Resources */}
         <section>
-          <div className="flex justify-between items-center mb-6">
-            <h2 className="text-2xl font-bold text-gray-900">
+          <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-6 gap-4">
+            <h2 className="text-xl sm:text-2xl font-bold text-gray-900">
               All Resources 
               <span className="text-sm font-normal text-gray-500 ml-2">
                 ({resources.length} total)
               </span>
             </h2>
-            <div className="flex items-center">
-              <Button variant="ghost" className="text-sm flex items-center" onClick={() => setActiveCategory("all")}>
+            <div className="flex flex-wrap items-center gap-1">
+              <Button variant="ghost" className="text-xs sm:text-sm flex items-center" onClick={() => setActiveCategory("all")}>
                 <span className={activeCategory === "all" ? "text-blue-600 font-medium" : ""}>All</span>
               </Button>
               {categories.map((cat) => (
                 <Button 
                   key={cat.id} 
                   variant="ghost" 
-                  className="text-sm flex items-center"
+                  className="text-xs sm:text-sm flex items-center"
                   onClick={() => setActiveCategory(cat.id)}
                 >
-                  <span className={activeCategory === cat.id ? "text-blue-600 font-medium" : ""}>{cat.title}</span>
+                  <span className={activeCategory === cat.id ? "text-blue-600 font-medium" : ""}>
+                    <span className="hidden sm:inline">{cat.title}</span>
+                    <span className="sm:hidden">{cat.title.split(' ')[0]}</span>
+                  </span>
                 </Button>
               ))}
             </div>
@@ -599,7 +640,7 @@ const Resources = () => {
               initial="hidden"
               animate="visible"
               variants={staggerContainer}
-              className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-6"
+              className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6"
             >
               {filteredResources.map((resource) => (
                 <motion.div
@@ -710,6 +751,140 @@ const Resources = () => {
           )}
         </section>
       </div>
+
+      {/* Resource Viewer Modal */}
+      {showResourceViewer && viewingResource && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-lg w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
+            {/* Header */}
+            <div className="flex items-center justify-between p-4 border-b">
+              <div className="flex items-center space-x-2">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleCloseViewer}
+                  className="lg:hidden"
+                >
+                  <ArrowLeft className="h-4 w-4" />
+                </Button>
+                <div>
+                  <h2 className="text-lg font-semibold truncate">{viewingResource.title}</h2>
+                  <div className="flex items-center space-x-2 text-sm text-gray-500">
+                    {getResourceTypeIcon(viewingResource.type)}
+                    <span>{getResourceTypeLabel(viewingResource.type)}</span>
+                  </div>
+                </div>
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleCloseViewer}
+                className="hidden lg:flex"
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+
+            {/* Content */}
+            <div className="flex-1 overflow-auto">
+              {viewingResource.type === 'video' ? (
+                <div className="aspect-video w-full">
+                  <iframe
+                    src={getEmbedUrl(viewingResource.file_url || viewingResource.url)}
+                    className="w-full h-full"
+                    frameBorder="0"
+                    allowFullScreen
+                    title={viewingResource.title}
+                  />
+                </div>
+              ) : viewingResource.type === 'document' || viewingResource.file_url?.endsWith('.pdf') ? (
+                <div className="h-[60vh] w-full">
+                  <iframe
+                    src={viewingResource.file_url || viewingResource.url}
+                    className="w-full h-full"
+                    frameBorder="0"
+                    title={viewingResource.title}
+                  />
+                </div>
+              ) : viewingResource.type === 'image' ? (
+                <div className="p-4 flex justify-center">
+                  <img
+                    src={viewingResource.file_url || viewingResource.url}
+                    alt={viewingResource.title}
+                    className="max-w-full max-h-[60vh] object-contain"
+                  />
+                </div>
+              ) : (
+                <div className="h-[60vh] w-full">
+                  <iframe
+                    src={viewingResource.file_url || viewingResource.url}
+                    className="w-full h-full"
+                    frameBorder="0"
+                    title={viewingResource.title}
+                  />
+                </div>
+              )}
+              
+              {/* Description */}
+              <div className="p-4 border-t bg-gray-50">
+                <p className="text-gray-700 mb-4">{viewingResource.description}</p>
+                {viewingResource.author && (
+                  <div className="flex items-center space-x-2 text-sm text-gray-600">
+                    <span className="font-medium">By {viewingResource.author}</span>
+                    {viewingResource.author_role && (
+                      <>
+                        <span>•</span>
+                        <span>{viewingResource.author_role}</span>
+                      </>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Footer Actions */}
+            <div className="flex items-center justify-between p-4 border-t bg-gray-50">
+              <div className="flex items-center space-x-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleResourceShare(viewingResource)}
+                >
+                  <Share2 className="w-4 h-4 mr-2" />
+                  Share
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleFavoriteToggle(viewingResource)}
+                >
+                  <Heart 
+                    className={`w-4 h-4 mr-2 ${
+                      viewingResource.is_favorite ? 'text-red-500 fill-current' : ''
+                    }`} 
+                  />
+                  {viewingResource.is_favorite ? 'Saved' : 'Save'}
+                </Button>
+              </div>
+              {viewingResource.file_url && (
+                <Button
+                  variant="default"
+                  size="sm"
+                  onClick={() => {
+                    const link = document.createElement('a');
+                    link.href = viewingResource.file_url!;
+                    link.download = viewingResource.title;
+                    link.click();
+                  }}
+                >
+                  <Download className="w-4 h-4 mr-2" />
+                  Download
+                </Button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

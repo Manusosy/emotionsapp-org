@@ -46,7 +46,7 @@ export interface AppointmentData {
   start_time: string;
   end_time: string;
   meeting_link?: string;
-  meeting_type: 'video' | 'audio' | 'chat';
+  meeting_type: 'video' | 'audio';
   notes?: string;
 }
 

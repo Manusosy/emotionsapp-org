@@ -478,7 +478,7 @@ export default function MessagesPage({
   return (
     <div className={`h-full flex bg-white ${className}`}>
       {/* Sidebar */}
-      <div className={`${isMobile && !showSidebar ? 'hidden' : 'flex'} w-80 border-r border-gray-200 flex-col bg-gray-50`}>
+      <div className={`${isMobile && !showSidebar ? 'hidden' : 'flex'} ${isMobile ? 'w-full' : 'w-80'} border-r border-gray-200 flex-col bg-gray-50`}>
         {/* Search Header */}
         <div className="p-4 border-b border-gray-200 bg-white">
           <div className="relative">
@@ -552,7 +552,7 @@ export default function MessagesPage({
       </div>
 
       {/* Chat Area */}
-      <div className="flex-1 flex flex-col">
+      <div className={`${isMobile && showSidebar ? 'hidden' : 'flex'} flex-1 flex-col`}>
         {activeConversation ? (
           <>
             {/* Chat Header */}
@@ -562,7 +562,10 @@ export default function MessagesPage({
                   <Button
                     variant="ghost"
                     size="sm"
-                    onClick={() => setShowSidebar(true)}
+                    onClick={() => {
+                      setShowSidebar(true);
+                      setActiveConversation(null);
+                    }}
                     className="mr-2"
                   >
                     <ArrowLeft className="h-5 w-5" />

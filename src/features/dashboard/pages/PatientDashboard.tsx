@@ -78,7 +78,7 @@ interface AppointmentData {
   date: string;
   start_time: string;
   end_time: string;
-  meeting_type: 'video' | 'audio' | 'chat';
+  meeting_type: 'video' | 'audio';
   status: 'pending' | 'scheduled' | 'completed' | 'cancelled' | 'rescheduled';
   description?: string;
   notes?: string;
@@ -817,7 +817,7 @@ export default function PatientDashboard() {
         {/* Health Records Overview */}
         <div>
           <h2 className="text-xl font-medium mb-4">Emotional Health Records</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-5">
             {/* Mood Score */}
             <Card className="overflow-hidden border-0 bg-gradient-to-br from-red-50 to-pink-50">
               <CardContent className="p-5">
@@ -977,7 +977,7 @@ export default function PatientDashboard() {
         </div>
 
         {/* Mood Check-in and Recent Assessments - 2 columns layout */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-5">
           {/* Emotional Health Wheel - replaces Daily Check-in */}
           <EmotionalHealthWheel 
             stressLevel={userMetrics.stressLevel} 
@@ -1007,9 +1007,9 @@ export default function PatientDashboard() {
         <div>
           {/* Reports Section */}
           <div className="mb-6">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-4 gap-3 sm:gap-0">
               <h2 className="text-xl font-medium">Appointment Reports</h2>
-              <div className="flex items-center mt-2 sm:mt-0 gap-2">
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
                 <div className="relative">
                   <select 
                     className="appearance-none bg-white border border-slate-200 rounded-md pl-3 pr-8 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
@@ -1047,7 +1047,141 @@ export default function PatientDashboard() {
           {/* Appointments Table */}
           <Card className="shadow-sm overflow-hidden">
             <CardContent className="p-0">
-              <div className="overflow-x-auto">
+              {/* Mobile Card View */}
+              <div className="block md:hidden">
+                {reportsLoading ? (
+                  Array(3).fill(null).map((_, i) => (
+                    <div key={`mobile-skeleton-${i}`} className="p-4 border-b border-slate-200 animate-pulse">
+                      <div className="flex items-center gap-3 mb-3">
+                        <div className="w-10 h-10 rounded-full bg-slate-200"></div>
+                        <div className="flex-1 space-y-2">
+                          <div className="h-4 bg-slate-200 rounded w-3/4"></div>
+                          <div className="h-3 bg-slate-200 rounded w-1/2"></div>
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        <div className="h-3 bg-slate-200 rounded w-1/2"></div>
+                        <div className="h-6 bg-slate-200 rounded w-1/3"></div>
+                      </div>
+                    </div>
+                  ))
+                ) : appointmentReports.length === 0 ? (
+                  <div className="p-8 text-center text-slate-500">
+                    No appointments found matching your filter criteria
+                  </div>
+                ) : (
+                  appointmentReports.map((report) => {
+                    const getBadgeClasses = (status: string) => {
+                      if (!status) return "bg-slate-100 text-slate-700 hover:bg-slate-200";
+                      
+                      switch(status.toLowerCase()) {
+                        case 'pending':
+                        case 'scheduled':
+                          return "bg-indigo-100 text-indigo-700 hover:bg-indigo-200";
+                        case 'completed':
+                          return "bg-purple-100 text-purple-700 hover:bg-purple-200";
+                        case 'cancelled':
+                          return "bg-red-100 text-red-700 hover:bg-red-200";
+                        default:
+                          return "bg-slate-100 text-slate-700 hover:bg-slate-200";
+                      }
+                    };
+
+                    const getDotColor = (status: string) => {
+                      if (!status) return "bg-slate-500";
+                      
+                      switch(status.toLowerCase()) {
+                        case 'pending':
+                        case 'scheduled':
+                          return "bg-indigo-500";
+                        case 'completed':
+                          return "bg-purple-500";
+                        case 'cancelled':
+                          return "bg-red-500";
+                        default:
+                          return "bg-slate-500";
+                      }
+                    };
+
+                    const getDisplayStatus = (status: string) => {
+                      if (!status) return "Unknown";
+                      
+                      if (status.toLowerCase() === 'pending' || status.toLowerCase() === 'scheduled') {
+                        return "Upcoming";
+                      }
+                      
+                      return status.charAt(0).toUpperCase() + status.slice(1).toLowerCase();
+                    };
+
+                    const mentorName = report.mood_mentor?.user_metadata?.full_name || "Unknown Mentor";
+                    const mentorSpecialty = report.mood_mentor?.user_metadata?.specialty || "Specialist";
+                    const mentorAvatar = report.mood_mentor?.user_metadata?.avatar_url || "";
+
+                    return (
+                      <div key={report.id} className="p-4 border-b border-slate-200 hover:bg-blue-50/30 transition-colors">
+                        <div className="flex items-start justify-between mb-3">
+                          <div className="flex items-center gap-3 min-w-0 flex-1">
+                            {mentorAvatar ? (
+                              <FallbackAvatar
+                                src={mentorAvatar}
+                                name={mentorName}
+                                className="h-10 w-10 flex-shrink-0"
+                              />
+                            ) : (
+                              <div className="h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-medium flex-shrink-0">
+                                {mentorName.split(' ').map(n => n[0]).join('')}
+                              </div>
+                            )}
+                            <div className="min-w-0 flex-1">
+                              <div className="font-medium text-gray-800 truncate">{mentorName}</div>
+                              <div className="text-xs text-slate-500 truncate">{mentorSpecialty}</div>
+                            </div>
+                          </div>
+                          <span className="text-xs text-blue-600 font-medium flex-shrink-0 ml-2">
+                            {formatAppointmentId(report.id)}
+                          </span>
+                        </div>
+                        
+                        <div className="grid grid-cols-2 gap-3 mb-3 text-sm">
+                          <div>
+                            <div className="text-xs text-slate-500 uppercase tracking-wide">Date & Time</div>
+                            <div className="text-gray-700 font-medium">{`${report.date}, ${report.start_time}`}</div>
+                          </div>
+                          <div>
+                            <div className="text-xs text-slate-500 uppercase tracking-wide">Type</div>
+                            <div className="flex items-center text-gray-700">
+                              {report.meeting_type === 'video' && <Video className="h-3 w-3 mr-1 text-blue-500" />}
+                              {report.meeting_type === 'audio' && <Phone className="h-3 w-3 mr-1 text-blue-500" />}
+      
+                              <span className="text-sm">{report.meeting_type.charAt(0).toUpperCase() + report.meeting_type.slice(1)}</span>
+                            </div>
+                          </div>
+                        </div>
+                        
+                        <div className="flex items-center justify-between">
+                          <Badge className={`${getBadgeClasses(report.status)} font-medium px-3 py-1 rounded-full text-xs`}>
+                            <span className="flex items-center">
+                              <span className={`h-1.5 w-1.5 rounded-full ${getDotColor(report.status)} mr-1.5`}></span>
+                              {getDisplayStatus(report.status)}
+                            </span>
+                          </Badge>
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            className="h-8 w-8 p-0" 
+                            onClick={() => handleExportAppointment(report.id)}
+                          >
+                            <FileText className="h-3.5 w-3.5 text-slate-600" />
+                          </Button>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+
+              {/* Desktop Table View */}
+              <div className="hidden md:block overflow-x-auto">
                 <table className="w-full">
                   <thead>
                     <tr style={{ backgroundColor: '#20C0F3' }} className="rounded-t-lg">
@@ -1175,7 +1309,7 @@ export default function PatientDashboard() {
                               <span className="inline-flex items-center text-sm text-gray-700">
                                 {report.meeting_type === 'video' && <Video className="h-3.5 w-3.5 mr-1.5 text-blue-500" />}
                                 {report.meeting_type === 'audio' && <Phone className="h-3.5 w-3.5 mr-1.5 text-blue-500" />}
-                                {report.meeting_type === 'chat' && <MessageSquare className="h-3.5 w-3.5 mr-1.5 text-blue-500" />}
+
                                 {report.meeting_type.charAt(0).toUpperCase() + report.meeting_type.slice(1)}
                               </span>
                             </td>
@@ -1221,7 +1355,7 @@ export default function PatientDashboard() {
             </Button>
           </div>
           
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-5">
             {recentJournalEntries.length === 0 ? (
               // No entries message
               <Card className="col-span-full p-5 text-center">

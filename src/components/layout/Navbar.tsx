@@ -263,8 +263,8 @@ export default function Navbar() {
 
         {/* Mobile Navigation */}
         {mobileMenuOpen && (
-          <div className="md:hidden py-4 space-y-2">
-            <a href="/" className="block px-4 py-2 hover:bg-[#fda802] rounded-lg transition-colors" onClick={(e) => handleNavigation("/", e)}>
+          <div className="md:hidden py-4 space-y-2 absolute top-20 left-0 w-full bg-[#0078FF] shadow-lg border-t border-blue-600/20 z-50">
+            <a href="/" className="block px-4 py-2 hover:bg-[#fda802] rounded-lg transition-colors text-white" onClick={(e) => handleNavigation("/", e)}>
               Home
             </a>
             <a href="/journal" className="block px-4 py-2 hover:bg-[#fda802] rounded-lg transition-colors" onClick={(e) => handleNavigation("/journal", e)}>

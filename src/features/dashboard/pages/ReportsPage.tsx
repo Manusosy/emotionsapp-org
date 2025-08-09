@@ -950,16 +950,16 @@ export default function ReportsPage() {
   return (
     <DashboardLayout>
       <div className="p-6 space-y-6">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="flex flex-col gap-4">
           <div>
             <h1 className="text-2xl font-semibold">Emotional Health Reports</h1>
             <p className="text-slate-500">
               Track your mental wellbeing and stress levels over time
             </p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-col sm:flex-row gap-3">
             <Select value={dateRange} onValueChange={setDateRange}>
-              <SelectTrigger className="w-[180px]">
+              <SelectTrigger className="w-full sm:w-[180px]">
                 <CalendarRange className="h-4 w-4 mr-2" />
                 <SelectValue placeholder="Select timeframe" />
               </SelectTrigger>
@@ -971,7 +971,7 @@ export default function ReportsPage() {
                 <SelectItem value="365">Last year</SelectItem>
               </SelectContent>
             </Select>
-            <Button variant="outline" size="sm" onClick={() => navigate("/patient-dashboard")}>
+            <Button variant="outline" size="sm" onClick={() => navigate("/patient-dashboard")} className="w-full sm:w-auto">
               <ChevronLeft className="h-4 w-4 mr-1" />
               Dashboard
             </Button>
@@ -980,11 +980,11 @@ export default function ReportsPage() {
 
         {/* Tabs for different report views */}
         <Tabs defaultValue={activeTab} value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList>
-            <TabsTrigger value="summary">Summary</TabsTrigger>
-            <TabsTrigger value="stress">Stress Analytics</TabsTrigger>
-            <TabsTrigger value="mood">Mood Tracking</TabsTrigger>
-            <TabsTrigger value="trends">Trends & Patterns</TabsTrigger>
+          <TabsList className="grid w-full grid-cols-2 md:grid-cols-4">
+            <TabsTrigger value="summary" className="text-xs sm:text-sm">Summary</TabsTrigger>
+            <TabsTrigger value="stress" className="text-xs sm:text-sm">Stress</TabsTrigger>
+            <TabsTrigger value="mood" className="text-xs sm:text-sm">Mood</TabsTrigger>
+            <TabsTrigger value="trends" className="text-xs sm:text-sm">Trends</TabsTrigger>
           </TabsList>
           
           {/* Summary Tab */}
@@ -997,7 +997,7 @@ export default function ReportsPage() {
                   <Skeleton className="h-4 w-1/2" />
                 </CardHeader>
                 <CardContent>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
                     {[1, 2, 3].map(i => (
                       <Card key={i}>
                         <CardContent className="p-4">
@@ -1029,10 +1029,10 @@ export default function ReportsPage() {
                                   : "Past year"}
                         </CardDescription>
                       </div>
-                      <div className="flex gap-2">
+                      <div className="flex flex-col sm:flex-row gap-2">
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
-                            <Button variant="outline" size="sm">
+                            <Button variant="outline" size="sm" className="w-full sm:w-auto">
                               <Download className="h-4 w-4 mr-1" />
                               Export
                               <ChevronDown className="h-4 w-4 ml-1" />
@@ -1050,7 +1050,7 @@ export default function ReportsPage() {
                           </DropdownMenuContent>
                         </DropdownMenu>
                         
-                        <Button variant="outline" size="sm">
+                        <Button variant="outline" size="sm" className="w-full sm:w-auto">
                           <Share className="h-4 w-4 mr-1" />
                           Share
                         </Button>
@@ -1058,7 +1058,7 @@ export default function ReportsPage() {
                     </div>
                   </CardHeader>
                   <CardContent>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
                       {/* Emotional Health Score */}
                       <Card>
                         <CardContent className="p-4">
@@ -1326,7 +1326,7 @@ export default function ReportsPage() {
                     </CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-4">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                       <div>
                         <h3 className="font-medium text-lg mb-3">Your Insights</h3>
                         
@@ -1552,10 +1552,10 @@ export default function ReportsPage() {
                           Detailed analysis of your stress levels and emotional health
                         </CardDescription>
                       </div>
-                      <div className="flex gap-2">
+                      <div className="flex flex-col sm:flex-row gap-2">
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
-                            <Button variant="outline" size="sm">
+                            <Button variant="outline" size="sm" className="w-full sm:w-auto">
                               <Download className="h-4 w-4 mr-1" />
                               Export
                               <ChevronDown className="h-4 w-4 ml-1" />
@@ -1573,7 +1573,7 @@ export default function ReportsPage() {
                           </DropdownMenuContent>
                         </DropdownMenu>
                         
-                        <Button variant="outline" size="sm">
+                        <Button variant="outline" size="sm" className="w-full sm:w-auto">
                           <Share className="h-4 w-4 mr-1" />
                           Share
                         </Button>
@@ -1601,8 +1601,8 @@ export default function ReportsPage() {
                             <h3 className="text-base font-medium">Emotional Health Score: {Math.round(healthMetrics.healthPercentage)}%</h3>
                           </div>
                           
-                          <div className="bg-slate-50 rounded-lg p-4 border">
-                            <div className="flex flex-col md:flex-row gap-6">
+                                                      <div className="bg-slate-50 rounded-lg p-4 border">
+                              <div className="flex flex-col lg:flex-row gap-6">
                               <div className="flex-1">
                                 <div className="flex items-center justify-center">
                                   <div className="relative w-32 h-32">
@@ -1803,7 +1803,7 @@ export default function ReportsPage() {
                       The score represents your overall emotional wellbeing, with higher percentages indicating better emotional health.
                     </p>
                     
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 pt-2">
                       <div className="space-y-3">
                         <h3 className="font-medium">What your score means:</h3>
                             <div className="flex items-center gap-2">
@@ -1872,10 +1872,10 @@ export default function ReportsPage() {
                           Analysis of your mood patterns over time
                         </CardDescription>
                       </div>
-                      <div className="flex gap-2">
+                      <div className="flex flex-col sm:flex-row gap-2">
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
-                            <Button variant="outline" size="sm">
+                            <Button variant="outline" size="sm" className="w-full sm:w-auto">
                               <Download className="h-4 w-4 mr-1" />
                               Export
                               <ChevronDown className="h-4 w-4 ml-1" />
@@ -1893,7 +1893,7 @@ export default function ReportsPage() {
                           </DropdownMenuContent>
                         </DropdownMenu>
                         
-                        <Button variant="outline" size="sm">
+                        <Button variant="outline" size="sm" className="w-full sm:w-auto">
                           <Share className="h-4 w-4 mr-1" />
                           Share
                         </Button>
@@ -1922,7 +1922,7 @@ export default function ReportsPage() {
                           </div>
                           
                           <div className="bg-slate-50 rounded-lg p-4 border">
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                               <div className="flex-1">
                                 {/* Mood score scale visualization */}
                         <div className="space-y-3">
@@ -2248,10 +2248,10 @@ export default function ReportsPage() {
                           Long-term analysis of your emotional health
                         </CardDescription>
                       </div>
-                      <div className="flex gap-2">
+                      <div className="flex flex-col sm:flex-row gap-2">
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
-                            <Button variant="outline" size="sm">
+                            <Button variant="outline" size="sm" className="w-full sm:w-auto">
                               <Download className="h-4 w-4 mr-1" />
                               Export
                               <ChevronDown className="h-4 w-4 ml-1" />
@@ -2269,7 +2269,7 @@ export default function ReportsPage() {
                           </DropdownMenuContent>
                         </DropdownMenu>
                         
-                        <Button variant="outline" size="sm">
+                        <Button variant="outline" size="sm" className="w-full sm:w-auto">
                           <Share className="h-4 w-4 mr-1" />
                           Share
                         </Button>

@@ -40,7 +40,6 @@ const steps = [
 const appointmentTypes = [
   { id: "video", name: "Video Call", description: "Talk face-to-face via video conference", icon: "📹" },
   { id: "audio", name: "Audio Call", description: "Voice call without video", icon: "🎧" },
-  { id: "chat", name: "Chat", description: "Text-based conversation", icon: "💬" },
 ];
 
 const BookingPage = () => {
@@ -257,7 +256,7 @@ const BookingPage = () => {
         date: selectedDate ? format(selectedDate, "yyyy-MM-dd") : new Date().toISOString().split('T')[0],
         start_time: startTime,
         end_time: endTime,
-        meeting_type: selectedAppointmentType as 'video' | 'audio' | 'chat',
+        meeting_type: selectedAppointmentType as 'video' | 'audio',
         meeting_link: `https://emotionsapp.org/meet/${user.id}/${moodMentor.userId}`,
         notes: formData.concerns || "No notes provided"
       };

@@ -35,7 +35,7 @@ export interface Appointment {
   end_time: string;
   status: 'pending' | 'scheduled' | 'completed' | 'cancelled' | 'rescheduled';
   meeting_link?: string;
-  meeting_type: 'video' | 'audio' | 'chat';
+  meeting_type: 'video' | 'audio';
   notes?: string;
   created_at: string;
   updated_at: string;

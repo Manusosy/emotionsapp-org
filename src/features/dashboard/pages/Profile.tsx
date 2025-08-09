@@ -123,23 +123,24 @@ export default function Profile() {
   return (
     <DashboardLayout>
       <div className="p-6 max-w-5xl mx-auto space-y-8">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <h1 className="text-3xl font-bold">Your Profile</h1>
             <p className="text-muted-foreground mt-1">View and manage your personal information</p>
           </div>
-          <div className="flex gap-3">
+          <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
             <Button 
               variant="outline"
               onClick={() => navigate('/patient-dashboard/appointments')}
-              className="border-blue-200 text-blue-600"
+              className="border-blue-200 text-blue-600 w-full sm:w-auto"
             >
               <Calendar className="w-4 h-4 mr-2" />
-              Schedule Appointment
+              <span className="hidden sm:inline">Schedule Appointment</span>
+              <span className="sm:hidden">Schedule</span>
             </Button>
             <Button 
               onClick={() => navigate('/patient-dashboard/settings')}
-              className="bg-[#20C0F3] hover:bg-[#20C0F3]/90 text-white"
+              className="bg-[#20C0F3] hover:bg-[#20C0F3]/90 text-white w-full sm:w-auto"
             >
               <Edit className="w-4 h-4 mr-2" />
               Edit Profile
@@ -151,17 +152,17 @@ export default function Profile() {
           <div className="space-y-8">
             {/* Basic Info Card */}
             <Card className="overflow-hidden border-none shadow-md rounded-xl">
-              <div className="bg-gradient-to-r from-[#20C0F3]/90 to-[#20C0F3]/70 h-32 relative">
-                <div className="absolute -bottom-16 left-8">
+              <div className="bg-gradient-to-r from-[#20C0F3]/90 to-[#20C0F3]/70 h-24 sm:h-32 relative">
+                <div className="absolute -bottom-12 sm:-bottom-16 left-4 sm:left-8">
                   <FallbackAvatar
                     src={profile.avatarUrl}
                     name={profile.fullName}
-                    className="h-32 w-32 border-4 border-white shadow-md"
+                    className="h-24 w-24 sm:h-32 sm:w-32 border-4 border-white shadow-md"
                   />
                 </div>
               </div>
-              <CardContent className="pt-20 pb-6 px-8">
-                <div className="flex flex-col md:flex-row md:justify-between md:items-end">
+              <CardContent className="pt-16 sm:pt-20 pb-6 px-4 sm:px-8">
+                <div className="flex flex-col sm:flex-row sm:justify-between sm:items-end gap-4">
                   <div>
                     <h2 className="text-2xl font-bold">
                       {profile.fullName}
@@ -173,7 +174,7 @@ export default function Profile() {
                       </Badge>
                     </div>
                   </div>
-                  <div className="mt-4 md:mt-0">
+                  <div className="mt-4 sm:mt-0">
                     <p className="text-sm text-muted-foreground flex items-center">
                       <Clock className="h-4 w-4 mr-1" />
                       Member since {format(new Date(profile.createdAt), 'MMMM yyyy')}
@@ -181,7 +182,7 @@ export default function Profile() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-8">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6 mt-8">
                   <div className="flex items-center gap-3 p-4 rounded-lg bg-slate-50 hover:bg-slate-100 transition-colors">
                     <div className="bg-[#20C0F3]/10 p-2 rounded-full">
                       <Mail className="h-5 w-5 text-[#20C0F3]" />
@@ -247,22 +248,22 @@ export default function Profile() {
 
             {/* Tabs for various profile sections */}
             <Tabs defaultValue={activeTab} onValueChange={setActiveTab} className="space-y-6">
-              <TabsList className="bg-slate-100 p-1">
-                <TabsTrigger value="personal" className="rounded-md data-[state=active]:bg-white">
-                  <User className="h-4 w-4 mr-2" />
-                  Personal Details
+              <TabsList className="bg-slate-100 p-1 w-full grid grid-cols-2 md:grid-cols-4 h-auto">
+                <TabsTrigger value="personal" className="rounded-md data-[state=active]:bg-white flex-col sm:flex-row p-2 h-auto">
+                  <User className="h-4 w-4 mb-1 sm:mb-0 sm:mr-2" />
+                  <span className="text-xs sm:text-sm">Personal</span>
                 </TabsTrigger>
-                <TabsTrigger value="address" className="rounded-md data-[state=active]:bg-white">
-                  <Home className="h-4 w-4 mr-2" />
-                  Address
+                <TabsTrigger value="address" className="rounded-md data-[state=active]:bg-white flex-col sm:flex-row p-2 h-auto">
+                  <Home className="h-4 w-4 mb-1 sm:mb-0 sm:mr-2" />
+                  <span className="text-xs sm:text-sm">Address</span>
                 </TabsTrigger>
-                <TabsTrigger value="account" className="rounded-md data-[state=active]:bg-white">
-                  <Shield className="h-4 w-4 mr-2" />
-                  Account
+                <TabsTrigger value="account" className="rounded-md data-[state=active]:bg-white flex-col sm:flex-row p-2 h-auto">
+                  <Shield className="h-4 w-4 mb-1 sm:mb-0 sm:mr-2" />
+                  <span className="text-xs sm:text-sm">Account</span>
                 </TabsTrigger>
-                <TabsTrigger value="privacy" className="rounded-md data-[state=active]:bg-white">
-                  <Key className="h-4 w-4 mr-2" />
-                  Privacy
+                <TabsTrigger value="privacy" className="rounded-md data-[state=active]:bg-white flex-col sm:flex-row p-2 h-auto">
+                  <Key className="h-4 w-4 mb-1 sm:mb-0 sm:mr-2" />
+                  <span className="text-xs sm:text-sm">Privacy</span>
                 </TabsTrigger>
               </TabsList>
 
@@ -287,7 +288,7 @@ export default function Profile() {
                     </div>
                   </CardHeader>
                   <CardContent className="p-6">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 md:gap-6">
                       <div>
                         <p className="text-sm text-muted-foreground">Full Name</p>
                         <p className="font-medium">{profile.fullName}</p>

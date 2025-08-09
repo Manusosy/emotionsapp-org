@@ -157,19 +157,19 @@ export default function HelpCenterPage() {
   return (
     <DashboardLayout>
       <div className="p-6 space-y-6">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <h1 className="text-2xl font-semibold">Help Center</h1>
             <p className="text-slate-500">
               Find answers, get support, and resolve issues
             </p>
           </div>
-          <form onSubmit={handleSearch} className="relative w-full md:w-auto">
+          <form onSubmit={handleSearch} className="relative w-full sm:w-auto">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400" />
             <Input
               type="search"
               placeholder="Search for help..."
-              className="pl-10 pr-4 w-full md:w-[300px]"
+              className="pl-10 pr-4 w-full sm:w-[250px] md:w-[300px]"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
             />
@@ -177,11 +177,17 @@ export default function HelpCenterPage() {
         </div>
 
         <Tabs defaultValue={activeTab} value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="mb-6">
-            <TabsTrigger value="overview">Overview</TabsTrigger>
-            <TabsTrigger value="faqs">FAQs</TabsTrigger>
-            <TabsTrigger value="contact">Contact Support</TabsTrigger>
-            <TabsTrigger value="knowledgeBase">Knowledge Base</TabsTrigger>
+          <TabsList className="mb-6 grid grid-cols-2 sm:grid-cols-4 w-full sm:w-auto">
+            <TabsTrigger value="overview" className="text-xs sm:text-sm">Overview</TabsTrigger>
+            <TabsTrigger value="faqs" className="text-xs sm:text-sm">FAQs</TabsTrigger>
+            <TabsTrigger value="contact" className="text-xs sm:text-sm">
+              <span className="hidden sm:inline">Contact Support</span>
+              <span className="sm:hidden">Contact</span>
+            </TabsTrigger>
+            <TabsTrigger value="knowledgeBase" className="text-xs sm:text-sm">
+              <span className="hidden sm:inline">Knowledge Base</span>
+              <span className="sm:hidden">KB</span>
+            </TabsTrigger>
           </TabsList>
 
           {/* Overview Tab */}
@@ -193,7 +199,7 @@ export default function HelpCenterPage() {
                 <CardDescription>Shortcuts to helpful resources in your dashboard</CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                   {quickLinks.map((link, index) => (
                     <Card key={index} className="hover:shadow-md transition cursor-pointer">
                       <CardContent className="p-4 flex items-start space-x-4">
@@ -247,7 +253,7 @@ export default function HelpCenterPage() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                   {/* Contact Information */}
                   <div className="space-y-4">
                     <p className="text-sm text-slate-600">
@@ -333,7 +339,7 @@ export default function HelpCenterPage() {
 
           {/* Contact Support Tab */}
           <TabsContent value="contact" className="space-y-8">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {/* Contact Support Info */}
               <Card>
                 <CardHeader>
@@ -444,7 +450,7 @@ export default function HelpCenterPage() {
 
           {/* Knowledge Base Tab */}
           <TabsContent value="knowledgeBase" className="space-y-8">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
               {knowledgeBase.map((category, index) => (
                 <Card key={index}>
                   <CardHeader className="pb-3">

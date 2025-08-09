@@ -75,7 +75,7 @@ interface Appointment {
   status: string;
   notes?: string;
   meeting_link?: string;
-  meeting_type: 'video' | 'audio' | 'chat';
+  meeting_type: 'video' | 'audio';
   patient?: {
     id: string;
     name: string;
@@ -103,7 +103,7 @@ interface AppointmentDisplay {
   notes?: string;
   start_time: string;
   end_time: string;
-  meeting_type: 'video' | 'audio' | 'chat';
+  meeting_type: 'video' | 'audio';
   created_at: string;
   updated_at: string;
 }
@@ -227,7 +227,7 @@ export default function AppointmentsPage() {
         },
         start_time: appointment.start_time,
         end_time: appointment.end_time,
-        meeting_type: appointment.meeting_type as 'video' | 'audio' | 'chat',
+        meeting_type: appointment.meeting_type as 'video' | 'audio',
         created_at: appointment.created_at,
         updated_at: appointment.updated_at
       } as AppointmentDisplay));

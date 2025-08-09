@@ -46,7 +46,6 @@ export const patientNavigation: NavigationSection[] = [
     section: "Account",
     items: [
       { name: "Profile", href: "/patient-dashboard/profile", icon: User },
-      { name: "Favorites", href: "/patient-dashboard/favorites", icon: Heart },
       { name: "Settings", href: "/patient-dashboard/settings", icon: Settings },
       { name: "Help Center", href: "/patient-dashboard/help", icon: BadgeHelp },
     ]

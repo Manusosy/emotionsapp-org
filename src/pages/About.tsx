@@ -27,14 +27,14 @@ const About = () => {
   return (
     <div className="min-h-screen bg-white">
       {/* Hero Section */}
-      <section className="bg-blue-500 py-16 relative">
+      <section className="bg-blue-500 py-8 md:py-16 relative">
         <div className="container mx-auto px-4">
           <div className="flex flex-col md:flex-row items-center justify-between gap-8">
             <motion.div 
               initial={{ opacity: 0, y: -20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.6 }}
-              className="max-w-2xl text-center md:text-left"
+              className="max-w-2xl text-center md:text-left px-4 md:px-0"
             >
               <span className="inline-block px-4 py-1 bg-blue-400 text-white text-sm font-medium rounded-full mb-4">
                 About Us

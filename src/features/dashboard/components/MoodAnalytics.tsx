@@ -390,7 +390,7 @@ export default function MoodAnalytics({ timeRange = 'week' }: MoodAnalyticsProps
       {isLoading ? (
         <div className="space-y-4">
           <Skeleton className="h-[200px] w-full" />
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Skeleton className="h-[120px] w-full" />
             <Skeleton className="h-[120px] w-full" />
           </div>
@@ -449,7 +449,7 @@ export default function MoodAnalytics({ timeRange = 'week' }: MoodAnalyticsProps
           </Card>
 
           {/* Stats Grid */}
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Card>
               <CardHeader>
                 <CardTitle className="text-sm font-medium">Overview</CardTitle>

@@ -139,7 +139,7 @@ interface AppointmentWithMentor {
   status: string;
   notes?: string;
   meeting_link?: string;
-  meeting_type: 'video' | 'audio' | 'chat';
+  meeting_type: 'video' | 'audio';
   mentor?: {
     id: string;
     name: string;
@@ -976,8 +976,9 @@ export default function AppointmentsPage() {
         
         <div className="bg-white rounded-lg border shadow-sm p-6">
           {/* Search and filters */}
-          <div className="flex flex-col md:flex-row gap-4 mb-6">
-            <div className="relative flex-grow">
+          <div className="flex flex-col gap-4 mb-6">
+            {/* Search Bar */}
+            <div className="relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
               <Input 
                 placeholder="Search by mentor name, specialty..." 
@@ -985,13 +986,15 @@ export default function AppointmentsPage() {
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
               />
-        </div>
-            <div className="flex gap-4">
+            </div>
+            
+            {/* Filter Controls */}
+            <div className="flex flex-col sm:flex-row gap-3">
               <Select 
                 value={activeTab} 
                 onValueChange={(value) => setActiveTab(value)}
               >
-                <SelectTrigger className="w-[160px]">
+                <SelectTrigger className="w-full sm:w-[160px]">
                   <SelectValue placeholder="All Status" />
                 </SelectTrigger>
                 <SelectContent>
@@ -1002,7 +1005,7 @@ export default function AppointmentsPage() {
               </Select>
               
               <Select>
-                <SelectTrigger className="w-[160px]">
+                <SelectTrigger className="w-full sm:w-[160px]">
                   <SelectValue placeholder="All Time" />
                 </SelectTrigger>
                 <SelectContent>
@@ -1016,10 +1019,11 @@ export default function AppointmentsPage() {
                 <DropdownMenuTrigger asChild>
                   <Button 
                     variant="outline" 
-                    className="flex items-center gap-2 text-blue-600 border-blue-200 hover:bg-blue-50"
+                    className="w-full sm:w-auto flex items-center justify-center gap-2 text-blue-600 border-blue-200 hover:bg-blue-50"
                   >
                     <Download className="h-4 w-4" />
-                    Export
+                    <span className="hidden sm:inline">Export</span>
+                    <span className="sm:hidden">Export Data</span>
                     <ChevronDown className="h-4 w-4 ml-1" />
                   </Button>
                 </DropdownMenuTrigger>
@@ -1037,6 +1041,219 @@ export default function AppointmentsPage() {
             </div>
           </div>
           
+          {/* Mobile Card View */}
+          <div className="block md:hidden space-y-4">
+            {loading ? (
+              Array(3).fill(null).map((_, i) => (
+                <Card key={`mobile-skeleton-${i}`} className="animate-pulse">
+                  <CardContent className="p-4">
+                    <div className="flex items-center gap-3 mb-3">
+                      <div className="w-12 h-12 rounded-full bg-gray-200"></div>
+                      <div className="flex-1 space-y-2">
+                        <div className="h-4 bg-gray-200 rounded w-3/4"></div>
+                        <div className="h-3 bg-gray-200 rounded w-1/2"></div>
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <div className="h-3 bg-gray-200 rounded w-1/2"></div>
+                      <div className="h-6 bg-gray-200 rounded w-1/3"></div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))
+            ) : appointments
+              .filter(appt => {
+                const matchesTab = 
+                  activeTab === "upcoming" ? (appt.status === "pending" || appt.status === "scheduled" || appt.status === "confirmed") :
+                  activeTab === "completed" ? appt.status === "completed" :
+                  activeTab === "cancelled" ? appt.status === "cancelled" :
+                  true;
+                
+                const matchesSearch = searchTerm === "" || 
+                  (appt.mentor?.name?.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                   appt.mentor?.specialty?.toLowerCase().includes(searchTerm.toLowerCase()));
+                
+                return matchesTab && matchesSearch;
+              }).length === 0 ? (
+                <Card className="text-center py-12">
+                  <CardContent>
+                    <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-blue-100 mb-4">
+                      {activeTab === "upcoming" && <Calendar className="h-6 w-6 text-blue-600" />}
+                      {activeTab === "completed" && <CheckCircle2 className="h-6 w-6 text-blue-600" />}
+                      {activeTab === "cancelled" && <X className="h-6 w-6 text-blue-600" />}
+                    </div>
+                    <h3 className="text-lg font-medium mb-2">No {activeTab} appointments</h3>
+                    <p className="text-gray-500 mb-6">
+                      {activeTab === "upcoming" 
+                        ? "You don't have any upcoming appointments scheduled. Book an appointment with one of our mentors."
+                        : activeTab === "cancelled" 
+                        ? "You don't have any cancelled appointments."
+                        : "You don't have any completed appointments yet."}
+                    </p>
+                    {activeTab === "upcoming" && (
+                      <Button 
+                        onClick={() => {
+                          const mentorsSection = document.getElementById('mood-mentors-section');
+                          if (mentorsSection) {
+                            mentorsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                          }
+                        }}
+                        className="bg-blue-600 hover:bg-blue-700 text-white"
+                      >
+                        <CalendarPlus className="mr-2 h-4 w-4" />
+                        Book Appointment
+                      </Button>
+                    )}
+                  </CardContent>
+                </Card>
+              ) : (
+                appointments
+                  .filter(appt => {
+                    const matchesTab = 
+                      activeTab === "upcoming" ? (appt.status === "pending" || appt.status === "scheduled" || appt.status === "confirmed") :
+                      activeTab === "completed" ? appt.status === "completed" :
+                      activeTab === "cancelled" ? appt.status === "cancelled" :
+                      true;
+                    
+                    const matchesSearch = searchTerm === "" || 
+                      (appt.mentor?.name?.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                       appt.mentor?.specialty?.toLowerCase().includes(searchTerm.toLowerCase()));
+                    
+                    return matchesTab && matchesSearch;
+                  })
+                  .map((appointment) => (
+                    <Card key={appointment.id} className="hover:shadow-md transition-shadow">
+                      <CardContent className="p-4">
+                        <div className="flex items-start justify-between mb-3">
+                          <div className="flex items-center gap-3 min-w-0 flex-1">
+                            <Avatar className="h-12 w-12 flex-shrink-0">
+                              <AvatarImage src={appointment.mentor?.avatar} alt={appointment.mentor?.name || "Mentor"} />
+                              <AvatarFallback className="bg-blue-100 text-blue-600">
+                                {appointment.mentor?.name?.charAt(0) || "M"}
+                              </AvatarFallback>
+                            </Avatar>
+                            <div className="min-w-0 flex-1">
+                              <div className="font-medium text-gray-900 truncate">{appointment.mentor?.name || "Mood Mentor"}</div>
+                              <div className="text-sm text-gray-500 truncate">{appointment.mentor?.specialty || "Mental Health Support"}</div>
+                            </div>
+                          </div>
+                          {getStatusBadge(appointment.status)}
+                        </div>
+                        
+                        <div className="grid grid-cols-2 gap-3 mb-4 text-sm">
+                          <div>
+                            <div className="text-xs text-gray-500 uppercase tracking-wide font-medium">Date</div>
+                            <div className="text-gray-900 font-medium">{appointment.date}</div>
+                          </div>
+                          <div>
+                            <div className="text-xs text-gray-500 uppercase tracking-wide font-medium">Time</div>
+                            <div className="text-gray-900 font-medium">{appointment.time}</div>
+                          </div>
+                        </div>
+                        
+                        <div className="mb-4">
+                          <div className="text-xs text-gray-500 uppercase tracking-wide font-medium mb-1">Type</div>
+                          <div className="flex items-center text-gray-900">
+                            {appointment.type === "video" && <Video className="mr-2 h-4 w-4 text-blue-600" />}
+                            {appointment.type === "audio" && <Phone className="mr-2 h-4 w-4 text-blue-600" />}
+                            {appointment.type === "chat" && <MessageSquare className="mr-2 h-4 w-4 text-blue-600" />}
+                            <span className="font-medium">{appointment.type.charAt(0).toUpperCase() + appointment.type.slice(1)}</span>
+                          </div>
+                        </div>
+                        
+                        <div className="flex flex-wrap gap-2">
+                          {appointment.status === "completed" && !appointment.isReviewed && (
+                            <Button 
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                setSelectedAppointmentForReview({
+                                  id: appointment.id,
+                                  mentorId: appointment.mentor?.id || "",
+                                  mentorName: appointment.mentor?.name || "Mood Mentor"
+                                });
+                                setIsReviewModalOpen(true);
+                              }}
+                              className="text-blue-600 border-blue-200 hover:bg-blue-50 flex-1 sm:flex-none"
+                            >
+                              <Star className="mr-1.5 h-3.5 w-3.5" />
+                              Review
+                            </Button>
+                          )}
+                          
+                          {appointment.status === "completed" && (
+                            <>
+                              <Button 
+                                variant="outline"
+                                size="sm"
+                                onClick={() => exportSingleAppointmentToPDF(appointment)}
+                                className="text-gray-600 border-gray-200 hover:bg-gray-50 flex-1 sm:flex-none"
+                              >
+                                <FileDown className="mr-1.5 h-3.5 w-3.5" />
+                                Export
+                              </Button>
+                              <Button
+                                size="sm"
+                                onClick={() => navigate('/booking', {
+                                  state: {
+                                    mentorId: appointment.mentor_id,
+                                    mentorName: appointment.mentor?.name,
+                                    specialty: appointment.mentor?.specialty,
+                                    preselectedMentor: true
+                                  }
+                                })}
+                                className="bg-blue-600 hover:bg-blue-700 text-white flex-1 sm:flex-none"
+                              >
+                                <CalendarPlus className="mr-1.5 h-3.5 w-3.5" />
+                                Book Again
+                              </Button>
+                            </>
+                          )}
+                          
+                          {(appointment.status === "pending" || appointment.status === "scheduled") && (
+                            <>
+                              <Button
+                                variant="outline" 
+                                size="sm"
+                                onClick={() => setCancelAppointmentId(appointment.id)}
+                                className="text-red-600 border-red-200 hover:bg-red-50 flex-1 sm:flex-none"
+                              >
+                                <X className="mr-1.5 h-3.5 w-3.5" />
+                                Cancel
+                              </Button>
+                              
+                              {canJoinSession(appointment) ? (
+                                                              <Button 
+                                size="sm"
+                                onClick={() => handleJoinSession(appointment)}
+                                className="bg-green-600 hover:bg-green-700 text-white flex-1 sm:flex-none"
+                                aria-label={`Join ${appointment.type} session with ${appointment.mentor?.name}`}
+                              >
+                                  {appointment.type === "video" && <Video className="mr-1.5 h-3.5 w-3.5" />}
+                                  {appointment.type === "audio" && <Phone className="mr-1.5 h-3.5 w-3.5" />}
+                                  Join
+                                </Button>
+                              ) : (
+                                <Button 
+                                  size="sm"
+                                  disabled
+                                  className="bg-gray-200 text-gray-600 cursor-not-allowed flex-1 sm:flex-none"
+                                >
+                                  <Clock className="mr-1.5 h-3.5 w-3.5" />
+                                  Waiting
+                                </Button>
+                              )}
+                            </>
+                          )}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))
+              )}
+          </div>
+
+          {/* Desktop Table View */}
+          <div className="hidden md:block">
           {/* Table */}
             <div className="overflow-x-auto">
               <table className="w-full">
@@ -1248,6 +1465,7 @@ export default function AppointmentsPage() {
                 )}
                 </tbody>
               </table>
+            </div>
           </div>
         </div>
         
@@ -1304,20 +1522,20 @@ export default function AppointmentsPage() {
               </CardContent>
             </Card>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
               {moodMentors.map((mentor) => (
                 <Card key={mentor.id} className="border border-gray-100 shadow-sm hover:shadow transition-shadow">
-                  <CardContent className="p-6">
-                    <div className="flex items-center space-x-4 mb-4">
-                      <Avatar className="h-12 w-12 border border-gray-100">
+                  <CardContent className="p-4 md:p-6">
+                    <div className="flex items-center space-x-3 md:space-x-4 mb-3 md:mb-4">
+                      <Avatar className="h-10 w-10 md:h-12 md:w-12 border border-gray-100 flex-shrink-0">
                         <AvatarImage src={mentor.avatar} alt={mentor.name} />
                         <AvatarFallback className="bg-blue-100 text-blue-600">
                           {mentor.name.charAt(0)}
                         </AvatarFallback>
                       </Avatar>
-                      <div>
-                        <h3 className="font-medium text-gray-900">{mentor.name}</h3>
-                        <p className="text-sm text-gray-500">{mentor.specialty}</p>
+                      <div className="min-w-0">
+                        <h3 className="font-medium text-gray-900 truncate">{mentor.name}</h3>
+                        <p className="text-sm text-gray-500 truncate">{mentor.specialty}</p>
                       </div>
                     </div>
                     
@@ -1327,7 +1545,7 @@ export default function AppointmentsPage() {
                           {Array.from({ length: 5 }).map((_, i) => (
                             <Star
                               key={i}
-                              className={`h-3.5 w-3.5 ${
+                              className={`h-3 w-3 md:h-3.5 md:w-3.5 ${
                                 i < Math.floor(mentor.rating || 0)
                                   ? "text-yellow-400 fill-yellow-400"
                                   : "text-gray-300"
@@ -1346,7 +1564,7 @@ export default function AppointmentsPage() {
                       {mentor.bio || `${mentor.name} is a mental health specialist with expertise in ${mentor.specialty}.`}
                     </p>
                     
-                    <div className="flex gap-2">
+                    <div className="flex flex-col sm:flex-row gap-2">
                       <BookingButton 
                         moodMentorId={mentor.id}
                         moodMentorName={mentor.name}
@@ -1354,13 +1572,13 @@ export default function AppointmentsPage() {
                         className="flex-1 bg-blue-600 hover:bg-blue-700 text-white"
                         buttonText="Book Session"
                       />
-                <Button 
+                      <Button 
                         variant="outline" 
-                        className="border-blue-200 text-blue-600 hover:bg-blue-50"
+                        className="flex-1 sm:flex-none border-blue-200 text-blue-600 hover:bg-blue-50"
                         onClick={() => handleViewMentorProfile(mentor.id)}
-                >
+                      >
                         Profile
-                </Button>
+                      </Button>
                     </div>
                   </CardContent>
                 </Card>
