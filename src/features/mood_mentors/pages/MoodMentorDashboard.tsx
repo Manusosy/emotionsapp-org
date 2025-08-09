@@ -899,7 +899,7 @@ export default function MoodMentorDashboard() {
         
         {/* Stats Section */}
         <section>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {stats.map((stat, index) => (
               <Card key={index}>
                 <CardContent className="py-4">
@@ -991,14 +991,14 @@ export default function MoodMentorDashboard() {
                         </div>
                         
                         {/* Action buttons */}
-                        <div className="flex justify-end gap-2 mt-3 pt-3 border-t border-gray-100" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex flex-col sm:flex-row justify-end gap-2 mt-3 pt-3 border-t border-gray-100" onClick={(e) => e.stopPropagation()}>
                           <ChatButton
                             userId={user?.id || ''}
                             targetUserId={appointment.patient_id}
                             userRole="mood_mentor"
                             variant="outline"
                             size="sm"
-                            className="h-8 px-3 rounded-full"
+                            className="h-8 px-3 rounded-full w-full sm:w-auto"
                           />
                           
                           <DropdownMenu>
@@ -1006,7 +1006,7 @@ export default function MoodMentorDashboard() {
                               <Button 
                                 variant="outline"
                                 size="sm" 
-                                className="h-8 px-3 rounded-full"
+                                className="h-8 px-3 rounded-full w-full sm:w-auto"
                                 onClick={(e) => e.stopPropagation()}
                               >
                                 <MoreVertical className="h-3.5 w-3.5" />
@@ -1030,7 +1030,7 @@ export default function MoodMentorDashboard() {
                           
                           <Button 
                             size="sm" 
-                            className={`h-8 px-3 rounded-full ${
+                            className={`h-8 px-3 rounded-full w-full sm:w-auto ${
                               isAppointmentStartingSoon(appointment.time, appointment.date)
                               ? 'bg-green-600 hover:bg-green-700'
                               : 'bg-blue-600 hover:bg-blue-700'
@@ -1189,7 +1189,7 @@ export default function MoodMentorDashboard() {
         </div>
         
         {/* Second row for support groups */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 mt-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-4">
           <Card 
             className="hover:shadow-md transition-all cursor-pointer" 
             onClick={() => navigate('/mood-mentor-dashboard/groups')}

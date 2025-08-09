@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { 
   Search, 
   BookOpen, 
@@ -25,7 +26,9 @@ import {
   Loader2,
   Filter,
   Grid3x3,
-  List
+  List,
+  X,
+  ArrowLeft
 } from "lucide-react";
 import { useAuth } from "@/contexts/authContext";
 import { dataService } from "@/services";
@@ -69,6 +72,10 @@ export default function ResourcesPage() {
   const [savedResources, setSavedResources] = useState<string[]>([]);
   const [hoveredResourceId, setHoveredResourceId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  
+  // Resource viewer state
+  const [viewingResource, setViewingResource] = useState<Resource | null>(null);
+  const [showResourceViewer, setShowResourceViewer] = useState(false);
 
   useEffect(() => {
     loadResources();
@@ -98,143 +105,89 @@ export default function ResourcesPage() {
       // Only set resources if we got data back from the database
       setResources(data || []);
       
-      // Update savedResources state based on favorites
-      if (data) {
-        const favoriteIds = data
-          .filter((resource: Resource) => resource.is_favorite)
-          .map((resource: Resource) => resource.id);
-        setSavedResources(favoriteIds);
-      }
+      // Extract saved resource IDs
+      const saved = (data || [])
+        .filter((res: Resource) => res.is_favorite)
+        .map((res: Resource) => res.id);
+      setSavedResources(saved);
+      
     } catch (error) {
-      console.error('Error:', error);
-      toast.error('Failed to load resources');
+      console.error('Unexpected error loading resources:', error);
+      toast.error('Unexpected error loading resources');
     } finally {
       setIsLoading(false);
     }
   };
 
-  // Filter resources based on search and active tab
-  const filteredResources = resources.filter((resource: Resource) => {
-    // Check if search query matches
+  // Filter resources based on active tab and search query
+  const filteredResources = resources.filter(resource => {
+    const matchesTab = 
+      activeTab === "all" ? true :
+      activeTab === "saved" ? resource.is_favorite :
+      activeTab === resource.type;
+    
     const matchesSearch = searchQuery === "" || 
       resource.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
       resource.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      resource.tags?.some(tag => tag.toLowerCase().includes(searchQuery.toLowerCase())) ||
+      resource.category.toLowerCase().includes(searchQuery.toLowerCase()) ||
       resource.author.toLowerCase().includes(searchQuery.toLowerCase());
     
-    // Check if tab matches
-    const matchesTab = activeTab === "all" || 
-      (activeTab === "articles" && resource.type === "article") ||
-      (activeTab === "videos" && resource.type === "video") ||
-      (activeTab === "podcasts" && resource.type === "podcast") ||
-      (activeTab === "groups" && resource.type === "group") ||
-      (activeTab === "workshops" && resource.type === "workshop") ||
-      (activeTab === "documents" && resource.type === "document") ||
-      (activeTab === "saved" && resource.is_favorite);
-    
-    return matchesSearch && matchesTab;
+    return matchesTab && matchesSearch;
   });
 
-  // Get featured resources
-  const featuredResources = resources.filter((resource: Resource) => resource.featured);
-
-  const handleSearch = (e: React.FormEvent) => {
-    e.preventDefault();
-    // Search is already applied through the filter
-  };
-
-  const handleSaveResource = useCallback(async (resourceId: string, e?: React.MouseEvent) => {
-    if (e) {
-      e.stopPropagation(); // Prevent triggering parent click events
-    }
+  const handleBookmark = useCallback(async (resourceId: string, event: React.MouseEvent) => {
+    event.stopPropagation();
     
     if (!user) {
       toast.error("Please sign in to save resources");
       return;
     }
-    
+
     try {
-      const isFavorite = savedResources.includes(resourceId);
+      const isCurrentlySaved = savedResources.includes(resourceId);
       
-      if (isFavorite) {
-        // Remove from favorites
-        const { error } = await supabase
-          .from('resource_favorites')
-          .delete()
-          .eq('user_id', user.id)
-          .eq('resource_id', resourceId);
-          
-        if (error) throw error;
-        
+      if (isCurrentlySaved) {
+        await resourceService.removeFromFavorites(resourceId, user.id);
         setSavedResources(prev => prev.filter(id => id !== resourceId));
-        
-        // Update the resource in the local state
-        setResources(prev => 
-          prev.map(resource => 
-            resource.id === resourceId 
-              ? { ...resource, is_favorite: false } 
-              : resource
-          )
-        );
-        
-        toast.success("Resource removed from your saved items");
+        setResources(prev => prev.map(res => 
+          res.id === resourceId ? { ...res, is_favorite: false } : res
+        ));
+        toast.success("Removed from saved resources");
       } else {
-        // Add to favorites
-        const { error } = await supabase
-          .from('resource_favorites')
-          .insert({
-            user_id: user.id,
-            resource_id: resourceId
-          });
-          
-        if (error) throw error;
-        
+        await resourceService.addToFavorites(resourceId, user.id);
         setSavedResources(prev => [...prev, resourceId]);
-        
-        // Update the resource in the local state
-        setResources(prev => 
-          prev.map(resource => 
-            resource.id === resourceId 
-              ? { ...resource, is_favorite: true } 
-              : resource
-          )
-        );
-        
-        toast.success("Resource saved to your collection");
+        setResources(prev => prev.map(res => 
+          res.id === resourceId ? { ...res, is_favorite: true } : res
+        ));
+        toast.success("Added to saved resources");
       }
     } catch (error) {
-      console.error('Error saving resource:', error);
+      console.error("Failed to toggle bookmark", error);
       toast.error("Failed to update saved resources");
     }
   }, [savedResources, user]);
 
-  const handleShareResource = useCallback(async (resource: Resource, e?: React.MouseEvent) => {
-    if (e) {
-      e.stopPropagation(); // Prevent triggering parent click events
-    }
+  const handleShare = useCallback(async (resource: Resource, event: React.MouseEvent) => {
+    event.stopPropagation();
     
     try {
       // Track share analytics
       await resourceService.trackShare(
         resource.id,
-        'link',
         user?.id,
-        window.location.hostname
+        window.location.hostname,
+        navigator.userAgent
       );
 
-      const shareUrl = resource.file_url || resource.url;
-      
-      // Try to use the native share API if available
       if (navigator.share) {
         await navigator.share({
           title: resource.title,
           text: resource.description,
-          url: shareUrl
+          url: window.location.href
         });
       } else {
-        // Fallback to copying to clipboard
-        await navigator.clipboard.writeText(`Check out this resource: ${resource.title} - ${shareUrl}`);
-        toast("Resource link copied to clipboard");
+        await navigator.clipboard.writeText(window.location.href);
+        toast.success("Resource link copied to clipboard");
       }
     } catch (error) {
       console.error("Failed to share resource", error);
@@ -242,10 +195,8 @@ export default function ResourcesPage() {
     }
   }, [user]);
 
-  const handleDownloadResource = useCallback(async (resource: Resource, e?: React.MouseEvent) => {
-    if (e) {
-      e.stopPropagation(); // Prevent triggering parent click events
-    }
+  const handleDownload = useCallback(async (resource: Resource, event: React.MouseEvent) => {
+    event.stopPropagation();
     
     try {
       const downloadUrl = resource.file_url || resource.url;
@@ -272,6 +223,27 @@ export default function ResourcesPage() {
     }
   }, [user]);
 
+  // Convert YouTube/Vimeo URLs to embeddable format
+  const getEmbedUrl = (url: string): string => {
+    // YouTube
+    if (url.includes('youtube.com/watch')) {
+      const videoId = url.split('v=')[1]?.split('&')[0];
+      return `https://www.youtube.com/embed/${videoId}`;
+    }
+    if (url.includes('youtu.be/')) {
+      const videoId = url.split('youtu.be/')[1]?.split('?')[0];
+      return `https://www.youtube.com/embed/${videoId}`;
+    }
+    
+    // Vimeo
+    if (url.includes('vimeo.com/')) {
+      const videoId = url.split('vimeo.com/')[1]?.split('?')[0];
+      return `https://player.vimeo.com/video/${videoId}`;
+    }
+    
+    return url;
+  };
+
   const handleResourceClick = useCallback(async (resource: Resource) => {
     try {
       const accessUrl = resource.file_url || resource.url;
@@ -290,17 +262,19 @@ export default function ResourcesPage() {
         0
       );
 
-      // Navigate to the resource
-      if (accessUrl.startsWith('http')) {
-        window.open(accessUrl, "_blank");
-      } else {
-        navigate(accessUrl);
-      }
+      // Open in-app viewer instead of external navigation
+      setViewingResource(resource);
+      setShowResourceViewer(true);
     } catch (error) {
       console.error("Failed to access resource", error);
       toast.error("Failed to access resource");
     }
-  }, [navigate, user]);
+  }, [user]);
+
+  const handleCloseViewer = () => {
+    setShowResourceViewer(false);
+    setViewingResource(null);
+  };
 
   // Get the icon for the resource type
   const getResourceIcon = (type: string) => {
@@ -359,7 +333,7 @@ export default function ResourcesPage() {
     </div>
   );
 
-  // Resource grid component
+  // Resource grid component - FIXED RESPONSIVENESS
   const ResourceGrid = () => (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
       {filteredResources.map(resource => (
@@ -401,70 +375,65 @@ export default function ResourcesPage() {
           </CardHeader>
           
           <CardContent className="pb-2">
-            <p className="text-gray-600 text-sm line-clamp-3 mb-3">{resource.description}</p>
+            <p className="text-gray-600 text-sm line-clamp-3 mb-3">
+              {resource.description}
+            </p>
             
-            {resource.tags && resource.tags.length > 0 && (
-              <div className="flex flex-wrap gap-1 mb-3">
-                {resource.tags.slice(0, 3).map(tag => (
-                  <Badge key={tag} variant="outline" className="text-xs">
-                    {tag}
-                  </Badge>
-                ))}
-                {resource.tags.length > 3 && (
-                  <Badge variant="outline" className="text-xs">
-                    +{resource.tags.length - 3} more
-                  </Badge>
-                )}
+            <div className="flex items-center gap-2 mb-3">
+              <Avatar className="h-6 w-6">
+                <AvatarImage src={resource.author_avatar} />
+                <AvatarFallback className="text-xs">
+                  {resource.author.split(' ').map(n => n[0]).join('')}
+                </AvatarFallback>
+              </Avatar>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-medium text-gray-900 truncate">{resource.author}</p>
+                <p className="text-xs text-gray-500 truncate">{resource.author_role || 'Mood Mentor'}</p>
               </div>
-            )}
+            </div>
           </CardContent>
           
-          <CardFooter className="border-t pt-3 flex justify-between items-center">
-            <div className="flex items-center text-sm text-gray-500">
-              {resource.author_avatar ? (
-                <Avatar className="h-6 w-6 mr-2">
-                  <AvatarImage src={resource.author_avatar} alt={resource.author} />
-                  <AvatarFallback>{resource.author.charAt(0)}</AvatarFallback>
-                </Avatar>
-              ) : (
-                <Avatar className="h-6 w-6 mr-2">
-                  <AvatarFallback>{resource.author.charAt(0)}</AvatarFallback>
-                </Avatar>
-              )}
-              <span className="truncate">{resource.author}</span>
-            </div>
-            
-            <div className="flex gap-1">
-              <Button 
-                variant="ghost" 
-                size="icon" 
-                className="h-8 w-8"
-                onClick={(e) => handleSaveResource(resource.id, e)}
-              >
-                {resource.is_favorite ? (
-                  <Bookmark className="h-4 w-4 fill-current text-blue-600" />
-                ) : (
-                  <BookmarkPlus className="h-4 w-4" />
-                )}
-              </Button>
-              <Button 
-                variant="ghost" 
-                size="icon" 
-                className="h-8 w-8"
-                onClick={(e) => handleShareResource(resource, e)}
-              >
-                <Share2 className="h-4 w-4" />
-              </Button>
-              {resource.file_url && (
-                <Button 
-                  variant="ghost" 
-                  size="icon" 
-                  className="h-8 w-8"
-                  onClick={(e) => handleDownloadResource(resource, e)}
+          <CardFooter className="pt-0">
+            <div className="flex items-center justify-between w-full">
+              <div className="flex items-center gap-1">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={(e) => handleBookmark(resource.id, e)}
+                  className="h-8 w-8 p-0"
                 >
-                  <Download className="h-4 w-4" />
+                  {savedResources.includes(resource.id) ? (
+                    <Bookmark className="h-4 w-4 fill-current text-blue-600" />
+                  ) : (
+                    <BookmarkPlus className="h-4 w-4" />
+                  )}
                 </Button>
-              )}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={(e) => handleShare(resource, e)}
+                  className="h-8 w-8 p-0"
+                >
+                  <Share2 className="h-4 w-4" />
+                </Button>
+                {(resource.file_url || resource.type === 'document') && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={(e) => handleDownload(resource, e)}
+                    className="h-8 w-8 p-0"
+                  >
+                    <Download className="h-4 w-4" />
+                  </Button>
+                )}
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-blue-600 hover:text-blue-700 p-0 h-8"
+              >
+                View <ChevronRight className="h-4 w-4 ml-1" />
+              </Button>
             </div>
           </CardFooter>
         </Card>
@@ -472,213 +441,212 @@ export default function ResourcesPage() {
     </div>
   );
 
-  // Resource list component
-  const ResourceList = () => (
-    <div className="space-y-4">
-      {filteredResources.map(resource => (
-        <Card 
-          key={resource.id} 
-          className="hover:shadow-md transition-shadow cursor-pointer"
-          onClick={() => handleResourceClick(resource)}
-        >
-          <div className="flex">
-            <div className="w-32 h-24 flex-shrink-0">
-              <img
-                src={resource.thumbnail_url || "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&h=150&fit=crop"}
-                alt={resource.title}
-                className="object-cover h-full w-full rounded-l-lg"
-                onError={(e) => {
-                  const target = e.target as HTMLImageElement;
-                  target.src = "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&h=150&fit=crop";
-                }}
+  return (
+    <DashboardLayout>
+      <div className="space-y-6">
+        {/* Header */}
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div>
+            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Resources</h1>
+            <p className="text-gray-600 mt-1">
+              Discover helpful content to support your mental health journey
+            </p>
+          </div>
+          
+          <div className="flex items-center gap-2 w-full sm:w-auto">
+            <div className="relative flex-1 sm:flex-none">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+              <Input
+                placeholder="Search resources..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-9 w-full sm:w-[250px] md:w-[300px]"
               />
             </div>
-            
-            <div className="flex-1 p-4">
-              <div className="flex justify-between items-start">
-                <div className="flex-1">
-                  <div className="flex items-center gap-2 mb-1">
-                    <Badge className={getCategoryColor(resource.type)}>
-                      <div className="flex items-center gap-1">
-                        {getResourceIcon(resource.type)}
-                        <span className="text-xs">{resource.type.charAt(0).toUpperCase() + resource.type.slice(1)}</span>
+            <Button
+              variant={viewMode === 'grid' ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => setViewMode('grid')}
+              className="hidden sm:flex"
+            >
+              <Grid3x3 className="h-4 w-4" />
+            </Button>
+            <Button
+              variant={viewMode === 'list' ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => setViewMode('list')}
+              className="hidden sm:flex"
+            >
+              <List className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+
+        {/* Tabs - FIXED RESPONSIVENESS */}
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+          <TabsList className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-7 w-full max-w-full overflow-x-auto">
+            <TabsTrigger value="all" className="text-xs sm:text-sm">All</TabsTrigger>
+            <TabsTrigger value="saved" className="text-xs sm:text-sm">Saved</TabsTrigger>
+            <TabsTrigger value="article" className="text-xs sm:text-sm">
+              <span className="hidden sm:inline">Articles</span>
+              <span className="sm:hidden">Art</span>
+            </TabsTrigger>
+            <TabsTrigger value="video" className="text-xs sm:text-sm">
+              <span className="hidden sm:inline">Videos</span>
+              <span className="sm:hidden">Vid</span>
+            </TabsTrigger>
+            <TabsTrigger value="podcast" className="text-xs sm:text-sm">
+              <span className="hidden sm:inline">Podcasts</span>
+              <span className="sm:hidden">Pod</span>
+            </TabsTrigger>
+            <TabsTrigger value="document" className="text-xs sm:text-sm">
+              <span className="hidden sm:inline">Documents</span>
+              <span className="sm:hidden">Doc</span>
+            </TabsTrigger>
+            <TabsTrigger value="workshop" className="text-xs sm:text-sm">
+              <span className="hidden sm:inline">Workshops</span>
+              <span className="sm:hidden">Work</span>
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value={activeTab} className="mt-6">
+            {isLoading ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
+                {[...Array(6)].map((_, i) => (
+                  <Card key={i} className="overflow-hidden">
+                    <div className="h-48 bg-gray-200 animate-pulse" />
+                    <CardHeader className="pb-2">
+                      <div className="h-4 bg-gray-200 rounded animate-pulse mb-2" />
+                      <div className="h-3 bg-gray-200 rounded animate-pulse w-2/3" />
+                    </CardHeader>
+                    <CardContent className="pb-2">
+                      <div className="space-y-2">
+                        <div className="h-3 bg-gray-200 rounded animate-pulse" />
+                        <div className="h-3 bg-gray-200 rounded animate-pulse w-3/4" />
                       </div>
-                    </Badge>
-                    {resource.featured && (
-                      <Badge className="bg-yellow-500 text-white text-xs">Featured</Badge>
-                    )}
-                  </div>
-                  
-                  <h3 className="font-medium text-lg mb-1 line-clamp-1">{resource.title}</h3>
-                  <p className="text-gray-600 text-sm line-clamp-2 mb-2">{resource.description}</p>
-                  
-                  <div className="flex items-center text-xs text-gray-500 gap-4">
-                    <div className="flex items-center">
-                      <Avatar className="h-4 w-4 mr-1">
-                        <AvatarImage src={resource.author_avatar} alt={resource.author} />
-                        <AvatarFallback className="text-xs">{resource.author.charAt(0)}</AvatarFallback>
-                      </Avatar>
-                      <span>{resource.author}</span>
-                    </div>
-                    <span>{resource.read_time || resource.duration}</span>
-                    <span>{resource.date || 'Recently added'}</span>
-                  </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            ) : filteredResources.length > 0 ? (
+              <ResourceGrid />
+            ) : (
+              <EmptyState />
+            )}
+          </TabsContent>
+        </Tabs>
+
+        {/* Resource Viewer Modal */}
+        <Dialog open={showResourceViewer} onOpenChange={setShowResourceViewer}>
+          <DialogContent className="max-w-4xl w-full h-[90vh] p-0">
+            <DialogHeader className="p-4 pb-2 border-b">
+              <div className="flex items-center justify-between">
+                <DialogTitle className="text-lg font-semibold truncate pr-4">
+                  {viewingResource?.title}
+                </DialogTitle>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleCloseViewer}
+                    className="h-8 w-8 p-0"
+                  >
+                    <ArrowLeft className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleCloseViewer}
+                    className="h-8 w-8 p-0"
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
                 </div>
-                
-                <div className="flex gap-1 ml-4">
-                  <Button 
-                    variant="ghost" 
-                    size="icon" 
-                    className="h-8 w-8"
-                    onClick={(e) => handleSaveResource(resource.id, e)}
+              </div>
+            </DialogHeader>
+            
+            <div className="flex-1 overflow-hidden">
+              {viewingResource && (
+                <div className="h-full w-full">
+                  {viewingResource.type === 'video' || viewingResource.url.includes('youtube') || viewingResource.url.includes('vimeo') ? (
+                    <iframe
+                      src={getEmbedUrl(viewingResource.file_url || viewingResource.url)}
+                      className="w-full h-full"
+                      frameBorder="0"
+                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                      allowFullScreen
+                    />
+                  ) : viewingResource.type === 'document' || viewingResource.url.includes('.pdf') ? (
+                    <iframe
+                      src={viewingResource.file_url || viewingResource.url}
+                      className="w-full h-full"
+                      frameBorder="0"
+                    />
+                  ) : viewingResource.type === 'article' && (viewingResource.url.includes('.jpg') || viewingResource.url.includes('.png') || viewingResource.url.includes('.gif')) ? (
+                    <div className="flex items-center justify-center h-full p-4">
+                      <img
+                        src={viewingResource.file_url || viewingResource.url}
+                        alt={viewingResource.title}
+                        className="max-w-full max-h-full object-contain"
+                      />
+                    </div>
+                  ) : (
+                    <iframe
+                      src={viewingResource.file_url || viewingResource.url}
+                      className="w-full h-full"
+                      frameBorder="0"
+                    />
+                  )}
+                </div>
+              )}
+            </div>
+            
+            <div className="p-4 border-t bg-gray-50">
+              <div className="flex items-center justify-between gap-4">
+                <div className="flex items-center gap-2 min-w-0 flex-1">
+                  <Badge className={getCategoryColor(viewingResource?.type || '')}>
+                    {viewingResource?.type?.charAt(0).toUpperCase()}{viewingResource?.type?.slice(1)}
+                  </Badge>
+                  <span className="text-sm text-gray-600 truncate">
+                    {viewingResource?.author} • {viewingResource?.read_time || viewingResource?.duration}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={(e) => viewingResource && handleShare(viewingResource, e)}
                   >
-                    {resource.is_favorite ? (
-                      <Bookmark className="h-4 w-4 fill-current text-blue-600" />
+                    <Share2 className="h-4 w-4 mr-1" />
+                    Share
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={(e) => viewingResource && handleBookmark(viewingResource.id, e)}
+                  >
+                    {viewingResource && savedResources.includes(viewingResource.id) ? (
+                      <Bookmark className="h-4 w-4 mr-1 fill-current" />
                     ) : (
-                      <BookmarkPlus className="h-4 w-4" />
+                      <BookmarkPlus className="h-4 w-4 mr-1" />
                     )}
+                    Save
                   </Button>
-                  <Button 
-                    variant="ghost" 
-                    size="icon" 
-                    className="h-8 w-8"
-                    onClick={(e) => handleShareResource(resource, e)}
-                  >
-                    <Share2 className="h-4 w-4" />
-                  </Button>
-                  {resource.file_url && (
-                    <Button 
-                      variant="ghost" 
-                      size="icon" 
-                      className="h-8 w-8"
-                      onClick={(e) => handleDownloadResource(resource, e)}
+                  {viewingResource?.file_url && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={(e) => viewingResource && handleDownload(viewingResource, e)}
                     >
-                      <Download className="h-4 w-4" />
+                      <Download className="h-4 w-4 mr-1" />
+                      Download
                     </Button>
                   )}
                 </div>
               </div>
             </div>
-          </div>
-        </Card>
-      ))}
-    </div>
-  );
-
-  return (
-    <DashboardLayout>
-      <div className="p-6">
-        {/* Header */}
-        <div className="mb-6">
-          <div className="flex justify-between items-start mb-4">
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900 mb-2">Resources</h1>
-              <p className="text-gray-600">
-                Access educational content and tools to support your mental health journey
-              </p>
-            </div>
-            
-            <div className="flex items-center gap-2">
-              <Button
-                variant={viewMode === 'grid' ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => setViewMode('grid')}
-              >
-                <Grid3x3 className="h-4 w-4" />
-              </Button>
-              <Button
-                variant={viewMode === 'list' ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => setViewMode('list')}
-              >
-                <List className="h-4 w-4" />
-              </Button>
-            </div>
-          </div>
-          
-          {/* Search */}
-          <div className="relative max-w-md">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-            <Input
-              type="search"
-              placeholder="Search resources..."
-              className="pl-10"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
-          </div>
-        </div>
-
-        {/* Content */}
-        <Tabs defaultValue={activeTab} value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="mb-6">
-            <TabsTrigger value="all">All Resources</TabsTrigger>
-            <TabsTrigger value="articles">Articles</TabsTrigger>
-            <TabsTrigger value="videos">Videos</TabsTrigger>
-            <TabsTrigger value="podcasts">Podcasts</TabsTrigger>
-            <TabsTrigger value="documents">Documents</TabsTrigger>
-            <TabsTrigger value="groups">Support Groups</TabsTrigger>
-            <TabsTrigger value="workshops">Workshops</TabsTrigger>
-            <TabsTrigger value="saved">Saved</TabsTrigger>
-          </TabsList>
-          
-          {isLoading ? (
-            <div className="flex justify-center items-center py-12">
-              <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
-            </div>
-          ) : filteredResources.length === 0 ? (
-            <EmptyState />
-          ) : (
-            <>
-              {/* Featured Resources */}
-              {activeTab === "all" && featuredResources.length > 0 && (
-                <div className="mb-8">
-                  <h2 className="text-lg font-semibold mb-4">Featured Resources</h2>
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {featuredResources.slice(0, 3).map(resource => (
-                      <Card 
-                        key={resource.id} 
-                        className="overflow-hidden border-blue-200 bg-blue-50/50 hover:shadow-md transition-shadow cursor-pointer"
-                        onClick={() => handleResourceClick(resource)}
-                      >
-                        <div className="relative h-32">
-                          <img
-                            src={resource.thumbnail_url || "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400&h=200&fit=crop"}
-                            alt={resource.title}
-                            className="object-cover h-full w-full"
-                          />
-                          <Badge className="absolute top-2 left-2 bg-yellow-500 text-white">
-                            Featured
-                          </Badge>
-                        </div>
-                        <CardContent className="p-4">
-                          <h3 className="font-medium mb-1 line-clamp-1">{resource.title}</h3>
-                          <p className="text-sm text-gray-600 line-clamp-2">{resource.description}</p>
-                        </CardContent>
-                      </Card>
-                    ))}
-                  </div>
-                </div>
-              )}
-              
-              {/* All Resources */}
-              <div>
-                <div className="flex justify-between items-center mb-4">
-                  <h2 className="text-lg font-semibold">
-                    {activeTab === "all" ? "All Resources" : 
-                     activeTab === "saved" ? "Saved Resources" :
-                     activeTab.charAt(0).toUpperCase() + activeTab.slice(1)}
-                  </h2>
-                  <span className="text-sm text-gray-500">
-                    {filteredResources.length} resource{filteredResources.length !== 1 ? 's' : ''}
-                  </span>
-                </div>
-                
-                {viewMode === 'grid' ? <ResourceGrid /> : <ResourceList />}
-              </div>
-            </>
-          )}
-        </Tabs>
+          </DialogContent>
+        </Dialog>
       </div>
     </DashboardLayout>
   );

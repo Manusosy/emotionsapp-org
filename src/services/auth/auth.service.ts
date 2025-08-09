@@ -185,7 +185,7 @@ class SupabaseAuthService implements AuthService {
       // Wait a moment for the trigger to complete
       await new Promise(resolve => setTimeout(resolve, 1000));
       
-      // Verify the profile was created
+      // Verify the profile was created (but don't fail if it's not ready yet)
       const { data: profile, error: profileError } = await supabase
         .from(tableName)
         .select('id')
@@ -193,11 +193,10 @@ class SupabaseAuthService implements AuthService {
         .single();
 
       if (profileError || !profile) {
-        console.error('Profile verification failed:', profileError);
-        throw new Error('Profile creation failed. Please try again or contact support.');
+        console.warn('Profile not yet created by trigger, but user signup was successful:', profileError);
+        // The profile will be created by the trigger or during email confirmation
+        // Don't throw an error here as the user signup was successful
       }
-
-      
 
       return { user: user as UserWithMetadata };
     } catch (error: any) {

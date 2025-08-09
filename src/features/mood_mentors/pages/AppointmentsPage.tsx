@@ -670,8 +670,8 @@ export default function AppointmentsPage() {
 
         <Card>
           <div className="p-4 space-y-4">
-            <div className="flex items-center justify-between gap-4">
-              <div className="flex-1">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+              <div className="flex-1 w-full sm:w-auto">
                 <Input
                   placeholder="Search by patient name, email, or phone..."
                   value={searchQuery}
@@ -679,7 +679,7 @@ export default function AppointmentsPage() {
                   className="w-full"
                 />
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 w-full sm:w-auto overflow-x-auto">
                 <Select value={statusFilter} onValueChange={setStatusFilter}>
                   <SelectTrigger className="w-[140px]">
                     <SelectValue placeholder="Status" />
@@ -756,7 +756,156 @@ export default function AppointmentsPage() {
               </div>
             </div>
 
-            <div className="rounded-md border">
+            {/* Mobile Card View */}
+            <div className="block md:hidden space-y-4">
+              {isLoading ? (
+                [...Array(3)].map((_, i) => (
+                  <Card key={i} className="p-4">
+                    <div className="animate-pulse space-y-3">
+                      <div className="flex items-center space-x-3">
+                        <div className="w-10 h-10 rounded-full bg-gray-200"></div>
+                        <div className="flex-1">
+                          <div className="h-4 bg-gray-200 rounded w-2/3 mb-2"></div>
+                          <div className="h-3 bg-gray-200 rounded w-1/2"></div>
+                        </div>
+                      </div>
+                      <div className="h-3 bg-gray-200 rounded w-1/3"></div>
+                    </div>
+                  </Card>
+                ))
+              ) : sortedAppointments.length === 0 ? (
+                <Card className="p-8 text-center">
+                  <Calendar className="mx-auto h-12 w-12 text-gray-400 mb-4" />
+                  <h3 className="text-lg font-medium text-gray-900">No appointments found</h3>
+                  <p className="text-gray-500 mt-1">No appointments match your current filters</p>
+                </Card>
+              ) : (
+                sortedAppointments.map((appointment) => (
+                  <Card 
+                    key={appointment.id}
+                    className="p-4 cursor-pointer hover:shadow-md transition-shadow"
+                    onClick={() => handleViewAppointmentDetails(appointment)}
+                  >
+                    <div className="space-y-3">
+                      {/* Patient Info */}
+                      <div className="flex items-center space-x-3">
+                        <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center">
+                          {appointment.patient.avatar ? (
+                            <img
+                              src={appointment.patient.avatar}
+                              alt={appointment.patient.name}
+                              className="w-10 h-10 rounded-full object-cover"
+                            />
+                          ) : (
+                            <span className="text-lg font-bold text-gray-600">
+                              {appointment.patient.name.charAt(0)}
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="font-medium truncate">{appointment.patient.name}</div>
+                          {appointment.patient.email && (
+                            <div className="text-sm text-gray-500 truncate">{appointment.patient.email}</div>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {getAppointmentTypeBadge(appointment.type)}
+                          {getStatusBadge(appointment.status)}
+                        </div>
+                      </div>
+                      
+                      {/* Date & Time */}
+                      <div className="flex items-center justify-between text-sm text-gray-600">
+                        <div className="flex items-center">
+                          <Calendar className="w-4 h-4 mr-1" />
+                          <span>{appointment.date}</span>
+                        </div>
+                        <div className="flex items-center">
+                          <Clock className="w-4 h-4 mr-1" />
+                          <span>{appointment.time}</span>
+                        </div>
+                      </div>
+                      
+                      {/* Actions */}
+                      <div className="flex flex-col gap-2 pt-2 border-t" onClick={(e) => e.stopPropagation()}>
+                        {(appointment.status.toLowerCase() === "upcoming" || 
+                          appointment.status.toLowerCase() === "scheduled" || 
+                          appointment.status.toLowerCase() === "pending") && (
+                          <div className="flex flex-col sm:flex-row gap-2">
+                            {isAppointmentActive() ? (
+                              <Button
+                                size="sm"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleStartSession(appointment);
+                                }}
+                                className={`flex-1 ${
+                                  appointment.status.toLowerCase() === "scheduled"
+                                    ? "bg-red-600 hover:bg-red-700 text-white" 
+                                    : "bg-green-600 hover:bg-green-700 text-white"
+                                }`}
+                              >
+                                {appointment.status.toLowerCase() === "scheduled" ? (
+                                  <><X className="w-3 h-3 mr-1" /> End Session</>
+                                ) : (
+                                  <><Video className="w-3 h-3 mr-1" /> Start Session</>
+                                )}
+                              </Button>
+                            ) : (
+                              <Button
+                                size="sm"
+                                disabled
+                                className="flex-1 bg-gray-200 text-gray-600 cursor-not-allowed"
+                              >
+                                <Clock className="w-3 h-3 mr-1" /> Waiting
+                              </Button>
+                            )}
+                            
+                            <ChatButton
+                              userId={user?.id || ''}
+                              targetUserId={appointment.patient_id}
+                              userRole="mood_mentor"
+                              variant="outline"
+                              size="sm"
+                              className="flex-1"
+                            />
+                          </div>
+                        )}
+                        
+                        {appointment.status.toLowerCase() === "completed" && (
+                          <div className="flex flex-col sm:flex-row gap-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleExportSingleAppointment(appointment);
+                              }}
+                              className="flex-1"
+                            >
+                              <FileText className="w-3 h-3 mr-1" />
+                              Export Report
+                            </Button>
+                            
+                            <ChatButton
+                              userId={user?.id || ''}
+                              targetUserId={appointment.patient_id}
+                              userRole="mood_mentor"
+                              variant="outline"
+                              size="sm"
+                              className="flex-1"
+                            />
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </Card>
+                ))
+              )}
+            </div>
+
+            {/* Desktop Table View */}
+            <div className="hidden md:block rounded-md border">
               <Table>
                 <TableHeader>
                   <TableRow>
