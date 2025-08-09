@@ -324,15 +324,16 @@ export default function PatientsPage() {
 
   return (
     <DashboardLayout>
-      <div className="container mx-auto py-6">
-        <div className="flex justify-between items-center mb-6">
-          <h1 className="text-2xl font-bold">Patients</h1>
-          <div className="flex gap-2">
-            <Button onClick={fetchPatients} variant="outline" size="sm" disabled={isLoading}>
-              <RefreshCcw className="h-4 w-4 mr-2" />
-              Refresh
-            </Button>
+      <div className="space-y-6 p-4 sm:p-6 max-w-7xl mx-auto">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+          <div>
+            <h1 className="text-2xl font-bold">Patients</h1>
+            <p className="text-muted-foreground">Manage your patient relationships</p>
           </div>
+          <Button onClick={fetchPatients} variant="outline" size="sm" disabled={isLoading}>
+            <RefreshCcw className="h-4 w-4 mr-2" />
+            Refresh
+          </Button>
         </div>
 
         {error && (
@@ -343,34 +344,50 @@ export default function PatientsPage() {
         )}
 
         {isLoading ? (
-          <div className="text-center py-10">Loading patients...</div>
+          <div className="space-y-4">
+            {/* Mobile loading cards */}
+            <div className="block md:hidden space-y-4">
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="bg-white rounded-lg border p-4 animate-pulse">
+                  <div className="flex items-center space-x-3 mb-3">
+                    <div className="w-12 h-12 rounded-full bg-gray-200"></div>
+                    <div className="flex-1">
+                      <div className="h-4 bg-gray-200 rounded w-2/3 mb-2"></div>
+                      <div className="h-3 bg-gray-200 rounded w-1/2"></div>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <div className="h-3 bg-gray-200 rounded w-1/3"></div>
+                    <div className="h-8 bg-gray-200 rounded"></div>
+                  </div>
+                </div>
+              ))}
+            </div>
+            {/* Desktop loading */}
+            <div className="hidden md:block text-center py-10">Loading patients...</div>
+          </div>
         ) : patients.length > 0 ? (
-          <div className="rounded-md border">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Patient</TableHead>
-                  <TableHead>Email</TableHead>
-                  <TableHead>Support Groups</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {patients.map((patient) => (
-                  <TableRow key={patient.id || patient.user_id}>
-                    <TableCell>
-                      <div className="flex items-center gap-3">
-                        <Avatar>
-                          <AvatarImage src={`https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(patient.full_name)}`} />
-                          <AvatarFallback>{getInitials(patient.full_name)}</AvatarFallback>
-                        </Avatar>
-                        <div className="font-medium">{patient.full_name || "Unknown"}</div>
+          <>
+            {/* Mobile Card View */}
+            <div className="block md:hidden space-y-4">
+              {patients.map((patient) => (
+                <div key={patient.id || patient.user_id} className="bg-white rounded-lg border shadow-sm hover:shadow-md transition-shadow">
+                  <div className="p-4">
+                    {/* Patient Info Header */}
+                    <div className="flex items-center gap-3 mb-4">
+                      <Avatar className="h-12 w-12">
+                        <AvatarImage src={`https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(patient.full_name)}`} />
+                        <AvatarFallback>{getInitials(patient.full_name)}</AvatarFallback>
+                      </Avatar>
+                      <div className="flex-1 min-w-0">
+                        <div className="font-medium text-gray-900 truncate">{patient.full_name || "Unknown"}</div>
+                        <div className="text-sm text-gray-500 font-mono truncate">{maskEmail(patient.email)}</div>
                       </div>
-                    </TableCell>
-                    <TableCell className="font-mono text-sm select-none">
-                      {maskEmail(patient.email)}
-                    </TableCell>
-                    <TableCell>
+                    </div>
+                    
+                    {/* Support Groups */}
+                    <div className="mb-4">
+                      <div className="text-xs text-gray-500 uppercase tracking-wide font-medium mb-2">Support Groups</div>
                       <div className="flex flex-wrap gap-1">
                         {patient.groups && patient.groups.length > 0 ? (
                           patient.groups.map((membership) => (
@@ -394,50 +411,146 @@ export default function PatientsPage() {
                             </Badge>
                           ))
                         ) : (
-                          <span className="text-gray-500 text-sm">No groups</span>
+                          <span className="text-gray-500 text-sm">No groups assigned</span>
                         )}
                       </div>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex justify-end gap-2">
+                    </div>
+                    
+                    {/* Action Buttons */}
+                    <div className="flex flex-col gap-3 pt-3 border-t border-gray-100">
+                      <div className="flex flex-col sm:flex-row gap-2">
                         <Button 
                           variant="outline" 
                           size="sm" 
                           onClick={() => openAddToGroupDialog(patient)}
                           disabled={getAvailableGroups(patient).length === 0}
+                          className="flex-1"
                         >
-                          <UserPlus className="h-4 w-4 mr-1" />
+                          <UserPlus className="h-4 w-4 mr-2" />
                           Add to Group
                         </Button>
-                        <Button variant="outline" size="sm" asChild>
+                        <Button variant="outline" size="sm" asChild className="flex-1">
                           <Link to={`/mood-mentor-dashboard/patient-profile/${patient.id}`}>
-                            <Eye className="h-4 w-4 mr-1" />
-                            View
+                            <Eye className="h-4 w-4 mr-2" />
+                            View Profile
                           </Link>
                         </Button>
-                        <ChatButton
-                          userId={user?.id || ''}
-                          targetUserId={patient.user_id}
-                          userRole="mood_mentor"
-                          variant="outline"
-                          size="sm"
-                        />
                       </div>
-                    </TableCell>
+                      <ChatButton
+                        userId={user?.id || ''}
+                        targetUserId={patient.user_id}
+                        userRole="mood_mentor"
+                        variant="default"
+                        size="sm"
+                        className="w-full"
+                      />
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Desktop Table View */}
+            <div className="hidden md:block rounded-md border shadow-sm overflow-hidden">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Patient</TableHead>
+                    <TableHead>Email</TableHead>
+                    <TableHead>Support Groups</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
+                </TableHeader>
+                <TableBody>
+                  {patients.map((patient) => (
+                    <TableRow key={patient.id || patient.user_id} className="hover:bg-gray-50">
+                      <TableCell>
+                        <div className="flex items-center gap-3">
+                          <Avatar>
+                            <AvatarImage src={`https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(patient.full_name)}`} />
+                            <AvatarFallback>{getInitials(patient.full_name)}</AvatarFallback>
+                          </Avatar>
+                          <div className="font-medium">{patient.full_name || "Unknown"}</div>
+                        </div>
+                      </TableCell>
+                      <TableCell className="font-mono text-sm select-none">
+                        {maskEmail(patient.email)}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex flex-wrap gap-1">
+                          {patient.groups && patient.groups.length > 0 ? (
+                            patient.groups.map((membership) => (
+                              <Badge 
+                                key={membership.id} 
+                                variant="secondary" 
+                                className="text-xs flex items-center gap-1"
+                              >
+                                <Users className="h-3 w-3" />
+                                {membership.group.name}
+                                <button
+                                  onClick={() => handleRemoveFromGroup(
+                                    patient.user_id, 
+                                    membership.group_id, 
+                                    patient.full_name
+                                  )}
+                                  className="ml-1 hover:text-red-500"
+                                >
+                                  <X className="h-3 w-3" />
+                                </button>
+                              </Badge>
+                            ))
+                          ) : (
+                            <span className="text-gray-500 text-sm">No groups</span>
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex justify-end gap-2">
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            onClick={() => openAddToGroupDialog(patient)}
+                            disabled={getAvailableGroups(patient).length === 0}
+                          >
+                            <UserPlus className="h-4 w-4 mr-1" />
+                            Add to Group
+                          </Button>
+                          <Button variant="outline" size="sm" asChild>
+                            <Link to={`/mood-mentor-dashboard/patient-profile/${patient.id}`}>
+                              <Eye className="h-4 w-4 mr-1" />
+                              View
+                            </Link>
+                          </Button>
+                          <ChatButton
+                            userId={user?.id || ''}
+                            targetUserId={patient.user_id}
+                            userRole="mood_mentor"
+                            variant="outline"
+                            size="sm"
+                          />
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </>
         ) : (
-          <div className="text-center py-10">
-            No patients found. Please make sure the patient_profiles table exists in your Supabase database.
+          <div className="text-center py-10 bg-white rounded-lg border">
+            <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-gray-100 mb-4">
+              <Users className="h-6 w-6 text-gray-400" />
+            </div>
+            <h3 className="text-lg font-medium text-gray-900 mb-2">No patients found</h3>
+            <p className="text-gray-500">
+              No patients have been assigned to you yet, or the patient_profiles table may need to be set up.
+            </p>
           </div>
         )}
 
         {/* Add to Group Dialog */}
         <Dialog open={isAddToGroupOpen} onOpenChange={setIsAddToGroupOpen}>
-          <DialogContent>
+          <DialogContent className="sm:max-w-md">
             <DialogHeader>
               <DialogTitle>Add Patient to Support Group</DialogTitle>
             </DialogHeader>
@@ -468,9 +581,6 @@ export default function PatientsPage() {
                         <div className="flex items-center gap-2">
                           <Users className="h-4 w-4" />
                           <span>{group.name}</span>
-                          <Badge variant="outline" className="ml-auto">
-                            {group.current_participants}/{group.max_participants}
-                          </Badge>
                         </div>
                       </SelectItem>
                     ))}

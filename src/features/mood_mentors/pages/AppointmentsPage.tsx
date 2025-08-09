@@ -52,15 +52,15 @@ import { format, addDays, startOfMonth, endOfMonth, isAfter, isBefore, isToday, 
 import { AuthContext } from "@/contexts/authContext";
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import { ChatButton } from "@/components/messaging/ChatButton";
+
 import { useAuth } from "@/contexts/authContext";
 import { Calendar as CalendarIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { Appointment } from '@/types/database.types';
 import { AppointmentDetailDialog } from '../components/AppointmentDetailDialog';
 import { Spinner } from '@/components/ui/spinner';
 import { Separator } from '@/components/ui/separator';
 import { User } from 'lucide-react';
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 interface Appointment {
   id: string;
@@ -298,9 +298,9 @@ export default function AppointmentsPage() {
   };
 
   // New function to view appointment details
-  const handleViewAppointmentDetails = (appointment: Appointment) => {
+  const handleViewAppointmentDetails = (appointment: AppointmentDisplay) => {
     // Set the selected appointment and open the dialog
-    setSelectedAppointment(appointment);
+    setSelectedAppointment(appointment as any);
     setIsDialogOpen(true);
   };
 
@@ -333,7 +333,7 @@ export default function AppointmentsPage() {
         if ('patient' in appointment && appointment.patient) {
           patientName = appointment.patient.name || "Unknown Patient";
           patientEmail = appointment.patient.email || "N/A";
-          patientPhone = appointment.patient.phone || "N/A";
+          patientPhone = (appointment.patient as any).phone || "N/A";
         }
       } catch (err) {
         console.error("Error extracting patient data:", err);
@@ -660,7 +660,7 @@ export default function AppointmentsPage() {
 
   return (
     <DashboardLayout>
-      <div className="space-y-6">
+      <div className="space-y-6 p-4 sm:p-6 max-w-7xl mx-auto">
         <div className="flex justify-between items-center">
           <div>
             <h1 className="text-2xl font-bold tracking-tight">Appointments</h1>
@@ -668,8 +668,8 @@ export default function AppointmentsPage() {
           </div>
         </div>
 
-        <Card>
-          <div className="p-4 space-y-4">
+        <Card className="shadow-sm">
+          <div className="p-4 sm:p-6 space-y-4">
             <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
               <div className="flex-1 w-full sm:w-auto">
                 <Input
@@ -681,7 +681,7 @@ export default function AppointmentsPage() {
               </div>
               <div className="flex items-center gap-2 w-full sm:w-auto overflow-x-auto">
                 <Select value={statusFilter} onValueChange={setStatusFilter}>
-                  <SelectTrigger className="w-[140px]">
+                  <SelectTrigger className="w-[140px] flex-shrink-0">
                     <SelectValue placeholder="Status" />
                   </SelectTrigger>
                   <SelectContent>
@@ -696,7 +696,7 @@ export default function AppointmentsPage() {
                 </Select>
 
                 <Select value={dateFilter} onValueChange={setDateFilter}>
-                  <SelectTrigger className="w-[140px]">
+                  <SelectTrigger className="w-[140px] flex-shrink-0">
                     <SelectValue placeholder="Date Range" />
                   </SelectTrigger>
                   <SelectContent>
@@ -720,11 +720,11 @@ export default function AppointmentsPage() {
                     <Button 
                       variant="outline" 
                       size="sm"
-                      className="flex items-center gap-1"
+                      className="flex items-center gap-1 flex-shrink-0"
                       disabled={filteredAppointments.length === 0}
                     >
                       <Download className="h-4 w-4" />
-                      Export
+                      <span className="hidden sm:inline">Export</span>
                       <ChevronDown className="h-4 w-4 ml-1" />
                     </Button>
                   </DropdownMenuTrigger>
@@ -760,152 +760,223 @@ export default function AppointmentsPage() {
             <div className="block md:hidden space-y-4">
               {isLoading ? (
                 [...Array(3)].map((_, i) => (
-                  <Card key={i} className="p-4">
-                    <div className="animate-pulse space-y-3">
-                      <div className="flex items-center space-x-3">
-                        <div className="w-10 h-10 rounded-full bg-gray-200"></div>
-                        <div className="flex-1">
-                          <div className="h-4 bg-gray-200 rounded w-2/3 mb-2"></div>
-                          <div className="h-3 bg-gray-200 rounded w-1/2"></div>
+                  <Card key={i} className="shadow-sm">
+                    <CardContent className="p-4">
+                      <div className="animate-pulse space-y-3">
+                        <div className="flex items-center space-x-3">
+                          <div className="w-12 h-12 rounded-full bg-gray-200 flex-shrink-0"></div>
+                          <div className="flex-1 min-w-0">
+                            <div className="h-4 bg-gray-200 rounded w-2/3 mb-2"></div>
+                            <div className="h-3 bg-gray-200 rounded w-1/2"></div>
+                          </div>
                         </div>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="h-3 bg-gray-200 rounded"></div>
+                          <div className="h-3 bg-gray-200 rounded"></div>
+                        </div>
+                        <div className="h-8 bg-gray-200 rounded"></div>
                       </div>
-                      <div className="h-3 bg-gray-200 rounded w-1/3"></div>
-                    </div>
+                    </CardContent>
                   </Card>
                 ))
               ) : sortedAppointments.length === 0 ? (
-                <Card className="p-8 text-center">
-                  <Calendar className="mx-auto h-12 w-12 text-gray-400 mb-4" />
-                  <h3 className="text-lg font-medium text-gray-900">No appointments found</h3>
-                  <p className="text-gray-500 mt-1">No appointments match your current filters</p>
+                <Card className="shadow-sm">
+                  <CardContent className="p-8 text-center">
+                    <Calendar className="mx-auto h-12 w-12 text-gray-400 mb-4" />
+                    <h3 className="text-lg font-medium text-gray-900 mb-2">No appointments found</h3>
+                    <p className="text-gray-500">No appointments match your current filters</p>
+                  </CardContent>
                 </Card>
               ) : (
                 sortedAppointments.map((appointment) => (
                   <Card 
                     key={appointment.id}
-                    className="p-4 cursor-pointer hover:shadow-md transition-shadow"
+                    className="shadow-sm hover:shadow-md transition-shadow cursor-pointer"
                     onClick={() => handleViewAppointmentDetails(appointment)}
                   >
-                    <div className="space-y-3">
-                      {/* Patient Info */}
-                      <div className="flex items-center space-x-3">
-                        <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center">
-                          {appointment.patient.avatar ? (
-                            <img
-                              src={appointment.patient.avatar}
-                              alt={appointment.patient.name}
-                              className="w-10 h-10 rounded-full object-cover"
-                            />
-                          ) : (
-                            <span className="text-lg font-bold text-gray-600">
-                              {appointment.patient.name.charAt(0)}
-                            </span>
-                          )}
+                    <CardContent className="p-4">
+                      {/* Patient Info Header */}
+                      <div className="flex items-start justify-between mb-3">
+                        <div className="flex items-center gap-3 min-w-0 flex-1">
+                          <Avatar className="h-12 w-12 flex-shrink-0">
+                            {appointment.patient.avatar ? (
+                              <AvatarImage 
+                                src={appointment.patient.avatar} 
+                                alt={appointment.patient.name}
+                              />
+                            ) : (
+                              <AvatarFallback className="bg-blue-100 text-blue-600">
+                                {appointment.patient.name.charAt(0).toUpperCase()}
+                              </AvatarFallback>
+                            )}
+                          </Avatar>
+                          <div className="min-w-0 flex-1">
+                            <div className="font-medium text-gray-900 truncate">
+                              {appointment.patient.name}
+                            </div>
+                            {appointment.patient.email && (
+                              <div className="text-sm text-gray-500 truncate">
+                                {appointment.patient.email}
+                              </div>
+                            )}
+                          </div>
                         </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="font-medium truncate">{appointment.patient.name}</div>
-                          {appointment.patient.email && (
-                            <div className="text-sm text-gray-500 truncate">{appointment.patient.email}</div>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-2">
+                        <div className="flex flex-col gap-1 items-end flex-shrink-0">
                           {getAppointmentTypeBadge(appointment.type)}
                           {getStatusBadge(appointment.status)}
                         </div>
                       </div>
                       
-                      {/* Date & Time */}
-                      <div className="flex items-center justify-between text-sm text-gray-600">
-                        <div className="flex items-center">
-                          <Calendar className="w-4 h-4 mr-1" />
-                          <span>{appointment.date}</span>
+                      {/* Date & Time Grid */}
+                      <div className="grid grid-cols-2 gap-3 mb-4 text-sm">
+                        <div>
+                          <div className="text-xs text-gray-500 uppercase tracking-wide font-medium mb-1">Date</div>
+                          <div className="flex items-center text-gray-900">
+                            <Calendar className="w-4 h-4 mr-1 text-gray-500" />
+                            <span className="font-medium">{appointment.date}</span>
+                          </div>
                         </div>
-                        <div className="flex items-center">
-                          <Clock className="w-4 h-4 mr-1" />
-                          <span>{appointment.time}</span>
+                        <div>
+                          <div className="text-xs text-gray-500 uppercase tracking-wide font-medium mb-1">Time</div>
+                          <div className="flex items-center text-gray-900">
+                            <Clock className="w-4 h-4 mr-1 text-gray-500" />
+                            <span className="font-medium">{appointment.time}</span>
+                          </div>
                         </div>
                       </div>
                       
-                      {/* Actions */}
-                      <div className="flex flex-col gap-2 pt-2 border-t" onClick={(e) => e.stopPropagation()}>
+                      {/* Action buttons */}
+                      <div className="flex flex-col gap-3 pt-4 border-t border-gray-100" onClick={(e) => e.stopPropagation()}>
+                        {/* Upcoming/Scheduled/Pending Appointments */}
                         {(appointment.status.toLowerCase() === "upcoming" || 
                           appointment.status.toLowerCase() === "scheduled" || 
                           appointment.status.toLowerCase() === "pending") && (
-                          <div className="flex flex-col sm:flex-row gap-2">
-                            {isAppointmentActive() ? (
+                          <>
+                            {/* Primary action - Start Session */}
+                            <div className="w-full">
+                              {isAppointmentActive() ? (
+                                <Button
+                                  size="sm"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleStartSession(appointment);
+                                  }}
+                                  className={`w-full h-11 ${
+                                    appointment.status.toLowerCase() === "scheduled"
+                                      ? "bg-red-600 hover:bg-red-700 text-white" 
+                                      : "bg-green-600 hover:bg-green-700 text-white"
+                                  }`}
+                                >
+                                  {appointment.status.toLowerCase() === "scheduled" ? (
+                                    <>
+                                      <X className="w-4 h-4 mr-2" />
+                                      End Session
+                                    </>
+                                  ) : (
+                                    <>
+                                      {appointment.type.toLowerCase() === 'video' && (
+                                        <Video className="w-4 h-4 mr-2" />
+                                      )}
+                                      {appointment.type.toLowerCase() === 'audio' && (
+                                        <Phone className="w-4 h-4 mr-2" />
+                                      )}
+                                      {appointment.type.toLowerCase() === 'chat' && (
+                                        <MessageSquare className="w-4 h-4 mr-2" />
+                                      )}
+                                      Start Session
+                                    </>
+                                  )}
+                                </Button>
+                              ) : (
+                                <Button
+                                  size="sm"
+                                  disabled
+                                  className="w-full h-11 bg-gray-200 text-gray-600 cursor-not-allowed"
+                                >
+                                  <Clock className="w-4 h-4 mr-2" />
+                                  Waiting for session time
+                                </Button>
+                              )}
+                            </div>
+                            
+                            {/* Secondary actions with more spacing */}
+                            <div className="flex flex-col gap-3 pt-2">
                               <Button
+                                variant="outline"
                                 size="sm"
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  handleStartSession(appointment);
+                                  handleStatusChange(appointment.id, "completed");
                                 }}
-                                className={`flex-1 ${
-                                  appointment.status.toLowerCase() === "scheduled"
-                                    ? "bg-red-600 hover:bg-red-700 text-white" 
-                                    : "bg-green-600 hover:bg-green-700 text-white"
-                                }`}
+                                className="w-full h-10 border-green-200 text-green-700 hover:bg-green-50"
                               >
-                                {appointment.status.toLowerCase() === "scheduled" ? (
-                                  <><X className="w-3 h-3 mr-1" /> End Session</>
-                                ) : (
-                                  <><Video className="w-3 h-3 mr-1" /> Start Session</>
-                                )}
+                                <Check className="w-4 h-4 mr-2" />
+                                Mark as Completed
                               </Button>
-                            ) : (
-                              <Button
-                                size="sm"
-                                disabled
-                                className="flex-1 bg-gray-200 text-gray-600 cursor-not-allowed"
-                              >
-                                <Clock className="w-3 h-3 mr-1" /> Waiting
-                              </Button>
-                            )}
-                            
-                            <ChatButton
-                              userId={user?.id || ''}
-                              targetUserId={appointment.patient_id}
-                              userRole="mood_mentor"
-                              variant="outline"
-                              size="sm"
-                              className="flex-1"
-                            />
-                          </div>
+                              
+                              {/* Dangerous action with clear separation */}
+                              <div className="pt-2 border-t border-gray-100">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleStatusChange(appointment.id, "cancelled");
+                                  }}
+                                  className="w-full h-10 border-red-200 text-red-600 hover:bg-red-50"
+                                >
+                                  <X className="w-4 h-4 mr-2" />
+                                  Cancel Appointment
+                                </Button>
+                              </div>
+                            </div>
+                          </>
                         )}
                         
+                        {/* Completed Appointments */}
                         {appointment.status.toLowerCase() === "completed" && (
-                          <div className="flex flex-col sm:flex-row gap-2">
+                          <div className="flex flex-col gap-3">
                             <Button
                               variant="outline"
                               size="sm"
                               onClick={(e) => {
                                 e.stopPropagation();
-                                handleExportSingleAppointment(appointment);
+                                handleExportAppointment(appointment);
                               }}
-                              className="flex-1"
+                              className="w-full h-10 border-blue-200 text-blue-600 hover:bg-blue-50"
                             >
-                              <FileText className="w-3 h-3 mr-1" />
+                              <FileText className="w-4 h-4 mr-2" />
                               Export Report
                             </Button>
-                            
-                            <ChatButton
-                              userId={user?.id || ''}
-                              targetUserId={appointment.patient_id}
-                              userRole="mood_mentor"
+                          </div>
+                        )}
+
+                        {/* Cancelled Appointments */}
+                        {appointment.status.toLowerCase() === "cancelled" && (
+                          <div className="flex flex-col gap-3">
+                            <Button
                               variant="outline"
                               size="sm"
-                              className="flex-1"
-                            />
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleViewAppointmentDetails(appointment);
+                              }}
+                              className="w-full h-10 border-gray-200 text-gray-600 hover:bg-gray-50"
+                            >
+                              <FileText className="w-4 h-4 mr-2" />
+                              View Details
+                            </Button>
                           </div>
                         )}
                       </div>
-                    </div>
+                    </CardContent>
                   </Card>
                 ))
               )}
             </div>
 
             {/* Desktop Table View */}
-            <div className="hidden md:block rounded-md border">
+            <div className="hidden md:block rounded-md border overflow-hidden">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -920,37 +991,41 @@ export default function AppointmentsPage() {
                   {isLoading ? (
                     <TableRow>
                       <TableCell colSpan={5} className="text-center py-8">
-                        Loading appointments...
+                        <div className="flex justify-center items-center">
+                          <Spinner className="mr-2 text-blue-600" />
+                          <span>Loading appointments...</span>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ) : sortedAppointments.length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={5} className="text-center py-8 text-gray-500">
-                        No appointments found
+                        <Calendar className="mx-auto h-12 w-12 text-gray-400 mb-4" />
+                        <div className="text-lg font-medium text-gray-900 mb-2">No appointments found</div>
+                        <div>No appointments match your current filters</div>
                       </TableCell>
                     </TableRow>
                   ) : (
                     sortedAppointments.map((appointment) => (
                       <TableRow 
                         key={appointment.id}
-                        className="cursor-pointer"
+                        className="cursor-pointer hover:bg-gray-50"
                         onClick={() => handleViewAppointmentDetails(appointment)}
                       >
                         <TableCell>
                           <div className="flex items-center space-x-3">
-                            <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center">
+                            <Avatar className="h-10 w-10">
                               {appointment.patient.avatar ? (
-                                <img
+                                <AvatarImage
                                   src={appointment.patient.avatar}
                                   alt={appointment.patient.name}
-                                  className="w-10 h-10 rounded-full object-cover"
                                 />
                               ) : (
-                                <span className="text-lg font-bold text-gray-600">
-                                  {appointment.patient.name.charAt(0)}
-                                </span>
+                                <AvatarFallback className="bg-blue-100 text-blue-600">
+                                  {appointment.patient.name.charAt(0).toUpperCase()}
+                                </AvatarFallback>
                               )}
-                            </div>
+                            </Avatar>
                             <div>
                               <div className="font-medium">{appointment.patient.name}</div>
                               {appointment.patient.email && (
@@ -1149,28 +1224,13 @@ export default function AppointmentsPage() {
                                   variant="outline"
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    try {
-                                      handleExportAppointment(appointment);
-                                    } catch (error) {
-                                      console.error("Error in export click handler:", error);
-                                      toast.error("Failed to initiate export");
-                                    }
+                                    handleStatusChange(appointment.id, "pending");
                                   }}
+                                  className="border-green-200 text-green-600 hover:bg-green-50"
                                 >
-                                  <FileDown className="w-3 h-3 mr-1" /> Export
+                                  <Check className="w-3 h-3 mr-1" /> Reactivate
                                 </Button>
                               </>
-                            )}
-                            
-                            {/* Chat Button for all chat appointments */}
-                            {appointment.type.toLowerCase() === 'chat' && (
-                              <ChatButton
-                                userId={user?.id || ''}
-                                targetUserId={appointment.patient_id}
-                                userRole="mood_mentor"
-                                variant="outline"
-                                size="sm"
-                              />
                             )}
                           </div>
                         </TableCell>
@@ -1182,17 +1242,16 @@ export default function AppointmentsPage() {
             </div>
           </div>
         </Card>
-
-        {selectedAppointment && (
-          <AppointmentDetailDialog
-            appointment={selectedAppointment}
-            open={isDialogOpen}
-            onOpenChange={setIsDialogOpen}
-            onJoinSession={() => handleStartSession(selectedAppointment as AppointmentDisplay)}
-            isMentor={true}
-          />
-        )}
       </div>
+
+      {/* Appointment Detail Dialog */}
+      {selectedAppointment && (
+        <AppointmentDetailDialog
+          appointment={selectedAppointment}
+          open={isDialogOpen}
+          onOpenChange={setIsDialogOpen}
+        />
+      )}
     </DashboardLayout>
   );
 } 

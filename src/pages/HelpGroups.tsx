@@ -324,7 +324,7 @@ const HelpGroups = () => {
     if (!schedule || schedule.length === 0) return "Schedule TBD";
     
     const firstSchedule = schedule[0];
-    if (!firstSchedule.time) return "Schedule TBD";
+    if (!firstSchedule || !firstSchedule.time) return "Schedule TBD";
     
     try {
       const time = new Date(`2000-01-01T${firstSchedule.time}`).toLocaleTimeString([], { 

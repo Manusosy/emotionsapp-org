@@ -75,7 +75,7 @@ interface Appointment {
   patient_name: string;
   date: string;
   time: string;
-  type: 'video' | 'in-person' | 'chat';
+  type: 'video' | 'audio' | 'in-person' | 'chat';
   status: 'upcoming' | 'canceled' | 'completed';
   patient_email?: string;
   patient_avatar_url?: string;
@@ -126,7 +126,7 @@ export default function MoodMentorDashboard() {
   const [showWelcomeDialog, setShowWelcomeDialog] = useState(false);
   const [profile, setProfile] = useState<DashboardProfile | null>(null);
   const [isNewUser, setIsNewUser] = useState(false);
-  const [selectedAppointmentId, setSelectedAppointmentId] = useState<string | null>(null);
+  const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
   const [detailDialogOpen, setDetailDialogOpen] = useState(false);
   const [showAvailabilityDialog, setShowAvailabilityDialog] = useState(false);
   
@@ -321,7 +321,7 @@ export default function MoodMentorDashboard() {
             patient_name: apt.patient_name || 'Unknown Patient',
             date: apt.date,
             time: apt.start_time,
-            type: apt.meeting_type as 'video' | 'audio',
+            type: apt.meeting_type as 'video' | 'audio' | 'in-person' | 'chat',
             status: apt.status === 'scheduled' ? 'upcoming' as const : 'completed' as const,
             patient_email: apt.patient_email,
             patient_avatar_url: apt.patient_avatar_url
@@ -434,6 +434,12 @@ export default function MoodMentorDashboard() {
         return (
           <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
             <Video className="mr-1 h-3 w-3" /> Video
+          </Badge>
+        );
+      case 'audio':
+        return (
+          <Badge variant="outline" className="bg-purple-50 text-purple-700 border-purple-200">
+            <MessageSquare className="mr-1 h-3 w-3" /> Audio
           </Badge>
         );
       case 'in-person':
@@ -830,8 +836,8 @@ export default function MoodMentorDashboard() {
   }, [user]);
 
   // Add handler to open appointment details
-  const handleViewAppointmentDetails = (appointmentId: string) => {
-    setSelectedAppointmentId(appointmentId);
+  const handleViewAppointmentDetails = (appointment: Appointment) => {
+    setSelectedAppointment(appointment);
     setDetailDialogOpen(true);
   };
 
@@ -887,8 +893,8 @@ export default function MoodMentorDashboard() {
         </DialogContent>
       </Dialog>
       
-      {/* Dashboard Content */}
-      <div className="space-y-6">
+      {/* Dashboard Content - Added proper container spacing */}
+      <div className="space-y-6 p-4 sm:p-6 max-w-7xl mx-auto">
         {/* Welcome Section */}
         <section className="space-y-2">
           <h1 className="text-2xl font-bold text-gray-900">
@@ -901,17 +907,17 @@ export default function MoodMentorDashboard() {
         <section>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {stats.map((stat, index) => (
-              <Card key={index}>
-                <CardContent className="py-4">
+              <Card key={index} className="shadow-sm">
+                <CardContent className="p-4 sm:p-6">
                   <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-medium text-gray-500">{stat.title}</p>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium text-gray-500 truncate">{stat.title}</p>
                       <h3 className="text-2xl font-bold mt-1">{stat.value}</h3>
                       {stat.trend && (
                         <p className="text-xs text-green-600 mt-1">{stat.trend}</p>
                       )}
                     </div>
-                    <div className="p-2 rounded-full bg-gray-100">
+                    <div className="p-2 rounded-full bg-gray-100 flex-shrink-0">
                       {stat.icon}
                     </div>
                   </div>
@@ -925,7 +931,7 @@ export default function MoodMentorDashboard() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Appointments Section */}
           <section className="lg:col-span-2">
-            <Card className="h-full">
+            <Card className="h-full shadow-sm">
               <CardHeader className="pb-3 flex flex-row items-center justify-between">
                 <div>
                   <CardTitle>Upcoming Appointments</CardTitle>
@@ -940,119 +946,129 @@ export default function MoodMentorDashboard() {
                   <ChevronRight className="ml-1 h-4 w-4" />
                 </Button>
               </CardHeader>
-              <CardContent>
+              <CardContent className="px-4 sm:px-6">
                 {isLoading ? (
                   <div className="space-y-4">
                     {[1, 2, 3].map((i) => (
                       <div key={i} className="flex items-center p-3 rounded-lg border border-gray-100 animate-pulse">
-                        <div className="w-10 h-10 rounded-full bg-gray-200 mr-4"></div>
-                        <div className="flex-1">
+                        <div className="w-10 h-10 rounded-full bg-gray-200 mr-4 flex-shrink-0"></div>
+                        <div className="flex-1 min-w-0">
                           <div className="h-4 bg-gray-200 rounded w-1/3 mb-2"></div>
                           <div className="h-3 bg-gray-100 rounded w-1/4"></div>
                         </div>
-                        <div className="h-6 bg-gray-100 rounded w-20"></div>
+                        <div className="h-6 bg-gray-100 rounded w-20 flex-shrink-0"></div>
                       </div>
                     ))}
                   </div>
                 ) : appointments.length > 0 ? (
                   <div className="space-y-4">
                     {appointments.map((appointment) => (
-                      <div
+                      <Card
                         key={appointment.id}
-                        className="flex flex-col p-4 rounded-lg border border-gray-100 hover:bg-gray-50 transition-colors cursor-pointer"
-                        onClick={() => handleViewAppointmentDetails(appointment.id)}
+                        className="border border-gray-100 hover:shadow-md transition-shadow cursor-pointer"
+                        onClick={() => handleViewAppointmentDetails(appointment)}
                       >
-                        <div className="flex items-center">
-                          <Avatar className="h-10 w-10 mr-4">
-                            {appointment.patient_avatar_url ? (
-                              <AvatarImage src={appointment.patient_avatar_url} alt={appointment.patient_name} />
-                            ) : (
-                              <AvatarFallback className="bg-blue-100 text-blue-600">
-                                {appointment.patient_name
-                                  .split(' ')
-                                  .map((n) => n[0])
-                                  .join('')
-                                  .toUpperCase()}
-                              </AvatarFallback>
-                            )}
-                          </Avatar>
-                          <div className="flex-1 min-w-0">
-                            <p className="font-medium text-gray-900 truncate">
-                              {appointment.patient_name}
-                            </p>
-                            <div className="flex flex-col text-sm text-gray-500">
-                              <span>{format(new Date(appointment.date), 'MMM d')} • {appointment.time}</span>
-                              {appointment.patient_email && (
-                                <span className="text-xs text-gray-400 truncate">{appointment.patient_email}</span>
-                              )}
+                        <CardContent className="p-4">
+                          {/* Top section with avatar and info */}
+                          <div className="flex items-start justify-between mb-3">
+                            <div className="flex items-center gap-3 min-w-0 flex-1">
+                              <Avatar className="h-12 w-12 flex-shrink-0">
+                                {appointment.patient_avatar_url ? (
+                                  <AvatarImage src={appointment.patient_avatar_url} alt={appointment.patient_name} />
+                                ) : (
+                                  <AvatarFallback className="bg-blue-100 text-blue-600">
+                                    {appointment.patient_name
+                                      .split(' ')
+                                      .map((n) => n[0])
+                                      .join('')
+                                      .toUpperCase()}
+                                  </AvatarFallback>
+                                )}
+                              </Avatar>
+                              <div className="min-w-0 flex-1">
+                                <div className="font-medium text-gray-900 truncate">
+                                  {appointment.patient_name}
+                                </div>
+                                {appointment.patient_email && (
+                                  <div className="text-sm text-gray-500 truncate">{appointment.patient_email}</div>
+                                )}
+                              </div>
+                            </div>
+                            {getAppointmentBadge(appointment.type)}
+                          </div>
+                          
+                          {/* Date and time grid */}
+                          <div className="grid grid-cols-2 gap-3 mb-4 text-sm">
+                            <div>
+                              <div className="text-xs text-gray-500 uppercase tracking-wide font-medium">Date</div>
+                              <div className="text-gray-900 font-medium">{format(new Date(appointment.date), 'MMM d, yyyy')}</div>
+                            </div>
+                            <div>
+                              <div className="text-xs text-gray-500 uppercase tracking-wide font-medium">Time</div>
+                              <div className="text-gray-900 font-medium">{appointment.time}</div>
                             </div>
                           </div>
-                          {getAppointmentBadge(appointment.type)}
-                        </div>
-                        
-                        {/* Action buttons */}
-                        <div className="flex flex-col sm:flex-row justify-end gap-2 mt-3 pt-3 border-t border-gray-100" onClick={(e) => e.stopPropagation()}>
-                          <ChatButton
-                            userId={user?.id || ''}
-                            targetUserId={appointment.patient_id}
-                            userRole="mood_mentor"
-                            variant="outline"
-                            size="sm"
-                            className="h-8 px-3 rounded-full w-full sm:w-auto"
-                          />
                           
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button 
-                                variant="outline"
-                                size="sm" 
-                                className="h-8 px-3 rounded-full w-full sm:w-auto"
-                                onClick={(e) => e.stopPropagation()}
-                              >
-                                <MoreVertical className="h-3.5 w-3.5" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              <DropdownMenuItem onClick={(e) => {
+                          {/* Action buttons */}
+                          <div className="flex flex-col sm:flex-row gap-2 pt-3 border-t border-gray-100" onClick={(e) => e.stopPropagation()}>
+                            <ChatButton
+                              userId={user?.id || ''}
+                              targetUserId={appointment.patient_id}
+                              userRole="mood_mentor"
+                              variant="outline"
+                              size="sm"
+                              className="flex-1 sm:flex-none"
+                            />
+                            
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button 
+                                  variant="outline"
+                                  size="sm" 
+                                  className="flex-1 sm:flex-none"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  <MoreVertical className="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleStatusChange(appointment.id, "completed");
+                                }}>
+                                  <Check className="w-4 h-4 mr-2" /> Mark as Completed
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleStatusChange(appointment.id, "cancelled");
+                                }}>
+                                  <X className="w-4 h-4 mr-2" /> Cancel Appointment
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                            
+                            <Button 
+                              size="sm" 
+                              className="flex-1 sm:flex-none bg-blue-600 hover:bg-blue-700"
+                              onClick={(e) => {
                                 e.stopPropagation();
-                                handleStatusChange(appointment.id, "completed");
-                              }}>
-                                <Check className="w-4 h-4 mr-2" /> Mark as Completed
-                              </DropdownMenuItem>
-                              <DropdownMenuItem onClick={(e) => {
-                                e.stopPropagation();
-                                handleStatusChange(appointment.id, "cancelled");
-                              }}>
-                                <X className="w-4 h-4 mr-2" /> Cancel Appointment
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                          
-                          <Button 
-                            size="sm" 
-                            className={`h-8 px-3 rounded-full w-full sm:w-auto ${
-                              isAppointmentStartingSoon(appointment.time, appointment.date)
-                              ? 'bg-green-600 hover:bg-green-700'
-                              : 'bg-blue-600 hover:bg-blue-700'
-                            }`}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              navigate(`/mood-mentor-dashboard/appointments/${appointment.id}/call`);
-                            }}
-                          >
-                            <Video className="h-3.5 w-3.5 mr-1.5" />
-                            Start Session
-                          </Button>
-                        </div>
-                      </div>
+                                navigate(`/mood-mentor-dashboard/appointments/${appointment.id}/call`);
+                              }}
+                            >
+                              <Video className="h-4 w-4 mr-2" />
+                              Start Session
+                            </Button>
+                          </div>
+                        </CardContent>
+                      </Card>
                     ))}
                   </div>
                 ) : (
-                  <div className="text-center py-6">
-                    <Calendar className="mx-auto h-10 w-10 text-gray-400 mb-2" />
-                    <h3 className="text-sm font-medium text-gray-900">No upcoming appointments</h3>
-                    <p className="text-sm text-gray-500 mt-1">
-                      No appointments for now
+                  <div className="text-center py-8">
+                    <Calendar className="mx-auto h-12 w-12 text-gray-400 mb-4" />
+                    <h3 className="text-lg font-medium text-gray-900 mb-2">No upcoming appointments</h3>
+                    <p className="text-sm text-gray-500">
+                      No appointments scheduled for now
                     </p>
                   </div>
                 )}
@@ -1062,12 +1078,12 @@ export default function MoodMentorDashboard() {
           
           {/* Calendar Section */}
           <section>
-            <Card className="h-full">
+            <Card className="h-full shadow-sm">
               <CardHeader className="pb-2">
                 <CardTitle>Calendar</CardTitle>
                 <CardDescription>Your appointment schedule</CardDescription>
               </CardHeader>
-              <CardContent>
+              <CardContent className="px-4 sm:px-6">
                 <div className="space-y-4">
                   {/* Month Navigation */}
                   <div className="flex items-center justify-between">
@@ -1111,8 +1127,10 @@ export default function MoodMentorDashboard() {
                     {calendarDays.map((day) => (
                       <div
                         key={`${currentMonthName}-${day}`}
-                        className={`h-8 w-8 rounded-full ${
-                          hasDayAppointment(day) ? 'bg-blue-500 text-white' : 'text-gray-500'
+                        className={`h-8 w-8 rounded-full flex items-center justify-center text-sm ${
+                          hasDayAppointment(day) 
+                            ? 'bg-blue-500 text-white' 
+                            : 'text-gray-500 hover:bg-gray-100'
                         }`}
                       >
                         {day}
@@ -1124,147 +1142,159 @@ export default function MoodMentorDashboard() {
             </Card>
           </section>
         </div>
-      </div>
-      
-      {/* Quick Actions Section */}
-      <section>
-        <h2 className="text-lg font-semibold mb-4">Quick Actions</h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
-          <Card className="hover:shadow-md transition-all cursor-pointer" onClick={() => setShowAvailabilityDialog(true)}>
-            <CardContent className="p-4 flex items-center space-x-4">
-              <div className="bg-[#20C0F3]/10 p-3 rounded-full">
-                <CalendarClock className="h-5 w-5 text-[#20C0F3]" />
-              </div>
-              <div>
-                <h3 className="font-medium">Set Availability</h3>
-                <p className="text-sm text-gray-500">Manage your schedule</p>
-              </div>
-            </CardContent>
-          </Card>
-          
-          <Card 
-            className="hover:shadow-md transition-all cursor-pointer" 
-            onClick={() => navigate('/mood-mentor-dashboard/profile')}
-          >
-            <CardContent className="p-4 flex items-center space-x-4">
-              <div className="bg-blue-100 p-3 rounded-full">
-                <User className="h-5 w-5 text-blue-600" />
-              </div>
-              <div>
-                <h3 className="font-medium">Update Profile</h3>
-                <p className="text-sm text-gray-500">Edit your details</p>
-              </div>
-            </CardContent>
-          </Card>
-          
-          <Card 
-            className="hover:shadow-md transition-all cursor-pointer" 
-            onClick={() => navigate('/mood-mentor-dashboard/resources')}
-          >
-            <CardContent className="p-4 flex items-center space-x-4">
-              <div className="bg-purple-100 p-3 rounded-full">
-                <BookOpen className="h-5 w-5 text-purple-600" />
-              </div>
-              <div>
-                <h3 className="font-medium">Manage Resources</h3>
-                <p className="text-sm text-gray-500">View resource library</p>
-              </div>
-            </CardContent>
-          </Card>
-          
-          <Card 
-            className="hover:shadow-md transition-all cursor-pointer" 
-            onClick={() => navigate('/mood-mentor-dashboard/messages')}
-          >
-            <CardContent className="p-4 flex items-center space-x-4">
-              <div className="bg-green-100 p-3 rounded-full">
-                <MessageSquare className="h-5 w-5 text-green-600" />
-              </div>
-              <div>
-                <h3 className="font-medium">Check Messages</h3>
-                <p className="text-sm text-gray-500">View your inbox</p>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
         
-        {/* Second row for support groups */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-4">
-          <Card 
-            className="hover:shadow-md transition-all cursor-pointer" 
-            onClick={() => navigate('/mood-mentor-dashboard/groups')}
-          >
-            <CardContent className="p-4 flex items-center space-x-4">
-              <div className="bg-[#20C0F3]/10 p-3 rounded-full">
-                <Users className="h-5 w-5 text-[#20C0F3]" />
-              </div>
-              <div>
-                <h3 className="font-medium">Manage Groups</h3>
-                <p className="text-sm text-gray-500">Support group management</p>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      </section>
-      
-      {/* Profile status card */}
-      <ProfileStatusCard />
+        {/* Quick Actions Section */}
+        <section>
+          <h2 className="text-lg font-semibold mb-4">Quick Actions</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <Card className="hover:shadow-md transition-all cursor-pointer shadow-sm" onClick={() => setShowAvailabilityDialog(true)}>
+              <CardContent className="p-4">
+                <div className="flex items-center space-x-4">
+                  <div className="bg-[#20C0F3]/10 p-3 rounded-full flex-shrink-0">
+                    <CalendarClock className="h-5 w-5 text-[#20C0F3]" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <h3 className="font-medium truncate">Set Availability</h3>
+                    <p className="text-sm text-gray-500 truncate">Manage your schedule</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+            
+            <Card 
+              className="hover:shadow-md transition-all cursor-pointer shadow-sm" 
+              onClick={() => navigate('/mood-mentor-dashboard/profile')}
+            >
+              <CardContent className="p-4">
+                <div className="flex items-center space-x-4">
+                  <div className="bg-blue-100 p-3 rounded-full flex-shrink-0">
+                    <User className="h-5 w-5 text-blue-600" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <h3 className="font-medium truncate">Update Profile</h3>
+                    <p className="text-sm text-gray-500 truncate">Edit your details</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+            
+            <Card 
+              className="hover:shadow-md transition-all cursor-pointer shadow-sm" 
+              onClick={() => navigate('/mood-mentor-dashboard/resources')}
+            >
+              <CardContent className="p-4">
+                <div className="flex items-center space-x-4">
+                  <div className="bg-purple-100 p-3 rounded-full flex-shrink-0">
+                    <BookOpen className="h-5 w-5 text-purple-600" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <h3 className="font-medium truncate">Manage Resources</h3>
+                    <p className="text-sm text-gray-500 truncate">View resource library</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+            
+            <Card 
+              className="hover:shadow-md transition-all cursor-pointer shadow-sm" 
+              onClick={() => navigate('/mood-mentor-dashboard/messages')}
+            >
+              <CardContent className="p-4">
+                <div className="flex items-center space-x-4">
+                  <div className="bg-green-100 p-3 rounded-full flex-shrink-0">
+                    <MessageSquare className="h-5 w-5 text-green-600" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <h3 className="font-medium truncate">Check Messages</h3>
+                    <p className="text-sm text-gray-500 truncate">View your inbox</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+          
+          {/* Support Groups Card */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-4">
+            <Card 
+              className="hover:shadow-md transition-all cursor-pointer shadow-sm" 
+              onClick={() => navigate('/mood-mentor-dashboard/groups')}
+            >
+              <CardContent className="p-4">
+                <div className="flex items-center space-x-4">
+                  <div className="bg-[#20C0F3]/10 p-3 rounded-full flex-shrink-0">
+                    <Users className="h-5 w-5 text-[#20C0F3]" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <h3 className="font-medium truncate">Manage Groups</h3>
+                    <p className="text-sm text-gray-500 truncate">Support group management</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </section>
+        
+        {/* Profile status card */}
+        <ProfileStatusCard />
+      </div>
 
       {/* Add the appointment detail dialog */}
-      {selectedAppointmentId && (
+      {selectedAppointment && (
         <AppointmentDetailDialog
-          appointmentId={selectedAppointmentId}
-          isOpen={detailDialogOpen}
-          onClose={() => {
-            setDetailDialogOpen(false);
-            // Fetch appointments again after dialog is closed
-            const fetchAppointmentsAgain = async () => {
-              if (!user) return;
+          appointment={selectedAppointment}
+          open={detailDialogOpen}
+          onOpenChange={(open) => {
+            setDetailDialogOpen(open);
+            if (!open) {
+              // Refresh appointments when dialog is closed
+              const fetchAppointmentsAgain = async () => {
+                if (!user) return;
+                
+                setIsLoading(true);
+                try {
+                  const todayFormatted = format(new Date(), 'yyyy-MM-dd');
+                  
+                  const { data: appointmentsData, error } = await supabase
+                    .from('mentor_appointments_view')
+                    .select('*')
+                    .eq('mentor_id', user.id)
+                    .in('status', ['pending', 'scheduled'])
+                    .gte('date', todayFormatted)
+                    .order('date', { ascending: true });
+                    
+                  if (error) {
+                    console.error('Error fetching appointments:', error);
+                    setAppointments([]);
+                    return;
+                  }
+                  
+                  if (!appointmentsData || appointmentsData.length === 0) {
+                    setAppointments([]);
+                  } else {
+                    const formattedAppointments = appointmentsData.map(apt => ({
+                      id: apt.id,
+                      patient_id: apt.patient_id,
+                      patient_name: apt.patient_name || 'Unknown Patient',
+                      date: apt.date,
+                      time: apt.start_time,
+                      type: apt.meeting_type as 'video' | 'audio' | 'in-person' | 'chat',
+                      status: apt.status === 'scheduled' ? 'upcoming' as const : 'completed' as const,
+                      patient_email: apt.patient_email,
+                      patient_avatar_url: apt.patient_avatar_url
+                    }));
+                    
+                    setAppointments(formattedAppointments);
+                    fetchDashboardStats();
+                  }
+                } catch (error) {
+                  console.error('Error refreshing appointments:', error);
+                } finally {
+                  setIsLoading(false);
+                }
+              };
               
-              setIsLoading(true);
-              try {
-                const todayFormatted = format(new Date(), 'yyyy-MM-dd');
-                
-                const { data: appointmentsData, error } = await supabase
-                  .from('mentor_appointments_view')
-                  .select('*')
-                  .eq('mentor_id', user.id)
-                  .in('status', ['pending', 'scheduled'])
-                  .gte('date', todayFormatted)
-                  .order('date', { ascending: true });
-                  
-                if (error) {
-                  console.error('Error fetching appointments:', error);
-                  setAppointments([]);
-                  return;
-                }
-                
-                if (!appointmentsData || appointmentsData.length === 0) {
-                  setAppointments([]);
-                } else {
-                  const formattedAppointments = appointmentsData.map(apt => ({
-                    id: apt.id,
-                    patient_id: apt.patient_id,
-                    patient_name: apt.patient_name || 'Unknown Patient',
-                    date: apt.date,
-                    time: apt.start_time,
-                    type: apt.meeting_type as 'video' | 'audio',
-                    status: apt.status === 'scheduled' ? 'upcoming' as const : 'completed' as const,
-                    patient_email: apt.patient_email,
-                    patient_avatar_url: apt.patient_avatar_url
-                  }));
-                  
-                  setAppointments(formattedAppointments);
-                  fetchDashboardStats();
-                }
-              } catch (error) {
-                console.error('Error refreshing appointments:', error);
-              } finally {
-                setIsLoading(false);
-              }
-            };
-            
-            fetchAppointmentsAgain();
+              fetchAppointmentsAgain();
+            }
           }}
         />
       )}
