@@ -9,7 +9,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { useAuth } from "@/contexts/authContext";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import EmailVerificationOverlay from "@/components/EmailVerificationOverlay";
-import { mentorSearchableItems, patientSearchableItems } from '../navigation';
+import { mentorSearchableItems, patientSearchableItems, moodMentorNavigation, patientNavigation } from '../navigation';
 import {
   Dialog,
   DialogContent,
@@ -55,7 +55,8 @@ import {
   ChevronLeft,
   Star,
   Info,
-  LayoutDashboard
+  LayoutDashboard,
+  CalendarClock
 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import FallbackAvatar from "@/components/ui/fallback-avatar";
@@ -124,66 +125,7 @@ interface SearchResult {
   category: string;
 }
 
-const patientNavigation = [
-  { 
-    section: "Main",
-    items: [
-      { name: "Overview", href: "/patient-dashboard", icon: Home },
-      { name: "Appointments", href: "/patient-dashboard/appointments", icon: Calendar },
-      { name: "Messages", href: "/patient-dashboard/messages", icon: Inbox },
-      { name: "Notifications", href: "/patient-dashboard/notifications", icon: Bell },
-      { name: "Journal", href: "/patient-dashboard/journal", icon: BookOpen },
-    ]
-  },
-  {
-    section: "Wellbeing",
-    items: [
-      { name: "Mood Tracker", href: "/patient-dashboard/mood-tracker", icon: Activity },
-      { name: "Reports", href: "/patient-dashboard/reports", icon: FileText }, 
-      { name: "Support Groups", href: "/patient-dashboard/groups", icon: Users },
-      { name: "Resources", href: "/patient-dashboard/resources", icon: BookOpen },
-    ]
-  },
-  {
-    section: "Account",
-    items: [
-      { name: "Profile", href: "/patient-dashboard/profile", icon: User },
 
-      { name: "Settings", href: "/patient-dashboard/settings", icon: Settings },
-      { name: "Help Center", href: "/patient-dashboard/help", icon: BadgeHelp },
-    ]
-  }
-];
-
-const moodMentorNavigation = [
-  {
-    section: "Main",
-    items: [
-      { name: "Overview", href: "/mood-mentor-dashboard", icon: LayoutDashboard },
-      { name: "Appointments", href: "/mood-mentor-dashboard/appointments", icon: Calendar },
-      { name: "Patients", href: "/mood-mentor-dashboard/patients", icon: Users },
-      { name: "Support Groups", href: "/mood-mentor-dashboard/groups", icon: UserCheck },
-      { name: "Messages", href: "/mood-mentor-dashboard/messages", icon: MessageSquare },
-    ]
-  },
-  {
-    section: "Professional",
-    items: [
-      { name: "Resources", href: "/mood-mentor-dashboard/resources", icon: BookOpen },
-      { name: "Reviews", href: "/mood-mentor-dashboard/reviews", icon: Star },
-      { name: "Analytics", href: "/mood-mentor-dashboard/analytics", icon: BarChart2 },
-    ]
-  },
-  {
-    section: "Account",
-    items: [
-      { name: "Profile", href: "/mood-mentor-dashboard/profile", icon: User },
-      { name: "Notifications", href: "/mood-mentor-dashboard/notifications", icon: Bell },
-      { name: "Settings", href: "/mood-mentor-dashboard/settings", icon: Settings },
-      { name: "Help Center", href: "/mood-mentor-dashboard/help", icon: BadgeHelp },
-    ]
-  }
-];
 
 export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const navigate = useNavigate();

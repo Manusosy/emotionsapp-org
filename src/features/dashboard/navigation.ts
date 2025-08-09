@@ -71,6 +71,7 @@ export const moodMentorNavigation: NavigationSection[] = [
     section: "Professional",
     items: [
       { name: "Resources", href: "/mood-mentor-dashboard/resources", icon: BookOpen },
+      { name: "Articles", href: "/mood-mentor-dashboard/articles", icon: FileText },
       { name: "Reviews", href: "/mood-mentor-dashboard/reviews", icon: Star },
       { name: "Analytics", href: "/mood-mentor-dashboard/analytics", icon: BarChart2 },
     ]
@@ -240,6 +241,14 @@ export const mentorSearchableItems: SearchResult[] = [
     description: "Access and share therapeutic resources",
     icon: BookOpen,
     href: "/mood-mentor-dashboard/resources",
+    category: "Professional"
+  },
+  // Articles
+  {
+    title: "Articles",
+    description: "Create and manage educational articles",
+    icon: FileText,
+    href: "/mood-mentor-dashboard/articles",
     category: "Professional"
   },
   // Reviews

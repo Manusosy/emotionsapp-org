@@ -22,6 +22,8 @@ import MoodMentors from "@/features/mood_mentors/pages/MoodMentors";
 import MoodMentorAppointmentsPage from "@/features/mood_mentors/pages/AppointmentsPage";
 import MoodMentorPatientsPage from "@/features/mood_mentors/pages/PatientsPage";
 import MoodMentorResourcesPage from "@/features/mood_mentors/pages/ResourcesPage";
+import MoodMentorArticlesPage from "@/features/mood_mentors/pages/ArticlesPage";
+import ArticleViewerPage from "@/features/mood_mentors/pages/ArticleViewerPage";
 import GroupsPage from "@/features/mood_mentors/pages/GroupsPage";
 import DashboardResourcesPage from "@/features/dashboard/pages/ResourcesPage";
 import BookingPage from "@/features/booking/pages/BookingPage";
@@ -303,6 +305,7 @@ const AppContent = () => {
               <Route path="/mood-mentor/:name" element={<MoodMentorProfile />} />
               <Route path="/booking" element={<BookingPage />} />
               <Route path="/resources" element={<Resources />} />
+              <Route path="/articles/:id" element={<ArticleViewerPage />} />
               <Route path="/help-groups" element={<HelpGroups />} />
               <Route path="/privacy-policy" element={<PrivacyPolicy />} />
               <Route path="/data-protection" element={<DataProtection />} />
@@ -435,6 +438,11 @@ const AppContent = () => {
               <Route path="/mood-mentor-dashboard/resources" element={
                 <ProtectedErrorBoundary dashboardPath="/mood-mentor-dashboard">
                   <MoodMentorResourcesPage />
+                </ProtectedErrorBoundary>
+              } />
+              <Route path="/mood-mentor-dashboard/articles" element={
+                <ProtectedErrorBoundary dashboardPath="/mood-mentor-dashboard">
+                  <MoodMentorArticlesPage />
                 </ProtectedErrorBoundary>
               } />
               <Route path="/mood-mentor-dashboard/settings" element={
