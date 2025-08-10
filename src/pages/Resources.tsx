@@ -185,6 +185,16 @@ const Resources = () => {
   // Handle resource access/download
   const handleResourceAccess = async (resource: Resource) => {
     try {
+      // For articles, navigate to dedicated article page instead of modal
+      if (resource.type === 'article') {
+        // Extract slug from URL (e.g., "/articles/overcoming-anxiety" -> "overcoming-anxiety")
+        const slug = resource.url.split('/articles/')[1];
+        if (slug) {
+          window.location.href = resource.url; // Full page navigation with header
+          return;
+        }
+      }
+      
       // Determine the URL to open
       const accessUrl = resource.file_url || resource.url;
       

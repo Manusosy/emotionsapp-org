@@ -70,6 +70,7 @@ interface Article {
   title: string;
   content: string;
   excerpt: string;
+  slug: string;
   thumbnail_url?: string;
   author_id: string;
   author_name: string;
@@ -165,6 +166,15 @@ export default function ArticlesPage() {
       : plainText;
   };
 
+  const generateSlug = (title: string) => {
+    return title
+      .toLowerCase()
+      .replace(/[^a-z0-9\s-]/g, '')
+      .replace(/\s+/g, '-')
+      .replace(/-+/g, '-')
+      .trim();
+  };
+
   const handleSaveArticle = async () => {
     try {
       if (!title.trim()) {
@@ -181,11 +191,13 @@ export default function ArticlesPage() {
 
       const readTime = calculateReadTime(content);
       const autoExcerpt = excerpt.trim() || generateExcerpt(content);
+      const baseSlug = generateSlug(title.trim());
 
       const articleData = {
         title: title.trim(),
         content: content.trim(),
         excerpt: autoExcerpt,
+        slug: baseSlug,
         thumbnail_url: thumbnailUrl || null,
         author_id: user?.id,
         author_name: user?.user_metadata?.name || 'Mood Mentor',
@@ -244,7 +256,7 @@ export default function ArticlesPage() {
         description: article.excerpt,
         type: 'article' as const,
         category: 'educational',
-        url: `/articles/${article.id}`, // Internal link
+        url: `/articles/${article.slug}`, // SEO-friendly slug URL
         thumbnail_url: article.thumbnail_url || '',
         author: article.author_name,
         author_role: 'Mood Mentor',
@@ -499,7 +511,7 @@ export default function ArticlesPage() {
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => navigate(`/articles/${article.id}`)}>
+                        <DropdownMenuItem onClick={() => navigate(`/articles/${article.slug}`)}>
                           <Eye className="h-4 w-4 mr-2" />
                           Preview
                         </DropdownMenuItem>
@@ -547,9 +559,9 @@ export default function ArticlesPage() {
           setIsEditorOpen(open);
           if (!open) resetEditor();
         }}>
-          <DialogContent className="max-w-4xl h-[90vh] flex flex-col">
-            <DialogHeader>
-              <DialogTitle>
+          <DialogContent className="max-w-6xl h-[95vh] flex flex-col p-0">
+            <DialogHeader className="px-6 py-4 border-b">
+              <DialogTitle className="text-xl font-semibold">
                 {editingArticle ? 'Edit Article' : 'Create New Article'}
               </DialogTitle>
               <DialogDescription>
@@ -557,7 +569,8 @@ export default function ArticlesPage() {
               </DialogDescription>
             </DialogHeader>
 
-            <div className="flex-1 overflow-hidden flex flex-col space-y-4">
+            <div className="flex-1 overflow-y-auto px-6 py-4">
+              <div className="space-y-6">
               {/* Article Details */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
@@ -605,8 +618,8 @@ export default function ArticlesPage() {
               </div>
 
               {/* Editor Toolbar */}
-              <div className="border rounded-lg">
-                <div className="border-b p-2 flex flex-wrap gap-1">
+              <div className="border rounded-lg shadow-sm">
+                <div className="border-b p-3 flex flex-wrap gap-2 bg-gray-50">
                   <Button variant="ghost" size="sm" onClick={() => insertHeading(1)}>
                     <Type className="h-4 w-4" />
                     H1
@@ -649,11 +662,12 @@ export default function ArticlesPage() {
                 </div>
 
                 {/* Content Editor */}
-                <Textarea
-                  ref={editorRef}
-                  value={content}
-                  onChange={(e) => setContent(e.target.value)}
-                  placeholder="Write your article content here... 
+                <div className="p-4">
+                  <Textarea
+                    ref={editorRef}
+                    value={content}
+                    onChange={(e) => setContent(e.target.value)}
+                    placeholder="Write your article content here... 
 
 You can use Markdown formatting:
 # Heading 1
@@ -672,8 +686,9 @@ You can use Markdown formatting:
 2. Numbered item
 
 > Quote text"
-                  className="min-h-[400px] border-0 resize-none"
-                />
+                    className="min-h-[500px] border-0 resize-none focus:outline-none text-base leading-relaxed"
+                  />
+                </div>
               </div>
 
               {/* Tags */}
@@ -699,8 +714,9 @@ You can use Markdown formatting:
                 </div>
               </div>
             </div>
+            </div>
 
-            <DialogFooter>
+            <DialogFooter className="px-6 py-4 border-t bg-gray-50">
               <Button
                 variant="outline"
                 onClick={() => setIsEditorOpen(false)}
