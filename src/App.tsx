@@ -76,6 +76,18 @@ import { syncSupportGroupCounts } from '@/utils/sync-support-groups';
 import { resetAllSessionData } from '@/utils/reset-session-data';
 import GroupSessionPage from "./features/dashboard/pages/GroupSessionPage";
 import EmailSentPage from "@/features/auth/pages/EmailSentPage";
+// Admin imports
+import AdminSignIn from "@/features/auth/pages/AdminSignIn";
+import AdminSignUp from "@/features/auth/pages/AdminSignUp";
+import AdminLayout from "@/features/admin/components/AdminLayout";
+import AdminDashboard from "@/features/admin/pages/AdminDashboard";
+import AdminUsersPage from "@/features/admin/pages/AdminUsersPage";
+import AdminSessionsPage from "@/features/admin/pages/AdminSessionsPage";
+import AdminAnalyticsPage from "@/features/admin/pages/AdminAnalyticsPage";
+import AdminFinancePage from "@/features/admin/pages/AdminFinancePage";
+import AdminContentPage from "@/features/admin/pages/AdminContentPage";
+import AdminCommunicationsPage from "@/features/admin/pages/AdminCommunicationsPage";
+import AdminReportsPage from "@/features/admin/pages/AdminReportsPage";
 // Test files removed
 
 // Type definition for UserRole
@@ -214,7 +226,8 @@ const AppContent = () => {
     const pathname = location.pathname;
     const isDashboardPage = pathname.includes('dashboard') || 
                           pathname === '/mood-mentor-dashboard' ||
-                          pathname.startsWith('/mood-mentor-dashboard/');
+                          pathname.startsWith('/mood-mentor-dashboard/') ||
+                          pathname.startsWith('/admin');
     
     setShowHeaderFooter(!isDashboardPage);
   }, [location.pathname]);
@@ -516,6 +529,20 @@ const AppContent = () => {
                   <MentorDirectCallPage />
                 </ProtectedErrorBoundary>
               } />
+              
+              {/* Admin Routes */}
+              <Route path="/admin/signin" element={<AdminSignIn />} />
+              <Route path="/admin/signup" element={<AdminSignUp />} />
+              <Route path="/admin" element={<AdminLayout />}>
+                <Route index element={<AdminDashboard />} />
+                <Route path="users" element={<AdminUsersPage />} />
+                <Route path="sessions" element={<AdminSessionsPage />} />
+                <Route path="analytics" element={<AdminAnalyticsPage />} />
+                <Route path="finance" element={<AdminFinancePage />} />
+                <Route path="content" element={<AdminContentPage />} />
+                <Route path="communications" element={<AdminCommunicationsPage />} />
+                <Route path="reports" element={<AdminReportsPage />} />
+              </Route>
               
               {/* Not Found Page */}
               <Route path="*" element={<NotFound />} />
