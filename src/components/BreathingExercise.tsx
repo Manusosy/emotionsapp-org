@@ -14,6 +14,44 @@ const BreathingExercise: React.FC = () => {
   const audioContextRef = useRef<AudioContext | null>(null);
   const currentOscillatorRef = useRef<OscillatorNode | null>(null);
 
+  // Speech synthesis refs
+  const currentUtteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
+  const speechSupported = typeof window !== 'undefined' && 'speechSynthesis' in window;
+  const selectedVoiceRef = useRef<SpeechSynthesisVoice | null>(null);
+
+  // Choose a likely female English voice when available
+  const chooseFemaleVoice = (voices: SpeechSynthesisVoice[]) => {
+    if (!voices || voices.length === 0) return null;
+    const femaleNameHints = [
+      'female', 'woman', 'samantha', 'victoria', 'karen', 'moira', 'ava', 'zira', 'daria', 'susan'
+    ];
+    const isEnglish = (v: SpeechSynthesisVoice) => (v.lang || '').toLowerCase().startsWith('en');
+    const score = (v: SpeechSynthesisVoice) => {
+      const name = (v.name || '').toLowerCase();
+      const uri = (v.voiceURI || '').toLowerCase();
+      const hasFemaleHint = femaleNameHints.some(h => name.includes(h) || uri.includes(h));
+      return (isEnglish(v) ? 2 : 0) + (hasFemaleHint ? 3 : 0);
+    };
+    let best: SpeechSynthesisVoice | null = null;
+    let bestScore = -1;
+    for (const v of voices) {
+      const s = score(v);
+      if (s > bestScore) {
+        best = v;
+        bestScore = s;
+      }
+    }
+    return best;
+  };
+
+  const refreshVoices = () => {
+    try {
+      const voices = window.speechSynthesis.getVoices();
+      const chosen = chooseFemaleVoice(voices);
+      if (chosen) selectedVoiceRef.current = chosen;
+    } catch {}
+  };
+
   // Initialize audio context
   const initAudioContext = () => {
     if (!audioContextRef.current) {
@@ -22,14 +60,44 @@ const BreathingExercise: React.FC = () => {
     return audioContextRef.current;
   };
 
-  // Create breathing sounds using Web Audio API
+  // Helper to speak any text with selected voice; returns true if spoken
+  const speakText = (text: string): boolean => {
+    if (!soundEnabled || !speechSupported) return false;
+    try {
+      if (window.speechSynthesis.speaking || window.speechSynthesis.pending) {
+        window.speechSynthesis.cancel();
+      }
+      // Ensure voices are loaded
+      refreshVoices();
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = 'en-US';
+      utterance.rate = 0.95;
+      utterance.pitch = 1.0;
+      utterance.volume = 1.0;
+      if (selectedVoiceRef.current) {
+        utterance.voice = selectedVoiceRef.current;
+      }
+      currentUtteranceRef.current = utterance;
+      window.speechSynthesis.speak(utterance);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
+  // Speak a short cue for the current phase using Web Speech API, with tone fallback
   const playBreathingSound = (phaseType: 'inhale' | 'hold' | 'exhale') => {
     if (!soundEnabled) return;
 
+    // Attempt voice first
+    const cue = phaseType === 'inhale' ? 'Breathe in' : phaseType === 'hold' ? 'Hold' : 'Breathe out';
+    const spoken = speakText(cue);
+    if (spoken) return;
+
+    // Fallback to gentle tones if speech is unavailable or fails
     const audioContext = initAudioContext();
     if (!audioContext) return;
 
-    // Stop any existing sound
     if (currentOscillatorRef.current) {
       currentOscillatorRef.current.stop();
       currentOscillatorRef.current = null;
@@ -43,38 +111,27 @@ const BreathingExercise: React.FC = () => {
     filterNode.connect(gainNode);
     gainNode.connect(audioContext.destination);
 
-    // Configure sound based on breathing phase
     switch (phaseType) {
       case 'inhale':
-        // Rising frequency for inhale
         oscillator.type = 'sine';
         oscillator.frequency.setValueAtTime(200, audioContext.currentTime);
-        oscillator.frequency.linearRampToValueAtTime(400, audioContext.currentTime + 4);
+        oscillator.frequency.linearRampToValueAtTime(400, audioContext.currentTime + 1.2);
         filterNode.frequency.setValueAtTime(800, audioContext.currentTime);
         gainNode.gain.setValueAtTime(0, audioContext.currentTime);
-        gainNode.gain.linearRampToValueAtTime(0.1, audioContext.currentTime + 0.5);
-        gainNode.gain.linearRampToValueAtTime(0.05, audioContext.currentTime + 4);
+        gainNode.gain.linearRampToValueAtTime(0.08, audioContext.currentTime + 0.4);
         break;
-      
       case 'hold':
-        // Steady, calm tone for hold
         oscillator.type = 'sine';
         oscillator.frequency.setValueAtTime(300, audioContext.currentTime);
         filterNode.frequency.setValueAtTime(600, audioContext.currentTime);
-        gainNode.gain.setValueAtTime(0, audioContext.currentTime);
-        gainNode.gain.linearRampToValueAtTime(0.03, audioContext.currentTime + 0.5);
-        gainNode.gain.setValueAtTime(0.03, audioContext.currentTime + 7);
+        gainNode.gain.setValueAtTime(0.03, audioContext.currentTime);
         break;
-      
       case 'exhale':
-        // Falling frequency for exhale
         oscillator.type = 'sine';
-        oscillator.frequency.setValueAtTime(400, audioContext.currentTime);
-        oscillator.frequency.linearRampToValueAtTime(150, audioContext.currentTime + 8);
-        filterNode.frequency.setValueAtTime(800, audioContext.currentTime);
-        gainNode.gain.setValueAtTime(0, audioContext.currentTime);
-        gainNode.gain.linearRampToValueAtTime(0.08, audioContext.currentTime + 0.5);
-        gainNode.gain.linearRampToValueAtTime(0, audioContext.currentTime + 8);
+        oscillator.frequency.setValueAtTime(380, audioContext.currentTime);
+        oscillator.frequency.linearRampToValueAtTime(180, audioContext.currentTime + 1.2);
+        filterNode.frequency.setValueAtTime(700, audioContext.currentTime);
+        gainNode.gain.setValueAtTime(0.06, audioContext.currentTime);
         break;
     }
 
@@ -84,14 +141,12 @@ const BreathingExercise: React.FC = () => {
     currentOscillatorRef.current = oscillator;
     oscillator.start();
 
-    // Auto-stop the sound after the phase duration
-    const duration = phaseType === 'inhale' ? 4 : phaseType === 'hold' ? 7 : 8;
     setTimeout(() => {
       if (currentOscillatorRef.current === oscillator) {
         oscillator.stop();
         currentOscillatorRef.current = null;
       }
-    }, duration * 1000);
+    }, 1500);
   };
 
   useEffect(() => {
@@ -124,6 +179,8 @@ const BreathingExercise: React.FC = () => {
             // Completed all cycles
             setPhase('complete');
             setIsActive(false);
+            // Speak final completion message
+            speakText('Great job! Take a moment to notice how you feel.');
           } else {
             // Start next cycle
             currentPhaseIndex = 0;
@@ -153,10 +210,22 @@ const BreathingExercise: React.FC = () => {
       currentOscillatorRef.current.stop();
       currentOscillatorRef.current = null;
     }
+    if (!soundEnabled && speechSupported) {
+      try {
+        window.speechSynthesis.cancel();
+        currentUtteranceRef.current = null;
+      } catch {}
+    }
   }, [soundEnabled]);
 
-  // Cleanup on unmount
+  // Initialize voices and cleanup on unmount
   useEffect(() => {
+    if (speechSupported) {
+      try {
+        refreshVoices();
+        window.speechSynthesis.addEventListener('voiceschanged', refreshVoices);
+      } catch {}
+    }
     return () => {
       if (currentOscillatorRef.current) {
         currentOscillatorRef.current.stop();
@@ -164,6 +233,13 @@ const BreathingExercise: React.FC = () => {
       }
       if (audioContextRef.current) {
         audioContextRef.current.close();
+      }
+      if (speechSupported) {
+        try {
+          window.speechSynthesis.cancel();
+          currentUtteranceRef.current = null;
+          window.speechSynthesis.removeEventListener('voiceschanged', refreshVoices);
+        } catch {}
       }
     };
   }, []);

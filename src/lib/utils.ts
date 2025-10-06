@@ -5,6 +5,19 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
+export const getSiteUrl = (): string => {
+  const fromWindow = typeof window !== 'undefined' ? window.ENV_CONFIG?.VITE_APP_URL : '';
+  const fromEnv = import.meta.env.VITE_APP_URL as string | undefined;
+  const fallback = 'https://emotionsapp.org';
+  return (fromWindow || fromEnv || fallback).replace(/\/$/, '');
+};
+
+export const buildCanonical = (path: string): string => {
+  const base = getSiteUrl();
+  const clean = path.startsWith('/') ? path : `/${path}`;
+  return `${base}${clean}`;
+};
+
 /**
  * Get a value from environment variables with fallback
  * @param key - Environment variable key

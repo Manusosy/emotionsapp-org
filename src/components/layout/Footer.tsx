@@ -163,8 +163,8 @@ const Footer = () => {
             </p>
             <div className="flex flex-wrap justify-center md:justify-end gap-x-8 gap-y-2">
               <a 
-                href="/privacy" 
-                onClick={(e) => handleNavigation("/privacy", e)}
+                href="/privacy-policy" 
+                onClick={(e) => handleNavigation("/privacy-policy", e)}
                 className="text-gray-600 hover:text-blue-600 whitespace-nowrap"
               >
                 Privacy Policy
@@ -177,8 +177,8 @@ const Footer = () => {
                 Data Protection
               </a>
               <a 
-                href="/terms" 
-                onClick={(e) => handleNavigation("/terms", e)}
+                href="/terms-of-service" 
+                onClick={(e) => handleNavigation("/terms-of-service", e)}
                 className="text-gray-600 hover:text-blue-600 whitespace-nowrap"
               >
                 Terms of Service

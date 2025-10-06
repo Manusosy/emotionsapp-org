@@ -1,0 +1,14 @@
+User-agent: *
+Allow: /
+
+# Disallow internal dashboards and admin
+Disallow: /patient-dashboard
+Disallow: /patient-dashboard/
+Disallow: /mood-mentor-dashboard
+Disallow: /mood-mentor-dashboard/
+Disallow: /admin
+Disallow: /admin/
+
+Sitemap: https://emotionsapp.org/sitemap.xml
+
+

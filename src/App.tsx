@@ -1,5 +1,8 @@
 import { moodMentorService, authService, userService, dataService, apiService, patientService, appointmentService } from '@/services';
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { HelmetProvider } from 'react-helmet-async';
+import { RouteSEO, NoIndex } from '@/components/RouteSEO';
+import { OrganizationJsonLD, WebsiteJsonLD } from '@/components/LLDJson';
 import { Toaster } from "sonner";
 import { BrowserRouter, Routes, Route, useLocation, Navigate, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useEffect, useState, useContext, createContext } from "react";
@@ -232,11 +235,93 @@ const AppContent = () => {
     setShowHeaderFooter(!isDashboardPage);
   }, [location.pathname]);
 
+  // Per-route SEO defaults
+  const getSeoForPath = (path: string) => {
+    switch (true) {
+      case path === '/':
+        return {
+          title: 'Your Mood Mentor and Emotional Wellbeing Companion',
+          description: 'Track your mood, connect with Mood Mentors, join support groups, and access evidence-based mental health resources.',
+          path: '/',
+        };
+      case path.startsWith('/mood-mentors'):
+        return {
+          title: 'Find Mood Mentors – Professional Mental Health Support',
+          description: 'Browse experienced Mood Mentors for personalized mental health support, coaching, and therapy sessions.',
+          path,
+        };
+      case path.startsWith('/resources'):
+        return {
+          title: 'Resources – Articles, Videos, Tools for Emotional Wellbeing',
+          description: 'Discover mental health resources: articles, videos, and downloadable tools curated by Mood Mentors.',
+          path,
+        };
+      case path.startsWith('/help-groups'):
+        return {
+          title: 'Support Groups – Peer Support and Guided Sessions',
+          description: 'Find and join support groups led by Mood Mentors for anxiety, stress, depression, and more.',
+          path,
+        };
+      case path.startsWith('/journal'):
+        return {
+          title: 'Private Journal – Reflect, Track, and Grow',
+          description: 'Secure, private journaling linked to your mood to reflect and build healthy habits.',
+          path,
+        };
+      case path.startsWith('/booking'):
+        return {
+          title: 'Book a Session – Schedule with a Mood Mentor',
+          description: 'Schedule 1-on-1 sessions with professional Mood Mentors tailored to your needs.',
+          path,
+        };
+      case path.startsWith('/about'):
+        return {
+          title: 'About Emotions App',
+          description: 'Our mission is to make mental health support accessible to everyone, everywhere.',
+          path,
+        };
+      case path.startsWith('/contact'):
+        return {
+          title: 'Contact Emotions App',
+          description: 'Get in touch with our team for support, feedback, or partnership inquiries.',
+          path,
+        };
+      case path.startsWith('/faqs'):
+        return {
+          title: 'FAQs – Common Questions Answered',
+          description: 'Find answers to common questions about Mood Mentors, resources, privacy, and safety.',
+          path,
+        };
+      case path.startsWith('/privacy-policy'):
+        return {
+          title: 'Privacy Policy',
+          description: 'Learn how Emotions App protects your data with privacy by design and secure storage.',
+          path,
+        };
+      case path.startsWith('/terms-of-service'):
+        return {
+          title: 'Terms of Service',
+          description: 'Read our terms of service governing the use of Emotions App and related services.',
+          path,
+        };
+      case path.startsWith('/data-protection'):
+        return {
+          title: 'Data Protection',
+          description: 'Details on our data protection practices, security controls, and user rights.',
+          path,
+        };
+      default:
+        return { path };
+    }
+  };
+
+  const routeSeo = getSeoForPath(location.pathname);
+
   const shouldShowContactBanner = location.pathname === "/" || 
                                  location.pathname === "/contact" || 
-                                 location.pathname === "/privacy" ||
+                                 location.pathname === "/privacy-policy" ||
                                  location.pathname === "/data-protection" ||
-                                 location.pathname === "/terms" ||
+                                 location.pathname === "/terms-of-service" ||
                                  location.pathname === "/faqs" ||
                                  location.pathname === "/about";
 
@@ -282,6 +367,10 @@ const AppContent = () => {
       <TooltipProvider>
         <div className="flex flex-col min-h-screen max-w-[100vw] overflow-x-hidden">
           {showHeaderFooter && <Navbar />}
+          {/* Apply default per-route SEO; ArticlePage handles its own dynamic meta */}
+          <RouteSEO {...routeSeo} />
+          {/* Noindex dashboards/admin */}
+          {!showHeaderFooter && <NoIndex />}
           <div className="flex-grow">
             <Routes>
               {/* Public routes accessible to all */}
@@ -324,6 +413,9 @@ const AppContent = () => {
               <Route path="/privacy-policy" element={<PrivacyPolicy />} />
               <Route path="/data-protection" element={<DataProtection />} />
               <Route path="/terms-of-service" element={<TermsOfService />} />
+              {/* Legacy redirects for older links */}
+              <Route path="/privacy" element={<Navigate to="/privacy-policy" replace />} />
+              <Route path="/terms" element={<Navigate to="/terms-of-service" replace />} />
               <Route path="/contact" element={<Contact />} />
               <Route path="/faqs" element={<FAQs />} />
               <Route path="/about" element={<About />} />
@@ -581,6 +673,10 @@ const App = () => {
       <ErrorBoundary>
         <AuthProvider>
           <TooltipProvider>
+            <HelmetProvider>
+              <RouteSEO />
+              <OrganizationJsonLD />
+              <WebsiteJsonLD />
             <ScrollToTop />
             <Toaster 
               position="top-center"
@@ -594,6 +690,7 @@ const App = () => {
               }}
             />
             <AppContent />
+            </HelmetProvider>
           </TooltipProvider>
         </AuthProvider>
       </ErrorBoundary>

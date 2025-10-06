@@ -1,0 +1,10 @@
+/* TEAM */
+Site: Emotions App (emotionsapp.org)
+Focus: Mental health, Mood Mentors, Support Groups, Journaling, Resources
+
+/* TECHNOLOGY */
+SPA: React 18 + TypeScript + Vite
+Backend: Supabase (Postgres, Auth, Storage)
+Hosting: Vercel
+
+

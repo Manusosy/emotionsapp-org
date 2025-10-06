@@ -15,6 +15,8 @@ import {
 import { supabase } from '@/lib/supabase';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
+import { RouteSEO } from '@/components/RouteSEO';
+import { ArticleJsonLD } from '@/components/LLDJson';
 
 interface Article {
   id: string;
@@ -199,6 +201,26 @@ export default function ArticlePage() {
 
   return (
     <div className="min-h-screen relative overflow-hidden">
+      <RouteSEO 
+        title={article.title}
+        description={article.excerpt}
+        path={`/articles/${article.slug}`}
+        image={article.thumbnail_url || '/og-image.png'}
+        type="article"
+        publishedTime={article.published_at || article.created_at}
+        modifiedTime={article.updated_at}
+        keywords={article.tags}
+      />
+      <ArticleJsonLD 
+        title={article.title}
+        description={article.excerpt}
+        url={`${window.location.origin}/articles/${article.slug}`}
+        image={article.thumbnail_url || undefined}
+        datePublished={article.published_at || article.created_at}
+        dateModified={article.updated_at}
+        authorName={article.author_name}
+        tags={article.tags}
+      />
       {/* Background gradient */}
       <div className="absolute inset-0 bg-gradient-to-r from-[#E7E1FF] to-[#FEFEFF] opacity-80"></div>
       <div className="absolute inset-0 bg-gradient-to-br from-transparent via-white to-[#D4E6FF] opacity-90"></div>

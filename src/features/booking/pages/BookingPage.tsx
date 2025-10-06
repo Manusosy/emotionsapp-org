@@ -621,7 +621,7 @@ const BookingPage = () => {
             </Card>
             
             <div className="bg-[#20C0F3]/10 p-4 rounded-lg text-[#20C0F3] text-sm">
-              <p>By confirming this appointment, you agree to our <Link to="/terms" className="text-[#20C0F3] font-medium underline">Terms of Service</Link> and <Link to="/privacy" className="text-[#20C0F3] font-medium underline">Privacy Policy</Link>.</p>
+              <p>By confirming this appointment, you agree to our <Link to="/terms-of-service" className="text-[#20C0F3] font-medium underline">Terms of Service</Link> and <Link to="/privacy-policy" className="text-[#20C0F3] font-medium underline">Privacy Policy</Link>.</p>
             </div>
           </div>
         );
