@@ -9,7 +9,7 @@
     "VITE_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhpYmVvcmtldnFpZ25raW5hYWZ5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDc4MTMwNjgsImV4cCI6MjA2MzM4OTA2OH0.T-Dda-Rox11B6YFgrOt2PpK_vzhNB7GRuf5RxnYhNOE",
     "VITE_DAILY_DOMAIN": "emotionsapp.daily.co",
     "VITE_DAILY_API_KEY": "87f0c35f773411583c35bf5c5d79488504f3d872542fdf8cc8a5f9e1e1f60ef8",
-    "VITE_APP_URL": "https://emotions-app.com"
+    "VITE_APP_URL": "https://emotionsapp.org"
   },
   "rewrites": [
     {
@@ -17,7 +17,7 @@
       "destination": "/index.html"
     },
     {
-      "source": "/(.*)",
+      "source": "/((?!sitemap\\.xml|robots\\.txt|humans\\.txt|favicon\\.ico|.*\\.(png|jpg|jpeg|gif|svg|webp|ico)).*)",
       "destination": "/index.html"
     }
   ],
