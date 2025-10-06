@@ -17,8 +17,22 @@
       "destination": "/index.html"
     },
     {
-      "source": "/((?!sitemap\\.xml|robots\\.txt|humans\\.txt|favicon\\.ico|.*\\.(png|jpg|jpeg|gif|svg|webp|ico)).*)",
+      "source": "/(.*)",
       "destination": "/index.html"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/sitemap.xml",
+      "dest": "/sitemap.xml"
+    },
+    {
+      "src": "/robots.txt",
+      "dest": "/robots.txt"
+    },
+    {
+      "src": "/humans.txt",
+      "dest": "/humans.txt"
     }
   ],
   "headers": [
