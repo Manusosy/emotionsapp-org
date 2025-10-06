@@ -18,21 +18,10 @@
     },
     {
       "source": "/(.*)",
-      "destination": "/index.html"
-    }
-  ],
-  "routes": [
-    {
-      "src": "/sitemap.xml",
-      "dest": "/sitemap.xml"
-    },
-    {
-      "src": "/robots.txt",
-      "dest": "/robots.txt"
-    },
-    {
-      "src": "/humans.txt",
-      "dest": "/humans.txt"
+      "destination": "/index.html",
+      "missing": [
+        { "type": "file" }
+      ]
     }
   ],
   "headers": [
