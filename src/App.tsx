@@ -69,6 +69,7 @@ import ScrollToTop from "@/components/layout/ScrollToTop";
 import AuthCallbackPage from "@/app/auth/callback/page";
 import AuthConfirmPage from "@/app/auth/confirm/page";
 import EmailConfirmationPage from "@/features/auth/components/EmailConfirmationPage";
+import WhatsAppButton from "@/components/WhatsAppButton";
 import MoodMentorProfile from "@/features/mood_mentors/pages/MoodMentorProfile";
 import { useAuth } from "@/contexts/authContext";
 import { setupDatabaseFunctions } from './lib/supabase';
@@ -642,6 +643,8 @@ const AppContent = () => {
           </div>
           {shouldShowContactBanner && showHeaderFooter && <ContactBanner />}
           {showHeaderFooter && <Footer />}
+          {/* WhatsApp floating button - visible on all pages */}
+          <WhatsAppButton />
         </div>
       </TooltipProvider>
     </>
