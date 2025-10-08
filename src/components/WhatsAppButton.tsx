@@ -32,16 +32,35 @@ const WhatsAppButton = () => {
     };
   }, []);
 
-  // Gentle chime when the button appears
+  // Gentle chime when the button appears (after first user interaction)
   useEffect(() => {
     if (!isVisible) return;
-    // Small delay to align with entrance animation
-    const t = setTimeout(() => {
-      try {
-        soundManager.playMessageSound();
-      } catch {}
-    }, 150);
-    return () => clearTimeout(t);
+
+    const playChime = () => {
+      try { soundManager.playMessageSound(); } catch {}
+    };
+
+    const interacted = (() => {
+      try { return sessionStorage.getItem('audio-user-interacted') === 'true'; } catch { return false; }
+    })();
+
+    if (interacted) {
+      const t = setTimeout(playChime, 200);
+      return () => clearTimeout(t);
+    }
+
+    const onInteract = () => {
+      setTimeout(playChime, 200);
+      document.removeEventListener('pointerdown', onInteract);
+      document.removeEventListener('keydown', onInteract);
+    };
+    document.addEventListener('pointerdown', onInteract, { once: true });
+    document.addEventListener('keydown', onInteract, { once: true });
+
+    return () => {
+      document.removeEventListener('pointerdown', onInteract);
+      document.removeEventListener('keydown', onInteract);
+    };
   }, [isVisible]);
 
   // Optional: soft voice prompt (once per session, after user interaction)
