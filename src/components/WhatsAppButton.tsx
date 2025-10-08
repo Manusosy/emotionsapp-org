@@ -1,7 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { soundManager } from '@/utils/soundUtils';
 
 const WhatsAppButton = () => {
   const [isVisible, setIsVisible] = useState(false);
+  const hasSpokenRef = useRef(false);
   const phoneNumber = '+250739091443';
   const message = encodeURIComponent('Hello! I would like to chat with you.');
   const whatsappUrl = `https://wa.me/${phoneNumber.replace(/\s/g, '')}?text=${message}`;
@@ -14,6 +16,109 @@ const WhatsAppButton = () => {
 
     return () => clearTimeout(timer);
   }, []);
+
+  // Mark first user interaction to satisfy autoplay policies
+  useEffect(() => {
+    const markInteraction = () => {
+      try {
+        sessionStorage.setItem('audio-user-interacted', 'true');
+      } catch {}
+    };
+    document.addEventListener('pointerdown', markInteraction, { once: true });
+    document.addEventListener('keydown', markInteraction, { once: true });
+    return () => {
+      document.removeEventListener('pointerdown', markInteraction);
+      document.removeEventListener('keydown', markInteraction);
+    };
+  }, []);
+
+  // Gentle chime when the button appears
+  useEffect(() => {
+    if (!isVisible) return;
+    // Small delay to align with entrance animation
+    const t = setTimeout(() => {
+      try {
+        soundManager.playMessageSound();
+      } catch {}
+    }, 150);
+    return () => clearTimeout(t);
+  }, [isVisible]);
+
+  // Optional: soft voice prompt (once per session, after user interaction)
+  useEffect(() => {
+    if (!isVisible || hasSpokenRef.current) return;
+
+    const speakPrompt = () => {
+      if (hasSpokenRef.current) return;
+      hasSpokenRef.current = true;
+      try {
+        if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
+        if (sessionStorage.getItem('whatsapp-voice-prompt-played') === 'true') return;
+
+        const text = 'Hi! You can contact us on WhatsApp anytime and get help immediately, free of charge.';
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.rate = 0.98;
+        utterance.pitch = 1.15;
+        utterance.volume = 0.6;
+
+        const chooseVoice = (voices: SpeechSynthesisVoice[]) => {
+          // Prefer a female English voice if available
+          const byName = voices.find(v => /female/i.test(v.name) && /en/i.test(v.lang));
+          const byLang = voices.find(v => /en-GB|en-US|en-AU/i.test(v.lang));
+          return byName || byLang || voices[0];
+        };
+
+        const assignAndSpeak = () => {
+          const voices = window.speechSynthesis.getVoices();
+          const voice = chooseVoice(voices);
+          if (voice) utterance.voice = voice;
+          window.speechSynthesis.speak(utterance);
+          try { sessionStorage.setItem('whatsapp-voice-prompt-played', 'true'); } catch {}
+        };
+
+        // Some browsers load voices async
+        if (window.speechSynthesis.getVoices().length === 0) {
+          const handler = () => {
+            assignAndSpeak();
+            window.speechSynthesis.removeEventListener('voiceschanged', handler);
+          };
+          window.speechSynthesis.addEventListener('voiceschanged', handler);
+          // Fallback timer in case event doesn't fire
+          setTimeout(assignAndSpeak, 1000);
+        } else {
+          assignAndSpeak();
+        }
+      } catch {}
+    };
+
+    // Only speak after a real user gesture (autoplay policies)
+    const maybeSpeakAfterInteraction = () => {
+      try {
+        const interacted = sessionStorage.getItem('audio-user-interacted') === 'true';
+        if (interacted) {
+          // Short delay to avoid overlapping with the chime
+          setTimeout(speakPrompt, 600);
+        }
+      } catch {}
+    };
+
+    // Check immediately (in case interaction already happened before visibility)
+    maybeSpeakAfterInteraction();
+
+    // And also listen once more in case the first interaction happens later
+    const onInteract = () => {
+      maybeSpeakAfterInteraction();
+      document.removeEventListener('pointerdown', onInteract);
+      document.removeEventListener('keydown', onInteract);
+    };
+    document.addEventListener('pointerdown', onInteract, { once: true });
+    document.addEventListener('keydown', onInteract, { once: true });
+
+    return () => {
+      document.removeEventListener('pointerdown', onInteract);
+      document.removeEventListener('keydown', onInteract);
+    };
+  }, [isVisible]);
 
   return (
     <a
