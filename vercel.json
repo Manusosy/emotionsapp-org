@@ -13,10 +13,9 @@
     "VITE_APP_URL": "https://emotionsapp.org",
     "SKIP_TYPE_CHECK": "true"
   },
-  "routes": [
-    { "handle": "filesystem" },
-    { "src": "/auth/(.*)", "dest": "/index.html" },
-    { "src": "/(.*)", "dest": "/index.html" }
+  "rewrites": [
+    { "source": "/auth/:path*", "destination": "/index.html" },
+    { "source": "/:path*", "destination": "/index.html" }
   ],
   "headers": [
     {
