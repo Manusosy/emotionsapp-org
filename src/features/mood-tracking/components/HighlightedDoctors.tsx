@@ -27,6 +27,8 @@ export default function MoodMentorGrid() {
   const [moodMentors, setMoodMentors] = useState<MoodMentor[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // Live time (updates every minute) used for the availability pill
+  const [now, setNow] = useState<Date>(new Date());
 
   useEffect(() => {
     // Set a timeout to ensure page doesn't appear to hang when loading
@@ -37,6 +39,11 @@ export default function MoodMentorGrid() {
     fetchMoodMentors();
     
     return () => clearTimeout(timeoutId);
+  }, []);
+
+  useEffect(() => {
+    const interval = setInterval(() => setNow(new Date()), 60_000);
+    return () => clearInterval(interval);
   }, []);
 
   const fetchMoodMentors = async () => {
@@ -170,7 +177,15 @@ export default function MoodMentorGrid() {
       
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {moodMentors.map((mentor) => (
-          <Card key={mentor.id} className="overflow-hidden hover:shadow-lg transition-shadow">
+          <Card key={mentor.id} className="overflow-hidden hover:shadow-lg transition-shadow relative">
+            {/* Top-right live availability time pill */}
+            <div
+              className={`absolute top-2 right-2 px-2 py-1 rounded-full text-[11px] font-medium shadow-sm ${
+                mentor.available ? 'bg-green-600 text-white' : 'bg-red-600 text-white'
+              }`}
+            >
+              {mentor.available ? 'Available now' : 'Unavailable'} • {now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+            </div>
             <div className="flex flex-col gap-4 p-6">
               <div className="flex items-center gap-4 cursor-pointer" onClick={() => viewMoodMentorProfile(mentor.id, mentor.full_name, mentor.name_slug)}>
                 <img
@@ -238,10 +253,10 @@ export default function MoodMentorGrid() {
                   <Clock className="w-4 h-4 text-gray-500" />
                   <span className="text-sm text-gray-600">{mentor.duration || '30 Min'}</span>
                 </div>
-                <span className={`px-2 py-1 rounded text-xs ${
+                <span className={`px-2 py-1 rounded-md text-xs font-medium ${
                   mentor.available 
-                    ? 'bg-green-100 text-green-800' 
-                    : 'bg-red-100 text-red-800'
+                    ? 'bg-green-600 text-white' 
+                    : 'bg-red-600 text-white'
                 }`}>
                   {mentor.available ? 'Available' : 'Unavailable'}
                 </span>
